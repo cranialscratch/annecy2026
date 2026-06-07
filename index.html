@@ -14,7 +14,6 @@
 </head>
 <body>
   <div id="app">
-    <!-- Header -->
     <header id="app-header">
       <div class="header-inner">
         <div class="header-left">
@@ -26,38 +25,21 @@
         </div>
         <div class="header-right">
           <button id="today-btn" class="pill-btn">Today</button>
-          <button id="cascade-btn" class="icon-btn cascade-off" title="Cascade time changes" aria-label="Toggle cascade">⛓</button>
+          <button id="cascade-btn" class="icon-btn cascade-off" title="Cascade time changes">⛓</button>
         </div>
       </div>
-      <!-- Day selector strip -->
-      <div id="day-strip-wrap">
-        <div id="day-strip"></div>
-      </div>
+      <div id="day-strip-wrap"><div id="day-strip"></div></div>
     </header>
 
-    <!-- Main view -->
     <main id="main-content">
       <div id="timeline"></div>
     </main>
 
-    <!-- Bottom bar -->
     <nav id="bottom-nav">
-      <button class="nav-btn active" data-view="day" aria-label="Day view">
-        <span class="nav-icon">📅</span>
-        <span class="nav-label">Day</span>
-      </button>
-      <button class="nav-btn" data-view="overview" aria-label="Trip overview">
-        <span class="nav-icon">🗺️</span>
-        <span class="nav-label">Trip</span>
-      </button>
-      <button class="nav-btn" data-view="vegan" aria-label="Vegan spots">
-        <span class="nav-icon">🌱</span>
-        <span class="nav-label">Vegan</span>
-      </button>
-      <button class="nav-btn" data-view="charging" aria-label="Charging stops">
-        <span class="nav-icon">⚡</span>
-        <span class="nav-label">Charging</span>
-      </button>
+      <button class="nav-btn active" data-view="day"><span class="nav-icon">📅</span><span class="nav-label">Day</span></button>
+      <button class="nav-btn" data-view="overview"><span class="nav-icon">🗺️</span><span class="nav-label">Trip</span></button>
+      <button class="nav-btn" data-view="vegan"><span class="nav-icon">🌱</span><span class="nav-label">Vegan</span></button>
+      <button class="nav-btn" data-view="charging"><span class="nav-icon">⚡</span><span class="nav-label">Charging</span></button>
     </nav>
   </div>
 
@@ -70,15 +52,14 @@
     </div>
     <nav class="drawer-nav">
       <button class="drawer-item" data-action="reset-times">🔄 Reset all times</button>
+      <button class="drawer-item" data-action="reset-checks">☐ Clear visited</button>
       <button class="drawer-item" data-action="toggle-dark">🌙 Toggle dark/light</button>
       <a class="drawer-item" href="https://www.annecy.org/festival" target="_blank" rel="noopener">🎬 Festival website</a>
       <a class="drawer-item" href="https://www.le-shuttle.com" target="_blank" rel="noopener">🚂 LeShuttle</a>
       <a class="drawer-item" href="https://www.plugshare.com" target="_blank" rel="noopener">⚡ PlugShare</a>
       <a class="drawer-item" href="https://www.happycow.net" target="_blank" rel="noopener">🌱 HappyCow</a>
     </nav>
-    <div class="drawer-footer">
-      <p>Works offline · Optimised for iPhone</p>
-    </div>
+    <div class="drawer-footer"><p>Works offline · Optimised for iPhone</p></div>
   </aside>
 
   <!-- Time edit modal -->
@@ -104,6 +85,31 @@
       <div class="modal-footer">
         <button id="modal-cancel" class="pill-btn secondary">Cancel</button>
         <button id="modal-save" class="pill-btn primary">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Detail page -->
+  <div id="detail-overlay" class="hidden">
+    <div id="detail-page">
+      <div class="detail-topbar">
+        <button id="detail-back" class="icon-btn glass-btn">←</button>
+        <button id="detail-check-btn" class="check-pill">Mark visited</button>
+      </div>
+      <div id="detail-slider-wrap">
+        <div id="detail-slides"></div>
+        <div id="detail-dots"></div>
+      </div>
+      <div id="detail-body">
+        <div class="detail-meta-row">
+          <span id="detail-badge" class="tl-card-badge"></span>
+          <span id="detail-time" class="detail-time-lbl"></span>
+          <span id="detail-stars" class="priority-stars"></span>
+        </div>
+        <h2 id="detail-name"></h2>
+        <p id="detail-reason"></p>
+        <div id="detail-tags"></div>
+        <div id="detail-actions"></div>
       </div>
     </div>
   </div>
