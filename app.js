@@ -3,8 +3,8 @@ const state = {
   currentDayId: null,
   currentView: 'day',
   cascadeEnabled: false,
-  overrides: {},   // { stopId: "HH:MM" }
-  checked: {},     // { stopId: true }
+  overrides: {},
+  checked: {},
 };
 
 /* ── Helpers ───────────────────────────────────────────────────────── */
@@ -19,7 +19,6 @@ function minutesToTime(mins) {
 }
 function getStopTime(stop) { return state.overrides[stop.id] ?? stop.time; }
 function priorityStars(p) { return p >= 1 ? '★'.repeat(p) + '☆'.repeat(3-p) : ''; }
-
 function formatDate(dateStr) {
   const d = new Date(dateStr + 'T00:00:00');
   return d.toLocaleDateString('en-GB', { day:'numeric', month:'short' });
@@ -29,7 +28,6 @@ function getDayLabel(day) {
   const names = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
   return names[new Date(day.date + 'T00:00:00').getDay()];
 }
-function isToday(dateStr) { return dateStr === new Date().toISOString().slice(0,10); }
 function findTodayDayId() {
   const today = new Date().toISOString().slice(0,10);
   for (const day of TRIP_DATA.days) {
@@ -45,24 +43,23 @@ function typeLabel(type) {
     scenic:'Scenic', historic:'Historic', festival:'Festival' }[type] || type;
 }
 function nowMinutes() {
-  const n = new Date();
-  return n.getHours() * 60 + n.getMinutes();
+  const n = new Date(); return n.getHours() * 60 + n.getMinutes();
+}
+function buildTags(stop) {
+  const tags = [];
+  if (stop.veganFriendly)       tags.push(`<span class="tl-tag vegan">🌱 Vegan-friendly</span>`);
+  if (stop.type === 'charging') tags.push(`<span class="tl-tag charge">⚡ Supercharger</span>`);
+  if (stop.priority >= 3)       tags.push(`<span class="tl-tag poi">★ Must-see</span>`);
+  return tags.length ? `<div class="tl-card-tags">${tags.join('')}</div>` : '';
 }
 
 /* ── Images ────────────────────────────────────────────────────────── */
 function getPhotos(stop) {
   const { lat, lng } = stop;
-  const enc = (s) => encodeURIComponent(s);
-  // Street View — works for scenic/architecture/village stops
   const sv  = `https://maps.googleapis.com/maps/api/streetview?size=640x380&location=${lat},${lng}&fov=90&pitch=5`;
-  // Satellite
   const sat = `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lng}&zoom=16&size=640x380&maptype=satellite&markers=color:red%7C${lat},${lng}`;
-  // Road map
   const map = `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lng}&zoom=14&size=640x380&maptype=roadmap&markers=${lat},${lng}`;
-
-  if (stop.type === 'charging' || stop.type === 'transport' || stop.type === 'depart') {
-    return [map];
-  }
+  if (stop.type === 'charging' || stop.type === 'transport' || stop.type === 'depart') return [map];
   if (stop.type === 'hotel') return [map, sat];
   return [sv, sat, map];
 }
@@ -126,12 +123,11 @@ function updateDayStrip() {
   const active = document.querySelector('.day-chip.active');
   if (active) active.scrollIntoView({ behavior:'smooth', block:'nearest', inline:'center' });
 }
-
 function selectDay(dayId) {
   state.currentDayId = dayId;
   state.currentView = 'day';
   updateDayStrip();
-  renderView();
+  renderView(false); // don't auto-scroll when manually picking a day
 }
 
 /* ── Header ────────────────────────────────────────────────────────── */
@@ -139,21 +135,22 @@ function updateHeader() {
   const day = TRIP_DATA.days.find(d => d.id === state.currentDayId);
   const label = document.getElementById('header-day-label');
   const sub   = document.getElementById('header-day-subtitle');
-  if (state.currentView === 'overview')       { label.textContent = 'Annecy 2026'; sub.textContent = 'Trip overview'; }
-  else if (state.currentView === 'vegan')     { label.textContent = '🌱 Vegan Spots'; sub.textContent = 'All vegan-friendly stops'; }
-  else if (state.currentView === 'charging')  { label.textContent = '⚡ Charging'; sub.textContent = 'Tesla Superchargers'; }
+  if (state.currentView === 'overview')      { label.textContent = 'Annecy 2026';    sub.textContent = 'Trip overview'; }
+  else if (state.currentView === 'vegan')    { label.textContent = '🌱 Vegan Spots'; sub.textContent = 'All vegan-friendly stops'; }
+  else if (state.currentView === 'charging') { label.textContent = '⚡ Charging';    sub.textContent = 'Tesla Superchargers'; }
   else if (day) { label.textContent = `${getDayLabel(day)} · ${day.title}`; sub.textContent = day.subtitle || ''; }
 }
 
 /* ── Render dispatcher ─────────────────────────────────────────────── */
-function renderView() {
+function renderView(scrollToNow) {
   updateHeader();
   const tl = document.getElementById('timeline');
-  document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.view === state.currentView));
-  if (state.currentView === 'overview')       renderOverview(tl);
-  else if (state.currentView === 'vegan')     renderFilterList(tl,'vegan');
-  else if (state.currentView === 'charging')  renderFilterList(tl,'charging');
-  else renderTimeline(tl);
+  document.querySelectorAll('.nav-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.view === state.currentView));
+  if (state.currentView === 'overview')      renderOverview(tl);
+  else if (state.currentView === 'vegan')    renderFilterList(tl, 'vegan');
+  else if (state.currentView === 'charging') renderFilterList(tl, 'charging');
+  else renderTimeline(tl, scrollToNow);
 }
 
 /* ── Overview ──────────────────────────────────────────────────────── */
@@ -191,16 +188,14 @@ function renderFilterList(container, kind) {
           <div class="filter-loc">${stop.location}</div>
           <div class="filter-reason">${stop.reason}</div>
         </div>
-        <div>
-          <a class="act-btn tesla" href="${teslaNavUrl(stop)}" target="_blank" rel="noopener">🚗</a>
-        </div>`;
+        <div><a class="act-btn tesla" href="${teslaNavUrl(stop)}" target="_blank" rel="noopener">🚗</a></div>`;
       container.appendChild(card);
     });
   });
 }
 
 /* ── Timeline ──────────────────────────────────────────────────────── */
-function renderTimeline(container) {
+function renderTimeline(container, scrollToNow) {
   container.innerHTML = '';
   const day = TRIP_DATA.days.find(d => d.id === state.currentDayId);
   if (!day) return;
@@ -213,36 +208,30 @@ function renderTimeline(container) {
   }
 
   const now = nowMinutes();
+  let nowLineEl = null;
   let nowInserted = false;
-  let scrollTarget = null;
 
   day.stops.forEach((stop, idx) => {
     const stopMins = timeToMinutes(getStopTime(stop));
-
-    // Insert "now" marker between past and future stops
     if (!nowInserted && stopMins !== null && stopMins > now) {
       nowInserted = true;
       const nowLine = document.createElement('div');
       nowLine.className = 'tl-now-line';
+      nowLine.id = 'tl-now-marker';
       nowLine.innerHTML = `<span class="tl-now-label">▶ Now ${minutesToTime(now)}</span>`;
       container.appendChild(nowLine);
-      scrollTarget = nowLine;
+      nowLineEl = nowLine;
     }
-
     const item = buildTimelineItem(stop, idx === day.stops.length - 1);
     container.appendChild(item);
-
-    // If no future stop found, scroll to the last past stop near now
-    if (stopMins !== null && stopMins <= now) scrollTarget = item;
   });
 
-  // Scroll to now marker (deferred so layout is complete)
-  if (scrollTarget) {
+  // Only scroll to now when explicitly requested (Today button)
+  if (scrollToNow && nowLineEl) {
     requestAnimationFrame(() => {
       const mc = document.getElementById('main-content');
       const headerH = document.getElementById('app-header').offsetHeight;
-      const offset = scrollTarget.offsetTop - headerH - 16;
-      mc.scrollTo({ top: Math.max(0, offset), behavior: 'smooth' });
+      mc.scrollTo({ top: Math.max(0, nowLineEl.offsetTop - headerH - 16), behavior: 'smooth' });
     });
   }
 }
@@ -286,55 +275,45 @@ function buildTimelineItem(stop, isLast) {
       </div>
     </div>`;
 
-  // Time button
   if (isEditable) {
     const day = TRIP_DATA.days.find(d => d.id === state.currentDayId);
     item.querySelector('.tl-time-btn').addEventListener('click', () => openTimeModal(stop, day));
   }
-
-  // Check button (stop propagation so it doesn't open detail)
   item.querySelector('.check-btn').addEventListener('click', e => {
     e.stopPropagation();
     toggleCheck(stop.id, item);
   });
-
-  // Slider touch
-  initSlider(item.querySelector('.card-slider'), stop, 'card', item);
-
+  initSlider(item.querySelector('.card-slider'), stop, 'card');
   return item;
 }
 
 /* ── Image slider HTML ─────────────────────────────────────────────── */
 function buildSlider(stop, prefix) {
   const photos = getPhotos(stop);
-  const slides = photos.map((url, i) =>
+  const slides = photos.map(url =>
     `<img class="${prefix}-slide" src="${url}" loading="lazy" onerror="this.style.display='none'" alt="${stop.location}">`
   ).join('');
   const dots = photos.length > 1
-    ? `<div class="${prefix}-dots">${photos.map((_, i) => `<span class="${prefix}-dot${i===0?' active':''}"></span>`).join('')}</div>`
+    ? `<div class="${prefix}-dots">${photos.map((_,i) => `<span class="${prefix}-dot${i===0?' active':''}"></span>`).join('')}</div>`
     : '';
   return `<div class="${prefix}-slider"><div class="${prefix}-slides">${slides}</div>${dots}</div>`;
 }
 
 /* ── Slider touch logic ────────────────────────────────────────────── */
-function initSlider(sliderEl, stop, prefix, cardEl) {
+function initSlider(sliderEl, stop, prefix) {
   if (!sliderEl) return;
   const slidesEl = sliderEl.querySelector(`.${prefix}-slides`);
-  const dotsEls  = sliderEl.querySelectorAll(`.${prefix}-dot`);
-  let current = 0;
-  let startX = 0, startY = 0, diffX = 0;
-  let isDragging = false, isHoriz = null;
   const total = getPhotos(stop).length;
+  let current = 0, startX = 0, startY = 0, diffX = 0, isDragging = false, isHoriz = null;
 
   function goTo(idx) {
     current = Math.max(0, Math.min(total - 1, idx));
     slidesEl.style.transform = `translateX(-${current * 100}%)`;
-    dotsEls.forEach((d, i) => d.classList.toggle('active', i === current));
+    sliderEl.querySelectorAll(`.${prefix}-dot`).forEach((d,i) => d.classList.toggle('active', i === current));
   }
 
   sliderEl.addEventListener('touchstart', e => {
-    startX = e.touches[0].clientX;
-    startY = e.touches[0].clientY;
+    startX = e.touches[0].clientX; startY = e.touches[0].clientY;
     diffX = 0; isDragging = true; isHoriz = null;
     slidesEl.style.transition = 'none';
   }, { passive: true });
@@ -358,7 +337,6 @@ function initSlider(sliderEl, stop, prefix, cardEl) {
       else if (diffX > 40) goTo(current - 1);
       else goTo(current);
     } else if (Math.abs(diffX) < 8) {
-      // Tap with no horizontal movement → open detail
       openDetail(stop);
     }
     isHoriz = null;
@@ -367,8 +345,7 @@ function initSlider(sliderEl, stop, prefix, cardEl) {
 
 /* ── Action buttons — icon only ───────────────────────────────────── */
 function buildIconActions(stop) {
-  const parts = [];
-  parts.push(`<a class="act-btn tesla" href="${teslaNavUrl(stop)}" target="_blank" rel="noopener">🚗</a>`);
+  const parts = [`<a class="act-btn tesla" href="${teslaNavUrl(stop)}" target="_blank" rel="noopener">🚗</a>`];
   if (stop.type !== 'depart' && stop.type !== 'transport') {
     if (stop.veganFriendly || stop.type === 'food')
       parts.push(`<a class="act-btn vegan" href="${veganNearbyUrl(stop)}" target="_blank" rel="noopener">🌱</a>`);
@@ -382,57 +359,43 @@ function buildIconActions(stop) {
 }
 
 /* ── Detail page ───────────────────────────────────────────────────── */
-let _detailStop = null;
-let _detailSliderCurrent = 0;
-let _detailSliderTotal = 0;
+let _detailStop = null, _detailCurrent = 0, _detailTotal = 0;
 
 function openDetail(stop) {
   _detailStop = stop;
   const overlay = document.getElementById('detail-overlay');
   overlay.classList.remove('hidden');
-  // force reflow then animate
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => overlay.classList.add('open'));
-  });
+  requestAnimationFrame(() => requestAnimationFrame(() => overlay.classList.add('open')));
 
-  // Slider
   const photos = getPhotos(stop);
-  _detailSliderTotal = photos.length;
-  _detailSliderCurrent = 0;
+  _detailTotal = photos.length;
+  _detailCurrent = 0;
 
   const slidesEl = document.getElementById('detail-slides');
   const dotsEl   = document.getElementById('detail-dots');
-  slidesEl.style.transform = 'translateX(0)';
-  slidesEl.innerHTML = photos.map((url, i) =>
+  slidesEl.style.transition = 'none';
+  slidesEl.style.transform  = 'translateX(0)';
+  slidesEl.innerHTML = photos.map(url =>
     `<img class="detail-slide" src="${url}" loading="lazy" onerror="this.style.display='none'" alt="${stop.location}">`
   ).join('') || `<div class="detail-slide-placeholder">${stop.icon}</div>`;
   dotsEl.innerHTML = photos.length > 1
-    ? photos.map((_, i) => `<span class="detail-dot${i===0?' active':''}"></span>`).join('')
-    : '';
+    ? photos.map((_,i) => `<span class="detail-dot${i===0?' active':''}"></span>`).join('') : '';
 
-  // Body
-  const day = TRIP_DATA.days.find(d => d.stops.some(s => s.id === stop.id));
-  document.getElementById('detail-badge').textContent = typeLabel(stop.type);
-  document.getElementById('detail-badge').className = 'tl-card-badge';
-  // set data-type on badge's parent for colour
   document.getElementById('detail-body').dataset.type = stop.type;
-  document.getElementById('detail-time').textContent = getStopTime(stop) + (stop.tz ? ' ' + stop.tz : '');
+  document.getElementById('detail-badge').textContent = typeLabel(stop.type);
+  document.getElementById('detail-time').textContent  = getStopTime(stop) + (stop.tz ? ' ' + stop.tz : '');
   document.getElementById('detail-stars').textContent = priorityStars(stop.priority);
-  document.getElementById('detail-name').textContent = stop.icon + ' ' + stop.location;
+  document.getElementById('detail-name').textContent  = stop.icon + ' ' + stop.location;
   document.getElementById('detail-reason').textContent = stop.reason;
 
-  // Tags
   const tagsEl = document.getElementById('detail-tags');
   tagsEl.innerHTML = '';
-  if (stop.veganFriendly) tagsEl.innerHTML += '<span class="tl-tag vegan">🌱 Vegan-friendly</span>';
+  if (stop.veganFriendly)       tagsEl.innerHTML += '<span class="tl-tag vegan">🌱 Vegan-friendly</span>';
   if (stop.type === 'charging') tagsEl.innerHTML += '<span class="tl-tag charge">⚡ Supercharger</span>';
-  if (stop.priority >= 3) tagsEl.innerHTML += '<span class="tl-tag poi">★ Must-see</span>';
+  if (stop.priority >= 3)       tagsEl.innerHTML += '<span class="tl-tag poi">★ Must-see</span>';
 
-  // Actions with labels
   const actEl = document.getElementById('detail-actions');
-  const parts = [
-    `<a class="act-btn-full tesla" href="${teslaNavUrl(stop)}" target="_blank" rel="noopener">🚗 Navigate</a>`,
-  ];
+  const parts = [`<a class="act-btn-full tesla" href="${teslaNavUrl(stop)}" target="_blank" rel="noopener">🚗 Navigate</a>`];
   if (stop.veganFriendly || stop.type === 'food')
     parts.push(`<a class="act-btn-full vegan" href="${veganNearbyUrl(stop)}" target="_blank" rel="noopener">🌱 Vegan nearby</a>`);
   parts.push(`<a class="act-btn-full charge" href="${chargingNearbyUrl(stop)}" target="_blank" rel="noopener">⚡ Chargers</a>`);
@@ -442,13 +405,8 @@ function openDetail(stop) {
     parts.push(`<a class="act-btn-full maps" href="${stop.mapsUrl}" target="_blank" rel="noopener">🗺️ Maps</a>`);
   actEl.innerHTML = parts.join('');
 
-  // Check button state
   updateDetailCheckBtn();
-
-  // Wire up detail slider touch
   initDetailSlider();
-
-  // Scroll detail page to top
   overlay.scrollTop = 0;
 }
 
@@ -471,46 +429,39 @@ function updateDetailCheckBtn() {
 function initDetailSlider() {
   const wrap = document.getElementById('detail-slider-wrap');
   const slidesEl = document.getElementById('detail-slides');
-  const dotsEls  = document.querySelectorAll('.detail-dot');
-  let startX = 0, startY = 0, diffX = 0, isDragging = false, isHoriz = null;
+  let startX = 0, diffX = 0, isDragging = false, isHoriz = null;
 
   function goTo(idx) {
-    _detailSliderCurrent = Math.max(0, Math.min(_detailSliderTotal - 1, idx));
-    slidesEl.style.transform = `translateX(-${_detailSliderCurrent * 100}%)`;
-    document.querySelectorAll('.detail-dot').forEach((d, i) => d.classList.toggle('active', i === _detailSliderCurrent));
+    _detailCurrent = Math.max(0, Math.min(_detailTotal - 1, idx));
+    slidesEl.style.transform = `translateX(-${_detailCurrent * 100}%)`;
+    document.querySelectorAll('.detail-dot').forEach((d,i) => d.classList.toggle('active', i === _detailCurrent));
   }
 
-  // Remove old listeners by cloning
   const newWrap = wrap.cloneNode(false);
   while (wrap.firstChild) newWrap.appendChild(wrap.firstChild);
   wrap.parentNode.replaceChild(newWrap, wrap);
   newWrap.id = 'detail-slider-wrap';
 
   newWrap.addEventListener('touchstart', e => {
-    startX = e.touches[0].clientX; startY = e.touches[0].clientY;
-    diffX = 0; isDragging = true; isHoriz = null;
+    startX = e.touches[0].clientX; diffX = 0; isDragging = true; isHoriz = null;
     slidesEl.style.transition = 'none';
   }, { passive: true });
-
   newWrap.addEventListener('touchmove', e => {
     if (!isDragging) return;
     diffX = e.touches[0].clientX - startX;
-    const diffY = e.touches[0].clientY - startY;
-    if (isHoriz === null) isHoriz = Math.abs(diffX) > Math.abs(diffY);
+    const diffY = e.touches[0].clientY - e.touches[0].clientY;
+    if (isHoriz === null) isHoriz = true;
     if (isHoriz) {
       e.preventDefault();
-      slidesEl.style.transform = `translateX(calc(-${_detailSliderCurrent * 100}% + ${diffX}px))`;
+      slidesEl.style.transform = `translateX(calc(-${_detailCurrent * 100}% + ${diffX}px))`;
     }
   }, { passive: false });
-
   newWrap.addEventListener('touchend', () => {
     isDragging = false;
     slidesEl.style.transition = 'transform .3s ease';
-    if (isHoriz) {
-      if (diffX < -40) goTo(_detailSliderCurrent + 1);
-      else if (diffX > 40) goTo(_detailSliderCurrent - 1);
-      else goTo(_detailSliderCurrent);
-    }
+    if (diffX < -40) goTo(_detailCurrent + 1);
+    else if (diffX > 40) goTo(_detailCurrent - 1);
+    else goTo(_detailCurrent);
     isHoriz = null;
   });
 }
@@ -519,8 +470,8 @@ function initDetailSlider() {
 function toggleCheck(stopId, itemEl) {
   state.checked[stopId] = !state.checked[stopId];
   save();
-  const card = itemEl ? itemEl.querySelector('.tl-card') : null;
-  const btn  = itemEl ? itemEl.querySelector('.check-btn') : null;
+  const card = itemEl && itemEl.querySelector('.tl-card');
+  const btn  = itemEl && itemEl.querySelector('.check-btn');
   if (card) card.classList.toggle('visited', !!state.checked[stopId]);
   if (btn)  { btn.classList.toggle('checked', !!state.checked[stopId]); btn.textContent = state.checked[stopId] ? '✓' : '○'; }
 }
@@ -534,82 +485,85 @@ function openTimeModal(stop, day) {
   document.getElementById('modal-cascade').checked = state.cascadeEnabled;
   document.getElementById('modal-overlay').classList.remove('hidden');
 }
-function closeModal() { document.getElementById('modal-overlay').classList.add('hidden'); _modalStop = _modalDay = null; }
+function closeModal() {
+  document.getElementById('modal-overlay').classList.add('hidden');
+  _modalStop = _modalDay = null;
+}
 function saveModal() {
   if (!_modalStop || !_modalDay) return;
   const newTime = document.getElementById('modal-time-input').value;
   const cascade = document.getElementById('modal-cascade').checked;
-  const oldMins = timeToMinutes(getStopTime(_modalStop));
-  const newMins = timeToMinutes(newTime);
-  const delta = newMins - oldMins;
+  const delta = timeToMinutes(newTime) - timeToMinutes(getStopTime(_modalStop));
   state.overrides[_modalStop.id] = newTime;
   if (cascade && delta !== 0) {
     let found = false;
-    _modalDay.stops.forEach(stop => {
-      if (stop.id === _modalStop.id) { found = true; return; }
+    _modalDay.stops.forEach(s => {
+      if (s.id === _modalStop.id) { found = true; return; }
       if (!found) return;
-      const cur = timeToMinutes(getStopTime(stop));
-      if (cur !== null) state.overrides[stop.id] = minutesToTime(cur + delta);
+      const cur = timeToMinutes(getStopTime(s));
+      if (cur !== null) state.overrides[s.id] = minutesToTime(cur + delta);
     });
   }
-  save(); closeModal(); renderView();
-}
-
-/* ── Cascade button ────────────────────────────────────────────────── */
-function updateCascadeBtn() {
-  const btn = document.getElementById('cascade-btn');
-  btn.classList.toggle('cascade-on', state.cascadeEnabled);
+  save(); closeModal(); renderView(false);
 }
 
 /* ── Init ──────────────────────────────────────────────────────────── */
 document.addEventListener('DOMContentLoaded', () => {
   load();
   state.currentDayId = findTodayDayId() || TRIP_DATA.days[0].id;
-
   buildDayStrip();
-  renderView();
+  renderView(true); // scroll to now only on first load
 
+  /* Nav buttons */
   document.querySelectorAll('.nav-btn').forEach(btn =>
-    btn.addEventListener('click', () => { state.currentView = btn.dataset.view; renderView(); }));
+    btn.addEventListener('click', () => {
+      state.currentView = btn.dataset.view;
+      renderView(false);
+    }));
 
+  /* Today button — jump to now and scroll to it */
   document.getElementById('today-btn').addEventListener('click', () => {
     state.currentDayId = findTodayDayId() || TRIP_DATA.days[0].id;
     state.currentView = 'day';
     updateDayStrip();
-    renderView();
+    renderView(true); // scroll to now
   });
 
+  /* Cascade toggle */
   document.getElementById('cascade-btn').addEventListener('click', () => {
     state.cascadeEnabled = !state.cascadeEnabled;
-    updateCascadeBtn();
+    const btn = document.getElementById('cascade-btn');
+    btn.classList.toggle('cascade-on', state.cascadeEnabled);
+    btn.title = state.cascadeEnabled ? 'Cascade ON' : 'Cascade OFF';
   });
 
-  // Drawer
-  document.getElementById('menu-btn').addEventListener('click', () => {
+  /* Drawer */
+  const openDrawer = () => {
     document.getElementById('drawer').classList.remove('hidden');
     document.getElementById('drawer-overlay').classList.remove('hidden');
-  });
-  function closeDrawer() {
+  };
+  const closeDrawer = () => {
     document.getElementById('drawer').classList.add('hidden');
     document.getElementById('drawer-overlay').classList.add('hidden');
-  }
+  };
+  document.getElementById('menu-btn').addEventListener('click', openDrawer);
   document.getElementById('drawer-close').addEventListener('click', closeDrawer);
   document.getElementById('drawer-overlay').addEventListener('click', closeDrawer);
   document.querySelectorAll('.drawer-item[data-action]').forEach(btn =>
     btn.addEventListener('click', () => {
-      if (btn.dataset.action === 'reset-times')  { state.overrides = {}; save(); renderView(); closeDrawer(); }
-      if (btn.dataset.action === 'reset-checks') { state.checked = {};   save(); renderView(); closeDrawer(); }
+      if (btn.dataset.action === 'reset-times')  { state.overrides = {}; save(); renderView(false); closeDrawer(); }
+      if (btn.dataset.action === 'reset-checks') { state.checked   = {}; save(); renderView(false); closeDrawer(); }
       if (btn.dataset.action === 'toggle-dark')  {
         document.body.classList.toggle('light');
-        try { localStorage.setItem('annecy_theme', document.body.classList.contains('light')?'light':'dark'); } catch {}
+        try { localStorage.setItem('annecy_theme', document.body.classList.contains('light') ? 'light' : 'dark'); } catch {}
         closeDrawer();
       }
     }));
 
-  // Time modal
+  /* Time modal */
   document.getElementById('modal-close').addEventListener('click', closeModal);
   document.getElementById('modal-cancel').addEventListener('click', closeModal);
-  document.getElementById('modal-overlay').addEventListener('click', e => { if (e.target.id==='modal-overlay') closeModal(); });
+  document.getElementById('modal-overlay').addEventListener('click', e => { if (e.target.id === 'modal-overlay') closeModal(); });
   document.getElementById('modal-save').addEventListener('click', saveModal);
   document.querySelectorAll('.time-adj').forEach(btn =>
     btn.addEventListener('click', () => {
@@ -618,14 +572,13 @@ document.addEventListener('DOMContentLoaded', () => {
       if (cur !== null) input.value = minutesToTime(cur + parseInt(btn.dataset.delta, 10));
     }));
 
-  // Detail page
+  /* Detail page */
   document.getElementById('detail-back').addEventListener('click', closeDetail);
   document.getElementById('detail-check-btn').addEventListener('click', () => {
     if (!_detailStop) return;
     state.checked[_detailStop.id] = !state.checked[_detailStop.id];
     save();
     updateDetailCheckBtn();
-    // Refresh the card in the timeline too
     const itemEl = document.getElementById(`stop-${_detailStop.id}`);
     if (itemEl) {
       const card = itemEl.querySelector('.tl-card');
@@ -635,6 +588,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // Service worker
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
+  /* Service worker */
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 });

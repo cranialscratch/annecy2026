@@ -65,7 +65,7 @@ html, body { height:100%; overflow:hidden; font-family:-apple-system,BlinkMacSys
 .day-chip.today .day-dot { display:block; }
 
 /* ─── Main scroll ───────────────────────────────────────────────────── */
-#main-content { flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch; padding:12px 12px calc(var(--safe-bot) + var(--bottom-h) + 12px); }
+#main-content { flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch; padding:12px 12px calc(max(var(--safe-bot),8px) + var(--bottom-h) + 16px); }
 
 /* ─── Festival banner ───────────────────────────────────────────────── */
 .festival-banner {
@@ -260,7 +260,14 @@ html, body { height:100%; overflow:hidden; font-family:-apple-system,BlinkMacSys
   -webkit-tap-highlight-color:transparent; transition:background .15s; flex-shrink:0;
 }
 .icon-btn:active { background:var(--bg3); }
-.cascade-btn.cascade-on { background:rgba(56,189,248,.2); color:var(--accent); }
+.cascade-pill {
+  padding:6px 12px; border-radius:20px; border:1px solid var(--bg3);
+  background:var(--bg2); color:var(--text3);
+  font-size:11px; font-weight:700; cursor:pointer;
+  -webkit-tap-highlight-color:transparent; transition:all .2s;
+  white-space:nowrap;
+}
+.cascade-pill.cascade-on { background:rgba(56,189,248,.2); color:var(--accent); border-color:var(--accent); }
 
 .pill-btn {
   padding:8px 16px; border-radius:20px; border:none; cursor:pointer;
@@ -276,9 +283,10 @@ html, body { height:100%; overflow:hidden; font-family:-apple-system,BlinkMacSys
 #bottom-nav {
   display:flex; position:fixed; bottom:0; left:0; right:0;
   background:var(--bg); border-top:1px solid var(--bg3);
-  padding-bottom:var(--safe-bot);
-  height:calc(var(--bottom-h) + var(--safe-bot));
-  z-index:50;
+  /* padding-bottom handles the home indicator on iPhone PWA */
+  padding-bottom:max(var(--safe-bot), 8px);
+  height:calc(var(--bottom-h) + max(var(--safe-bot), 8px));
+  z-index:200;
 }
 .nav-btn { flex:1; background:none; border:none; cursor:pointer; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; padding:8px 4px; color:var(--text3); transition:color .15s; -webkit-tap-highlight-color:transparent; }
 .nav-btn.active { color:var(--accent); }
