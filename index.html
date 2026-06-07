@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Annecy 2026">
+  <meta name="theme-color" content="#0f172a">
+  <title>Annecy 2026</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Header -->
+    <header id="app-header">
+      <div class="header-inner">
+        <div class="header-left">
+          <button id="menu-btn" class="icon-btn" aria-label="Menu">☰</button>
+          <div class="header-titles">
+            <h1 id="header-day-label">Annecy 2026</h1>
+            <p id="header-day-subtitle"></p>
+          </div>
+        </div>
+        <div class="header-right">
+          <button id="today-btn" class="pill-btn">Today</button>
+          <button id="cascade-btn" class="icon-btn cascade-off" title="Cascade time changes" aria-label="Toggle cascade">⛓</button>
+        </div>
+      </div>
+      <!-- Day selector strip -->
+      <div id="day-strip-wrap">
+        <div id="day-strip"></div>
+      </div>
+    </header>
+
+    <!-- Main view -->
+    <main id="main-content">
+      <div id="timeline"></div>
+    </main>
+
+    <!-- Bottom bar -->
+    <nav id="bottom-nav">
+      <button class="nav-btn active" data-view="day" aria-label="Day view">
+        <span class="nav-icon">📅</span>
+        <span class="nav-label">Day</span>
+      </button>
+      <button class="nav-btn" data-view="overview" aria-label="Trip overview">
+        <span class="nav-icon">🗺️</span>
+        <span class="nav-label">Trip</span>
+      </button>
+      <button class="nav-btn" data-view="vegan" aria-label="Vegan spots">
+        <span class="nav-icon">🌱</span>
+        <span class="nav-label">Vegan</span>
+      </button>
+      <button class="nav-btn" data-view="charging" aria-label="Charging stops">
+        <span class="nav-icon">⚡</span>
+        <span class="nav-label">Charging</span>
+      </button>
+    </nav>
+  </div>
+
+  <!-- Side drawer -->
+  <div id="drawer-overlay" class="hidden"></div>
+  <aside id="drawer" class="hidden">
+    <div class="drawer-header">
+      <span class="drawer-title">🏔️ Annecy 2026</span>
+      <button id="drawer-close" class="icon-btn">✕</button>
+    </div>
+    <nav class="drawer-nav">
+      <button class="drawer-item" data-action="reset-times">🔄 Reset all times</button>
+      <button class="drawer-item" data-action="toggle-dark">🌙 Toggle dark/light</button>
+      <a class="drawer-item" href="https://www.annecy.org/festival" target="_blank" rel="noopener">🎬 Festival website</a>
+      <a class="drawer-item" href="https://www.le-shuttle.com" target="_blank" rel="noopener">🚂 LeShuttle</a>
+      <a class="drawer-item" href="https://www.plugshare.com" target="_blank" rel="noopener">⚡ PlugShare</a>
+      <a class="drawer-item" href="https://www.happycow.net" target="_blank" rel="noopener">🌱 HappyCow</a>
+    </nav>
+    <div class="drawer-footer">
+      <p>Works offline · Optimised for iPhone</p>
+    </div>
+  </aside>
+
+  <!-- Time edit modal -->
+  <div id="modal-overlay" class="hidden">
+    <div id="time-modal">
+      <div class="modal-header">
+        <h3 id="modal-title">Edit time</h3>
+        <button id="modal-close" class="icon-btn">✕</button>
+      </div>
+      <div class="modal-body">
+        <p id="modal-location" class="modal-location"></p>
+        <div class="time-picker-row">
+          <button class="time-adj" data-delta="-60">−1h</button>
+          <button class="time-adj" data-delta="-15">−15m</button>
+          <input type="time" id="modal-time-input">
+          <button class="time-adj" data-delta="15">+15m</button>
+          <button class="time-adj" data-delta="60">+1h</button>
+        </div>
+        <label class="cascade-label">
+          <input type="checkbox" id="modal-cascade"> Shift all following stops by the same amount
+        </label>
+      </div>
+      <div class="modal-footer">
+        <button id="modal-cancel" class="pill-btn secondary">Cancel</button>
+        <button id="modal-save" class="pill-btn primary">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
