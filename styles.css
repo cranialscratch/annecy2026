@@ -147,28 +147,12 @@ html, body { height:100%; overflow:hidden; font-family:-apple-system,BlinkMacSys
   object-fit:cover; pointer-events:none;
   background:var(--bg3);
 }
-.card-slide-placeholder,
-.card-slide.card-slide-placeholder {
-  flex:0 0 100%; width:100%; height:100%;
-  display:flex; flex-direction:column; align-items:center; justify-content:center;
-  gap:6px;
+/* Photo / map slides are background-image divs — never a broken-image glyph,
+   never any text drawn over the photo. */
+.card-hero, .card-map, .detail-hero, .detail-map {
+  background-size:cover; background-position:center; background-repeat:no-repeat;
 }
-.ph-icon { font-size:44px; }
-.ph-name { font-size:12px; font-weight:700; color:rgba(255,255,255,.75); text-align:center; padding:0 12px; }
-
-/* Placeholder upgraded with a real Wikipedia photo */
-.card-slide-placeholder.has-photo,
-.detail-slide-placeholder.has-photo {
-  background-size:cover !important; background-position:center !important;
-  justify-content:flex-end; gap:0;
-}
-.card-slide-placeholder.has-photo .ph-icon,
-.detail-slide-placeholder.has-photo .ph-icon { display:none; }
-.card-slide-placeholder.has-photo .ph-name,
-.detail-slide-placeholder.has-photo .ph-name {
-  width:100%; margin:0; padding:18px 12px 8px; color:#fff;
-  background:linear-gradient(to top, rgba(0,0,0,.65), transparent);
-}
+.card-hero, .detail-hero { transition:background-image .2s ease; }
 
 .card-dots {
   position:absolute; bottom:8px; left:0; right:0;

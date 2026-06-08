@@ -105,76 +105,118 @@ const TYPE_GRAD = {
   festival:     ['#c084fc','#3b0764'],
 };
 
-/* ── Get slides for a stop ─────────────────────────────────────────── */
-function getPhotos(stop) {
-  const curated = CURATED[stop.id] || [];
-  // OSM static map — free, no API key needed
-  const osm = `https://staticmap.openstreetmap.de/staticmap.php?center=${stop.lat},${stop.lng}&zoom=15&size=640x380&markers=${stop.lat},${stop.lng},red`;
-  // placeholder sentinel (rendered as styled div, not img)
-  const placeholder = '__placeholder__';
+/* ── Location photos (free APIs, every candidate load-tested) ──────────
+   Guarantees each stop a real, location-relevant photo with no broken
+   images: candidates come from curated picks, Wikipedia, Wikimedia
+   Commons text search, and — the reliable anchor — Commons geo-search by
+   the stop's exact coordinates. Every URL is verified to load in the
+   browser before it is ever shown. */
 
-  if (curated.length) return [...curated, osm];
-  if (stop.type === 'charging' || stop.type === 'transport' || stop.type === 'depart' || stop.type === 'hotel') {
-    return [placeholder, osm];
-  }
-  return [placeholder, osm];
-}
-
-/* ── Wikipedia images (free, CORS-enabled, looked up by location) ───── */
-// Builds a clean, searchable place name from a stop's location string.
-function wikiQuery(stop) {
-  if (CURATED[stop.id]) return null;              // already has a curated photo
-  // Logistics / generic stops have no meaningful Wikipedia location image
-  if (['charging','transport','depart','hotel','food'].includes(stop.type)) return null;
-  const q = stop.location
-    .replace(/^(Old |Medieval |Historic |Evening |Independent |Central )/i, '')
-    .replace(/\b(Wander|Walk|Boat Tour|Area|Old Town|Lunch|Dinner|Stop)\b/gi, '')
+// A clean place/area query from a stop's location string.
+function searchQuery(stop) {
+  return stop.location
+    .replace(/^(Old |Medieval |Historic |Evening |Independent |Central |Dinner,?\s*|Lunch,?\s*|Coffee\s+Stop,?\s*)/i, '')
+    .replace(/\b(Wander|Walk|Boat Tour|Check-?In|Departure|Arrival|Old Town|Centre|Stop)\b/gi, '')
     .replace(/\s*&\s*/g, ' ')
-    .replace(/,.*$/, '')                           // drop everything after the first comma
     .replace(/\s{2,}/g, ' ')
-    .trim();
-  return q || stop.location;
+    .replace(/^[,\s]+|[,\s]+$/g, '')
+    .trim() || stop.location;
 }
-
-// Resolves a place name to a Wikipedia thumbnail URL (or null). Cached in
-// localStorage so each place is only looked up once; '' = known-missing.
-function fetchWikiImage(query) {
-  const key = 'wimg:' + query.toLowerCase();
-  let cached = null;
-  try { cached = localStorage.getItem(key); } catch (_) {}
-  if (cached !== null) return Promise.resolve(cached || null);
-  const api = 'https://en.wikipedia.org/w/api.php?action=query&format=json&origin=*'
-    + '&generator=search&gsrlimit=1&gsrsearch=' + encodeURIComponent(query)
-    + '&prop=pageimages&piprop=thumbnail&pithumbsize=800';
-  return fetch(api).then(r => r.json()).then(d => {
-    let url = '';
-    const pages = d && d.query && d.query.pages;
-    if (pages) {
-      const first = Object.values(pages)[0];
-      if (first && first.thumbnail && first.thumbnail.source) url = first.thumbnail.source;
-    }
-    try { localStorage.setItem(key, url); } catch (_) {}
-    return url || null;
-  }).catch(() => null);
+// Last comma-segment is usually the town/region (good secondary search term).
+function townOf(stop) {
+  const parts = stop.location.split(',').map(s => s.trim()).filter(Boolean);
+  return parts.length > 1 ? parts[parts.length - 1] : searchQuery(stop);
 }
+function dedupe(a) { return a.filter((x, i) => x && a.indexOf(x) === i); }
 
-// Progressively turns gradient placeholders into real Wikipedia photos.
-function enhanceWikiPlaceholders(root) {
-  if (!root) return;
-  root.querySelectorAll('[data-wq]').forEach(el => {
-    const q = decodeURIComponent(el.getAttribute('data-wq'));
-    el.removeAttribute('data-wq');                 // guard against double lookup
-    fetchWikiImage(q).then(url => {
-      if (!url) return;
-      const img = new Image();
-      img.onload = () => {
-        el.style.backgroundImage = `url("${url}")`;
-        el.classList.add('has-photo');
-      };
-      img.src = url;
-    });
+// Files that are not real photos (maps, logos, diagrams, audio, …)
+const PHOTO_JUNK = /(\.svg|\bmap\b|locator|logo|flag|coat[_ ]of[_ ]arms|blason|icon|diagram|\bplan\b|\.ogg|\.pdf|\.tif|symbol|wikidata|noun_|render)/i;
+
+// Resolve true once an image actually loads (and isn't a 1×1 tracker).
+function loadable(url, timeout) {
+  return new Promise(resolve => {
+    if (!url) return resolve(false);
+    const img = new Image();
+    let done = false;
+    const finish = ok => { if (!done) { done = true; clearTimeout(t); resolve(ok); } };
+    const t = setTimeout(() => finish(false), timeout || 9000);
+    img.onload  = () => finish(img.naturalWidth > 2);
+    img.onerror = () => finish(false);
+    img.src = url;
   });
 }
+async function firstLoadable(urls) {
+  for (const u of urls) if (await loadable(u)) return u;
+  return null;
+}
+async function collectLoadable(urls, max) {
+  const out = [];
+  for (const u of urls) {
+    if (out.length >= (max || 8)) break;
+    if (await loadable(u)) out.push(u);
+  }
+  return out;
+}
+
+// Wikimedia Commons — photos matching a text query.
+function commonsSearch(q) {
+  if (!q) return Promise.resolve([]);
+  const api = 'https://commons.wikimedia.org/w/api.php?action=query&format=json&origin=*'
+    + '&generator=search&gsrnamespace=6&gsrlimit=15&gsrsearch=' + encodeURIComponent(q)
+    + '&prop=imageinfo&iiprop=url|mime&iiurlwidth=800';
+  return fetch(api).then(r => r.json()).then(d => {
+    const pages = d && d.query && d.query.pages;
+    if (!pages) return [];
+    return Object.values(pages)
+      .sort((a, b) => (a.index || 0) - (b.index || 0))
+      .filter(p => p.imageinfo && p.imageinfo[0] && /jpeg|png/i.test(p.imageinfo[0].mime || '') && !PHOTO_JUNK.test(p.title || ''))
+      .map(p => p.imageinfo[0].thumburl).filter(Boolean);
+  }).catch(() => []);
+}
+
+// Wikimedia Commons — geotagged photos near the stop's exact coordinates.
+function commonsGeo(stop, radius) {
+  const api = 'https://commons.wikimedia.org/w/api.php?action=query&format=json&origin=*'
+    + '&generator=geosearch&ggsnamespace=6&ggscoord=' + stop.lat + '|' + stop.lng
+    + '&ggsradius=' + radius + '&ggslimit=20&prop=imageinfo&iiprop=url|mime&iiurlwidth=800';
+  return fetch(api).then(r => r.json()).then(d => {
+    const pages = d && d.query && d.query.pages;
+    if (!pages) return [];
+    return Object.values(pages)
+      .filter(p => p.imageinfo && p.imageinfo[0] && /jpeg|png/i.test(p.imageinfo[0].mime || '') && !PHOTO_JUNK.test(p.title || ''))
+      .map(p => p.imageinfo[0].thumburl).filter(Boolean);
+  }).catch(() => []);
+}
+
+// One guaranteed, location-relevant, load-tested photo for a card hero.
+function resolveHero(stop) {
+  const info = cacheGet('info2:' + stop.id);
+  if (info && info.gallery && info.gallery[0]) return Promise.resolve(info.gallery[0]);
+  const cached = cacheGet('hero:' + stop.id);
+  if (cached) return Promise.resolve(cached);
+  const curated = CURATED[stop.id] || [];
+  return firstLoadable(curated)
+    .then(u => u || commonsGeo(stop, 2000).then(firstLoadable))
+    .then(u => u || commonsSearch(searchQuery(stop)).then(firstLoadable))
+    .then(u => u || commonsGeo(stop, 15000).then(firstLoadable))
+    .then(u => {
+      const hero = u || osmStatic(stop);   // map: only non-photo fallback, always loads
+      cacheSet('hero:' + stop.id, hero);
+      return hero;
+    });
+}
+
+// Fill a hero slide element with its resolved photo (background-image so a
+// failed load can never show a broken-image glyph).
+function fillHero(el, stop) {
+  if (!el) return;
+  resolveHero(stop).then(url => {
+    if (!url) return;
+    el.style.backgroundImage = `url("${url}")`;
+    el.classList.add('has-photo');
+  });
+}
+
 
 /* ── Rich location info (free APIs: Wikipedia, Wikimedia Commons) ───── */
 function esc(s) {
@@ -224,22 +266,6 @@ function fetchWikiSummary(q) {
   }).catch(() => null);
 }
 
-// Several photos of the area from Wikimedia Commons
-function fetchCommonsImages(q) {
-  const api = 'https://commons.wikimedia.org/w/api.php?action=query&format=json&origin=*'
-    + '&generator=search&gsrnamespace=6&gsrlimit=12&gsrsearch=' + encodeURIComponent(q)
-    + '&prop=imageinfo&iiprop=url|mime&iiurlwidth=800';
-  return fetch(api).then(r => r.json()).then(d => {
-    const pages = d && d.query && d.query.pages;
-    if (!pages) return [];
-    return Object.values(pages)
-      .sort((a, b) => (a.index || 0) - (b.index || 0))
-      .filter(p => p.imageinfo && p.imageinfo[0] && /jpeg|png/i.test(p.imageinfo[0].mime || ''))
-      .map(p => p.imageinfo[0].thumburl)
-      .filter(Boolean);
-  }).catch(() => []);
-}
-
 // Notable places near the stop's coordinates ("popular in the area")
 function fetchNearby(stop) {
   const api = 'https://en.wikipedia.org/w/api.php?action=query&format=json&origin=*'
@@ -268,27 +294,35 @@ function haversine(la1, lo1, la2, lo2) {
   return 2 * R * Math.asin(Math.sqrt(a));
 }
 
-// Assemble (and cache) everything for a stop's detail page
+// Assemble (and cache) everything for a stop's detail page, with a
+// verified photo gallery (guaranteed non-empty).
 function loadStopInfo(stop) {
   const key = 'info2:' + stop.id;
   const cached = cacheGet(key);
   if (cached) return Promise.resolve(cached);
-  const q = wikiQuery(stop);
+  const q = searchQuery(stop);
   return Promise.all([
-    q ? fetchWikiSummary(q)  : Promise.resolve(null),
-    q ? fetchCommonsImages(q) : Promise.resolve([]),
+    fetchWikiSummary(q),
+    commonsSearch(q),
+    commonsSearch(townOf(stop)),
+    commonsGeo(stop, 8000),
     fetchNearby(stop),
-  ]).then(([summary, gallery, nearby]) => {
-    const info = {
-      title:   summary && summary.title,
-      extract: summary && summary.extract,
-      url:     summary && summary.url,
-      hero:    summary && summary.hero,
-      gallery: gallery || [],
-      nearby:  nearby || [],
-    };
-    cacheSet(key, info);
-    return info;
+  ]).then(([summary, s1, s2, geo, nearby]) => {
+    const curated = CURATED[stop.id] || [];
+    const heroFirst = summary && summary.hero ? [summary.hero] : [];
+    const candidates = dedupe([...curated, ...heroFirst, ...s1, ...s2, ...geo]).slice(0, 24);
+    return collectLoadable(candidates, 8).then(async gallery => {
+      if (!gallery.length && await loadable(osmStatic(stop))) gallery = [osmStatic(stop)];
+      const info = {
+        title:   summary && summary.title,
+        extract: summary && summary.extract,
+        url:     summary && summary.url,
+        gallery,
+        nearby:  nearby || [],
+      };
+      cacheSet(key, info);
+      return info;
+    });
   }).catch(() => ({ gallery: [], nearby: [] }));
 }
 
@@ -516,33 +550,24 @@ function buildTimelineItem(stop, isLast) {
 }
 
 /* ── Image slider HTML ─────────────────────────────────────────────── */
+// A card shows a hero photo (filled + verified async) plus the location map.
+// Both slides are background-image divs, so a failed load never shows a
+// broken-image glyph, and there is no text drawn over the photo.
 function buildSlider(stop, prefix) {
-  const photos = getPhotos(stop);
   const [c1, c2] = TYPE_GRAD[stop.type] || ['#334155','#0f172a'];
-  const slides = photos.map((url, i) => {
-    if (url === '__placeholder__') {
-      const wq = wikiQuery(stop);
-      return `<div class="${prefix}-slide ${prefix}-slide-placeholder"${wq ? ` data-wq="${encodeURIComponent(wq)}"` : ''} style="background:linear-gradient(145deg,${c1}55,${c2})">
-        <div class="ph-icon">${stop.icon}</div>
-        <div class="ph-name">${stop.location}</div>
-      </div>`;
-    }
-    return `<img class="${prefix}-slide" src="${url}" loading="lazy"
-      onerror="this.parentNode.style.transform=this.parentNode.style.transform"
-      alt="${stop.location}">`;
-  }).join('');
-  const dots = photos.length > 1
-    ? `<div class="${prefix}-dots">${photos.map((_,i) => `<span class="${prefix}-dot${i===0?' active':''}"></span>`).join('')}</div>`
-    : '';
+  const slides =
+    `<div class="${prefix}-slide ${prefix}-hero" data-hero style="background:linear-gradient(145deg,${c1}55,${c2})"></div>`
+  + `<div class="${prefix}-slide ${prefix}-map" style="background-image:url('${osmStatic(stop)}')"></div>`;
+  const dots = `<div class="${prefix}-dots"><span class="${prefix}-dot active"></span><span class="${prefix}-dot"></span></div>`;
   return `<div class="${prefix}-slider"><div class="${prefix}-slides">${slides}</div>${dots}</div>`;
 }
 
 /* ── Slider touch logic ────────────────────────────────────────────── */
 function initSlider(sliderEl, stop, prefix) {
   if (!sliderEl) return;
-  enhanceWikiPlaceholders(sliderEl);
   const slidesEl = sliderEl.querySelector(`.${prefix}-slides`);
-  const total = getPhotos(stop).length;
+  fillHero(sliderEl.querySelector('[data-hero]'), stop);
+  const total = slidesEl.children.length;
   let current = 0, startX = 0, startY = 0, diffX = 0, isDragging = false, isHoriz = null;
 
   function goTo(idx) {
@@ -600,25 +625,19 @@ function buildIconActions(stop) {
 /* ── Detail page ───────────────────────────────────────────────────── */
 let _detailStop = null, _detailCurrent = 0, _detailTotal = 0;
 
-// Collect a deduped photo set for the detail gallery (curated + Wikipedia + Commons)
-function buildGalleryImages(stop, info) {
-  let imgs = [];
-  if (CURATED[stop.id]) imgs.push(...CURATED[stop.id]);
-  if (info.hero) imgs.push(info.hero);
-  if (info.gallery) imgs.push(...info.gallery);
-  return imgs.filter((u, i) => u && imgs.indexOf(u) === i).slice(0, 10);
-}
-
+// Render the verified gallery (already load-tested) followed by the map.
 function rebuildDetailGallery(stop, imgs) {
   const slidesEl = document.getElementById('detail-slides');
   const dotsEl   = document.getElementById('detail-dots');
-  const all = [...imgs, osmStatic(stop)];
+  const photoSlides = imgs.map(url =>
+    `<img class="detail-slide" src="${url}" loading="lazy" alt="${esc(stop.location)}">`).join('');
+  const mapSlide = `<div class="detail-slide detail-map" style="background-image:url('${osmStatic(stop)}')"></div>`;
+  const all = imgs.concat(['__map__']);
   _detailTotal = all.length;
   _detailCurrent = 0;
   slidesEl.style.transition = 'none';
   slidesEl.style.transform  = 'translateX(0)';
-  slidesEl.innerHTML = all.map(url =>
-    `<img class="detail-slide" src="${url}" loading="lazy" alt="${esc(stop.location)}">`).join('');
+  slidesEl.innerHTML = photoSlides + mapSlide;
   dotsEl.innerHTML = all.length > 1
     ? all.map((_, i) => `<span class="detail-dot${i === 0 ? ' active' : ''}"></span>`).join('') : '';
   initDetailSlider();
@@ -653,28 +672,20 @@ function openDetail(stop) {
   overlay.classList.remove('hidden');
   requestAnimationFrame(() => requestAnimationFrame(() => overlay.classList.add('open')));
 
-  const photos = getPhotos(stop);
-  _detailTotal = photos.length;
-  _detailCurrent = 0;
-
+  // Start with a hero slot (filled async) + the location map; the full
+  // verified gallery replaces these once loadStopInfo resolves.
   const slidesEl = document.getElementById('detail-slides');
   const dotsEl   = document.getElementById('detail-dots');
+  const [dc1, dc2] = TYPE_GRAD[stop.type] || ['#334155','#0f172a'];
+  _detailTotal = 2;
+  _detailCurrent = 0;
   slidesEl.style.transition = 'none';
   slidesEl.style.transform  = 'translateX(0)';
-  const [dc1, dc2] = TYPE_GRAD[stop.type] || ['#334155','#0f172a'];
-  slidesEl.innerHTML = photos.map(url => {
-    if (url === '__placeholder__') {
-      const wq = wikiQuery(stop);
-      return `<div class="detail-slide detail-slide-placeholder"${wq ? ` data-wq="${encodeURIComponent(wq)}"` : ''} style="background:linear-gradient(145deg,${dc1}55,${dc2})">
-        <div class="ph-icon" style="font-size:72px">${stop.icon}</div>
-        <div class="ph-name" style="font-size:18px;margin-top:12px;padding:0 24px;text-align:center">${stop.location}</div>
-      </div>`;
-    }
-    return `<img class="detail-slide" src="${url}" loading="lazy" alt="${stop.location}">`;
-  }).join('');
-  enhanceWikiPlaceholders(slidesEl);
-  dotsEl.innerHTML = photos.length > 1
-    ? photos.map((_,i) => `<span class="detail-dot${i===0?' active':''}"></span>`).join('') : '';
+  slidesEl.innerHTML =
+      `<div class="detail-slide detail-hero" data-hero style="background:linear-gradient(145deg,${dc1}55,${dc2})"></div>`
+    + `<div class="detail-slide detail-map" style="background-image:url('${osmStatic(stop)}')"></div>`;
+  fillHero(slidesEl.querySelector('[data-hero]'), stop);
+  dotsEl.innerHTML = '<span class="detail-dot active"></span><span class="detail-dot"></span>';
 
   document.getElementById('detail-body').dataset.type = stop.type;
   document.getElementById('detail-badge').textContent = typeLabel(stop.type);
@@ -705,16 +716,14 @@ function openDetail(stop) {
   // Reset rich sections, then load them in the background (cached per stop)
   const aboutEl  = document.getElementById('detail-about');
   const nearbyEl = document.getElementById('detail-nearby');
-  aboutEl.className  = 'detail-section hidden'; aboutEl.innerHTML  = '';
+  aboutEl.className  = 'detail-section'; aboutEl.innerHTML  = '<div class="sec-loading">Loading details…</div>';
   nearbyEl.className = 'detail-section hidden'; nearbyEl.innerHTML = '';
-  if (wikiQuery(stop)) { aboutEl.className = 'detail-section'; aboutEl.innerHTML = '<div class="sec-loading">Loading details…</div>'; }
   const reqStop = stop;
   loadStopInfo(stop).then(info => {
     if (_detailStop !== reqStop) return;   // user moved on before it loaded
     renderAbout(aboutEl, stop, info);
     renderNearby(nearbyEl, info);
-    const gallery = buildGalleryImages(stop, info);
-    if (gallery.length) rebuildDetailGallery(stop, gallery);
+    if (info.gallery && info.gallery.length) rebuildDetailGallery(stop, info.gallery);
   });
 
   updateDetailCheckBtn();
