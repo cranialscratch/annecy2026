@@ -120,6 +120,62 @@ function getPhotos(stop) {
   return [placeholder, osm];
 }
 
+/* ── Wikipedia images (free, CORS-enabled, looked up by location) ───── */
+// Builds a clean, searchable place name from a stop's location string.
+function wikiQuery(stop) {
+  if (CURATED[stop.id]) return null;              // already has a curated photo
+  // Logistics / generic stops have no meaningful Wikipedia location image
+  if (['charging','transport','depart','hotel','food'].includes(stop.type)) return null;
+  const q = stop.location
+    .replace(/^(Old |Medieval |Historic |Evening |Independent |Central )/i, '')
+    .replace(/\b(Wander|Walk|Boat Tour|Area|Old Town|Lunch|Dinner|Stop)\b/gi, '')
+    .replace(/\s*&\s*/g, ' ')
+    .replace(/,.*$/, '')                           // drop everything after the first comma
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+  return q || stop.location;
+}
+
+// Resolves a place name to a Wikipedia thumbnail URL (or null). Cached in
+// localStorage so each place is only looked up once; '' = known-missing.
+function fetchWikiImage(query) {
+  const key = 'wimg:' + query.toLowerCase();
+  let cached = null;
+  try { cached = localStorage.getItem(key); } catch (_) {}
+  if (cached !== null) return Promise.resolve(cached || null);
+  const api = 'https://en.wikipedia.org/w/api.php?action=query&format=json&origin=*'
+    + '&generator=search&gsrlimit=1&gsrsearch=' + encodeURIComponent(query)
+    + '&prop=pageimages&piprop=thumbnail&pithumbsize=800';
+  return fetch(api).then(r => r.json()).then(d => {
+    let url = '';
+    const pages = d && d.query && d.query.pages;
+    if (pages) {
+      const first = Object.values(pages)[0];
+      if (first && first.thumbnail && first.thumbnail.source) url = first.thumbnail.source;
+    }
+    try { localStorage.setItem(key, url); } catch (_) {}
+    return url || null;
+  }).catch(() => null);
+}
+
+// Progressively turns gradient placeholders into real Wikipedia photos.
+function enhanceWikiPlaceholders(root) {
+  if (!root) return;
+  root.querySelectorAll('[data-wq]').forEach(el => {
+    const q = decodeURIComponent(el.getAttribute('data-wq'));
+    el.removeAttribute('data-wq');                 // guard against double lookup
+    fetchWikiImage(q).then(url => {
+      if (!url) return;
+      const img = new Image();
+      img.onload = () => {
+        el.style.backgroundImage = `url("${url}")`;
+        el.classList.add('has-photo');
+      };
+      img.src = url;
+    });
+  });
+}
+
 /* ── Nav URLs ──────────────────────────────────────────────────────── */
 function teslaNavUrl(stop) {
   return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(stop.location)}`;
@@ -349,7 +405,8 @@ function buildSlider(stop, prefix) {
   const [c1, c2] = TYPE_GRAD[stop.type] || ['#334155','#0f172a'];
   const slides = photos.map((url, i) => {
     if (url === '__placeholder__') {
-      return `<div class="${prefix}-slide ${prefix}-slide-placeholder" style="background:linear-gradient(145deg,${c1}55,${c2})">
+      const wq = wikiQuery(stop);
+      return `<div class="${prefix}-slide ${prefix}-slide-placeholder"${wq ? ` data-wq="${encodeURIComponent(wq)}"` : ''} style="background:linear-gradient(145deg,${c1}55,${c2})">
         <div class="ph-icon">${stop.icon}</div>
         <div class="ph-name">${stop.location}</div>
       </div>`;
@@ -367,6 +424,7 @@ function buildSlider(stop, prefix) {
 /* ── Slider touch logic ────────────────────────────────────────────── */
 function initSlider(sliderEl, stop, prefix) {
   if (!sliderEl) return;
+  enhanceWikiPlaceholders(sliderEl);
   const slidesEl = sliderEl.querySelector(`.${prefix}-slides`);
   const total = getPhotos(stop).length;
   let current = 0, startX = 0, startY = 0, diffX = 0, isDragging = false, isHoriz = null;
@@ -443,13 +501,15 @@ function openDetail(stop) {
   const [dc1, dc2] = TYPE_GRAD[stop.type] || ['#334155','#0f172a'];
   slidesEl.innerHTML = photos.map(url => {
     if (url === '__placeholder__') {
-      return `<div class="detail-slide detail-slide-placeholder" style="background:linear-gradient(145deg,${dc1}55,${dc2})">
+      const wq = wikiQuery(stop);
+      return `<div class="detail-slide detail-slide-placeholder"${wq ? ` data-wq="${encodeURIComponent(wq)}"` : ''} style="background:linear-gradient(145deg,${dc1}55,${dc2})">
         <div class="ph-icon" style="font-size:72px">${stop.icon}</div>
         <div class="ph-name" style="font-size:18px;margin-top:12px;padding:0 24px;text-align:center">${stop.location}</div>
       </div>`;
     }
     return `<img class="detail-slide" src="${url}" loading="lazy" alt="${stop.location}">`;
   }).join('');
+  enhanceWikiPlaceholders(slidesEl);
   dotsEl.innerHTML = photos.length > 1
     ? photos.map((_,i) => `<span class="detail-dot${i===0?' active':''}"></span>`).join('') : '';
 
