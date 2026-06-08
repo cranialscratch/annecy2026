@@ -212,7 +212,10 @@ function fillHero(el, stop) {
   if (!el) return;
   resolveHero(stop).then(url => {
     if (!url) return;
-    el.style.backgroundImage = `url("${url}")`;
+    el.style.backgroundImage    = `url("${url}")`;
+    el.style.backgroundSize     = 'cover';
+    el.style.backgroundPosition = 'center';
+    el.style.backgroundRepeat   = 'no-repeat';
     el.classList.add('has-photo');
   });
 }
