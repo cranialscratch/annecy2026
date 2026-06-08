@@ -176,6 +176,122 @@ function enhanceWikiPlaceholders(root) {
   });
 }
 
+/* ── Rich location info (free APIs: Wikipedia, Wikimedia Commons) ───── */
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g,
+    c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+}
+function cacheGet(k) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : null; } catch (_) { return null; } }
+function cacheSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (_) {} }
+
+function dayForStop(stop) {
+  for (const d of TRIP_DATA.days) if (d.stops && d.stops.some(s => s.id === stop.id)) return d;
+  return null;
+}
+function osmStatic(stop) {
+  return `https://staticmap.openstreetmap.de/staticmap.php?center=${stop.lat},${stop.lng}&zoom=15&size=640x380&markers=${stop.lat},${stop.lng},red`;
+}
+
+// Google deep links (free, always current — no API key needed)
+function googleReviewsUrl(stop) {
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(stop.location)}`;
+}
+function whatsOnUrl(stop) {
+  const day = dayForStop(stop);
+  const area = stop.location.replace(/^[^,]*,\s*/, '').replace(/,.*$/, '').trim() || stop.location;
+  const date = day && !day.isFestival
+    ? ' on ' + new Date(day.date + 'T00:00:00').toLocaleDateString('en-GB', { day:'numeric', month:'long', year:'numeric' })
+    : '';
+  return `https://www.google.com/search?q=${encodeURIComponent('things to do and events in ' + area + date)}`;
+}
+
+// Wikipedia intro paragraph + best hero image
+function fetchWikiSummary(q) {
+  const api = 'https://en.wikipedia.org/w/api.php?action=query&format=json&origin=*&redirects=1'
+    + '&generator=search&gsrlimit=1&gsrsearch=' + encodeURIComponent(q)
+    + '&prop=extracts|pageimages|info&inprop=url&exintro=1&explaintext=1&piprop=original|thumbnail&pithumbsize=800';
+  return fetch(api).then(r => r.json()).then(d => {
+    const pages = d && d.query && d.query.pages;
+    if (!pages) return null;
+    const p = Object.values(pages)[0];
+    if (!p) return null;
+    return {
+      title:   p.title || null,
+      extract: p.extract || null,
+      url:     p.fullurl || p.canonicalurl || null,
+      hero:    (p.original && p.original.source) || (p.thumbnail && p.thumbnail.source) || null,
+    };
+  }).catch(() => null);
+}
+
+// Several photos of the area from Wikimedia Commons
+function fetchCommonsImages(q) {
+  const api = 'https://commons.wikimedia.org/w/api.php?action=query&format=json&origin=*'
+    + '&generator=search&gsrnamespace=6&gsrlimit=12&gsrsearch=' + encodeURIComponent(q)
+    + '&prop=imageinfo&iiprop=url|mime&iiurlwidth=800';
+  return fetch(api).then(r => r.json()).then(d => {
+    const pages = d && d.query && d.query.pages;
+    if (!pages) return [];
+    return Object.values(pages)
+      .sort((a, b) => (a.index || 0) - (b.index || 0))
+      .filter(p => p.imageinfo && p.imageinfo[0] && /jpeg|png/i.test(p.imageinfo[0].mime || ''))
+      .map(p => p.imageinfo[0].thumburl)
+      .filter(Boolean);
+  }).catch(() => []);
+}
+
+// Notable places near the stop's coordinates ("popular in the area")
+function fetchNearby(stop) {
+  const api = 'https://en.wikipedia.org/w/api.php?action=query&format=json&origin=*'
+    + '&generator=geosearch&ggscoord=' + stop.lat + '|' + stop.lng + '&ggsradius=10000&ggslimit=12'
+    + '&prop=pageimages|description|coordinates&piprop=thumbnail&pithumbsize=160';
+  return fetch(api).then(r => r.json()).then(d => {
+    const pages = d && d.query && d.query.pages;
+    if (!pages) return [];
+    const here = (stop.location || '').toLowerCase();
+    return Object.values(pages)
+      .map(p => {
+        const co = p.coordinates && p.coordinates[0];
+        const dist = co ? haversine(stop.lat, stop.lng, co.lat, co.lon) : 1e9;
+        return { title:p.title, desc:p.description || '', thumb:(p.thumbnail && p.thumbnail.source) || null, dist };
+      })
+      .filter(p => p.title && p.title.toLowerCase() !== here)
+      .sort((a, b) => a.dist - b.dist)
+      .slice(0, 8);
+  }).catch(() => []);
+}
+
+function haversine(la1, lo1, la2, lo2) {
+  const R = 6371, t = x => x * Math.PI / 180;
+  const dLa = t(la2 - la1), dLo = t(lo2 - lo1);
+  const a = Math.sin(dLa/2)**2 + Math.cos(t(la1)) * Math.cos(t(la2)) * Math.sin(dLo/2)**2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+// Assemble (and cache) everything for a stop's detail page
+function loadStopInfo(stop) {
+  const key = 'info2:' + stop.id;
+  const cached = cacheGet(key);
+  if (cached) return Promise.resolve(cached);
+  const q = wikiQuery(stop);
+  return Promise.all([
+    q ? fetchWikiSummary(q)  : Promise.resolve(null),
+    q ? fetchCommonsImages(q) : Promise.resolve([]),
+    fetchNearby(stop),
+  ]).then(([summary, gallery, nearby]) => {
+    const info = {
+      title:   summary && summary.title,
+      extract: summary && summary.extract,
+      url:     summary && summary.url,
+      hero:    summary && summary.hero,
+      gallery: gallery || [],
+      nearby:  nearby || [],
+    };
+    cacheSet(key, info);
+    return info;
+  }).catch(() => ({ gallery: [], nearby: [] }));
+}
+
 /* ── Nav URLs ──────────────────────────────────────────────────────── */
 function teslaNavUrl(stop) {
   return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(stop.location)}`;
@@ -484,6 +600,53 @@ function buildIconActions(stop) {
 /* ── Detail page ───────────────────────────────────────────────────── */
 let _detailStop = null, _detailCurrent = 0, _detailTotal = 0;
 
+// Collect a deduped photo set for the detail gallery (curated + Wikipedia + Commons)
+function buildGalleryImages(stop, info) {
+  let imgs = [];
+  if (CURATED[stop.id]) imgs.push(...CURATED[stop.id]);
+  if (info.hero) imgs.push(info.hero);
+  if (info.gallery) imgs.push(...info.gallery);
+  return imgs.filter((u, i) => u && imgs.indexOf(u) === i).slice(0, 10);
+}
+
+function rebuildDetailGallery(stop, imgs) {
+  const slidesEl = document.getElementById('detail-slides');
+  const dotsEl   = document.getElementById('detail-dots');
+  const all = [...imgs, osmStatic(stop)];
+  _detailTotal = all.length;
+  _detailCurrent = 0;
+  slidesEl.style.transition = 'none';
+  slidesEl.style.transform  = 'translateX(0)';
+  slidesEl.innerHTML = all.map(url =>
+    `<img class="detail-slide" src="${url}" loading="lazy" alt="${esc(stop.location)}">`).join('');
+  dotsEl.innerHTML = all.length > 1
+    ? all.map((_, i) => `<span class="detail-dot${i === 0 ? ' active' : ''}"></span>`).join('') : '';
+  initDetailSlider();
+}
+
+function renderAbout(el, stop, info) {
+  if (!info.extract) { el.className = 'detail-section hidden'; el.innerHTML = ''; return; }
+  el.className = 'detail-section';
+  el.innerHTML = `<h3 class="sec-title">About ${esc(info.title || stop.location)}</h3>
+    <p class="about-text">${esc(info.extract)}</p>
+    ${info.url ? `<a class="about-more" href="${info.url}" target="_blank" rel="noopener">Read more on Wikipedia →</a>` : ''}`;
+}
+
+function renderNearby(el, info) {
+  if (!info.nearby || !info.nearby.length) { el.className = 'detail-section hidden'; el.innerHTML = ''; return; }
+  el.className = 'detail-section';
+  const cards = info.nearby.map(n => {
+    const g = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(n.title)}`;
+    const km = n.dist < 1 ? Math.round(n.dist * 1000) + ' m' : n.dist.toFixed(1) + ' km';
+    return `<a class="nearby-card" href="${g}" target="_blank" rel="noopener">
+      <div class="nearby-thumb"${n.thumb ? ` style="background-image:url('${n.thumb}')"` : ''}>${n.thumb ? '' : '📍'}</div>
+      <div class="nearby-name">${esc(n.title)}</div>
+      <div class="nearby-desc">${esc(n.desc || ('about ' + km + ' away'))}</div>
+    </a>`;
+  }).join('');
+  el.innerHTML = `<h3 class="sec-title">Popular nearby</h3><div class="nearby-scroll">${cards}</div>`;
+}
+
 function openDetail(stop) {
   _detailStop = stop;
   const overlay = document.getElementById('detail-overlay');
@@ -535,7 +698,24 @@ function openDetail(stop) {
     parts.push(`<a class="act-btn-full poi" href="${poiNearbyUrl(stop)}" target="_blank" rel="noopener">📍 POI</a>`);
   if (stop.mapsUrl && stop.mapsUrl !== 'N/A')
     parts.push(`<a class="act-btn-full maps" href="${stop.mapsUrl}" target="_blank" rel="noopener">🗺️ Maps</a>`);
+  parts.push(`<a class="act-btn-full reviews" href="${googleReviewsUrl(stop)}" target="_blank" rel="noopener">⭐ Reviews & hours</a>`);
+  parts.push(`<a class="act-btn-full whatson" href="${whatsOnUrl(stop)}" target="_blank" rel="noopener">🎟️ What's on</a>`);
   actEl.innerHTML = parts.join('');
+
+  // Reset rich sections, then load them in the background (cached per stop)
+  const aboutEl  = document.getElementById('detail-about');
+  const nearbyEl = document.getElementById('detail-nearby');
+  aboutEl.className  = 'detail-section hidden'; aboutEl.innerHTML  = '';
+  nearbyEl.className = 'detail-section hidden'; nearbyEl.innerHTML = '';
+  if (wikiQuery(stop)) { aboutEl.className = 'detail-section'; aboutEl.innerHTML = '<div class="sec-loading">Loading details…</div>'; }
+  const reqStop = stop;
+  loadStopInfo(stop).then(info => {
+    if (_detailStop !== reqStop) return;   // user moved on before it loaded
+    renderAbout(aboutEl, stop, info);
+    renderNearby(nearbyEl, info);
+    const gallery = buildGalleryImages(stop, info);
+    if (gallery.length) rebuildDetailGallery(stop, gallery);
+  });
 
   updateDetailCheckBtn();
   initDetailSlider();
