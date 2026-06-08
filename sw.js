@@ -1,4 +1,4 @@
-const CACHE = 'annecy2026-v3';
+const CACHE = 'annecy2026-v4';
 const ASSETS = [
   './',
   './index.html',
@@ -30,14 +30,33 @@ self.addEventListener('activate', e => {
 
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
-  // Navigation: serve app shell
+  const url = new URL(e.request.url);
+  const sameOrigin = url.origin === self.location.origin;
+
+  // Navigation: network-first, fall back to cached shell offline
   if (e.request.mode === 'navigate') {
     e.respondWith(
       fetch(e.request).catch(() => caches.match('./index.html'))
     );
     return;
   }
-  // Assets: cache-first
+
+  // Same-origin app assets (html/css/js/data): network-first so new
+  // builds always show when online, falling back to cache when offline.
+  if (sameOrigin) {
+    e.respondWith(
+      fetch(e.request).then(res => {
+        if (res && res.status === 200) {
+          const clone = res.clone();
+          caches.open(CACHE).then(c => c.put(e.request, clone));
+        }
+        return res;
+      }).catch(() => caches.match(e.request))
+    );
+    return;
+  }
+
+  // Cross-origin (photos, maps): cache-first to save bandwidth / work offline
   e.respondWith(
     caches.match(e.request).then(cached => {
       if (cached) return cached;
