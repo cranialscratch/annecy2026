@@ -7,6 +7,10 @@ const state = {
   checked: {},          // stopId → bool
   locOverrides: {},     // stopId → { name, lat, lng }
   durOverrides: {},     // stopId → minutes
+  typeOverrides: {},    // stopId → type string
+  priorityOverrides: {}, // stopId → 0-3
+  reasonOverrides: {},  // stopId → string
+  veganOverrides: {},   // stopId → bool
 };
 
 /* ── Helpers ───────────────────────────────────────────────────────── */
@@ -24,6 +28,10 @@ function getStopLat(stop)      { return state.locOverrides[stop.id]?.lat  ?? sto
 function getStopLng(stop)      { return state.locOverrides[stop.id]?.lng  ?? stop.lng; }
 function getStopName(stop)     { return state.locOverrides[stop.id]?.name ?? stop.location; }
 function getStopDuration(stop) { return state.durOverrides[stop.id]       ?? stop.duration ?? 30; }
+function getStopType(stop)     { return state.typeOverrides[stop.id]     ?? stop.type; }
+function getStopPriority(stop) { return state.priorityOverrides[stop.id] ?? stop.priority ?? 0; }
+function getStopReason(stop)   { return state.reasonOverrides[stop.id]   ?? stop.reason; }
+function getStopVegan(stop)    { return stop.id in state.veganOverrides ? state.veganOverrides[stop.id] : !!stop.veganFriendly; }
 function priorityStars(p) { return p >= 1 ? '★'.repeat(p) + '☆'.repeat(3-p) : ''; }
 function formatDate(dateStr) {
   const d = new Date(dateStr + 'T00:00:00');
@@ -53,9 +61,9 @@ function nowMinutes() {
 }
 function buildTags(stop) {
   const tags = [];
-  if (stop.veganFriendly)       tags.push(`<span class="tl-tag vegan">🌱 Vegan-friendly</span>`);
-  if (stop.type === 'charging') tags.push(`<span class="tl-tag charge">⚡ Supercharger</span>`);
-  if (stop.priority >= 3)       tags.push(`<span class="tl-tag poi">★ Must-see</span>`);
+  if (getStopVegan(stop))              tags.push(`<span class="tl-tag vegan">🌱 Vegan-friendly</span>`);
+  if (getStopType(stop) === 'charging') tags.push(`<span class="tl-tag charge">⚡ Supercharger</span>`);
+  if (getStopPriority(stop) >= 3)       tags.push(`<span class="tl-tag poi">★ Must-see</span>`);
   return tags.length ? `<div class="tl-card-tags">${tags.join('')}</div>` : '';
 }
 
@@ -340,10 +348,14 @@ function poiNearbyUrl(stop) {
 /* ── Persist ───────────────────────────────────────────────────────── */
 function save() {
   try {
-    localStorage.setItem('annecy_overrides',    JSON.stringify(state.overrides));
-    localStorage.setItem('annecy_checked',      JSON.stringify(state.checked));
-    localStorage.setItem('annecy_loc_overrides', JSON.stringify(state.locOverrides));
-    localStorage.setItem('annecy_dur_overrides', JSON.stringify(state.durOverrides));
+    localStorage.setItem('annecy_overrides',          JSON.stringify(state.overrides));
+    localStorage.setItem('annecy_checked',            JSON.stringify(state.checked));
+    localStorage.setItem('annecy_loc_overrides',      JSON.stringify(state.locOverrides));
+    localStorage.setItem('annecy_dur_overrides',      JSON.stringify(state.durOverrides));
+    localStorage.setItem('annecy_type_overrides',     JSON.stringify(state.typeOverrides));
+    localStorage.setItem('annecy_priority_overrides', JSON.stringify(state.priorityOverrides));
+    localStorage.setItem('annecy_reason_overrides',   JSON.stringify(state.reasonOverrides));
+    localStorage.setItem('annecy_vegan_overrides',    JSON.stringify(state.veganOverrides));
   } catch {}
 }
 function load() {
@@ -352,10 +364,18 @@ function load() {
     const c  = localStorage.getItem('annecy_checked');
     const lo = localStorage.getItem('annecy_loc_overrides');
     const du = localStorage.getItem('annecy_dur_overrides');
-    if (o)  state.overrides    = JSON.parse(o);
-    if (c)  state.checked      = JSON.parse(c);
-    if (lo) state.locOverrides = JSON.parse(lo);
-    if (du) state.durOverrides = JSON.parse(du);
+    const ty = localStorage.getItem('annecy_type_overrides');
+    const pr = localStorage.getItem('annecy_priority_overrides');
+    const re = localStorage.getItem('annecy_reason_overrides');
+    const ve = localStorage.getItem('annecy_vegan_overrides');
+    if (o)  state.overrides         = JSON.parse(o);
+    if (c)  state.checked           = JSON.parse(c);
+    if (lo) state.locOverrides      = JSON.parse(lo);
+    if (du) state.durOverrides      = JSON.parse(du);
+    if (ty) state.typeOverrides     = JSON.parse(ty);
+    if (pr) state.priorityOverrides = JSON.parse(pr);
+    if (re) state.reasonOverrides   = JSON.parse(re);
+    if (ve) state.veganOverrides    = JSON.parse(ve);
   } catch {}
   try {
     if (localStorage.getItem('annecy_theme') === 'light') document.body.classList.add('light');
@@ -622,7 +642,7 @@ function renderTimeline(container, scrollToNow) {
 function buildTimelineItem(stop, isLast) {
   const item = document.createElement('div');
   item.className = 'tl-item';
-  item.dataset.type = stop.type;
+  item.dataset.type = getStopType(stop);
   item.id = `stop-${stop.id}`;
 
   const time = getStopTime(stop);
@@ -648,10 +668,10 @@ function buildTimelineItem(stop, isLast) {
           <button class="check-btn${isVisited ? ' checked' : ''}" data-stop-id="${stop.id}" aria-label="Mark visited">${isVisited ? '✓' : '○'}</button>
         </div>
         <div class="card-meta-row">
-          <span class="tl-card-badge">${typeLabel(stop.type)}</span>
-          ${stop.priority > 0 ? `<span class="priority-stars">${priorityStars(stop.priority)}</span>` : ''}
+          <span class="tl-card-badge">${typeLabel(getStopType(stop))}</span>
+          ${getStopPriority(stop) > 0 ? `<span class="priority-stars">${priorityStars(getStopPriority(stop))}</span>` : ''}
         </div>
-        <div class="card-reason">${stop.reason}</div>
+        <div class="card-reason">${getStopReason(stop)}</div>
         ${buildTags(stop)}
         <div class="tl-actions">${buildIconActions(stop)}</div>
       </div>
@@ -762,11 +782,12 @@ function initSlider(sliderEl, stop, prefix) {
 /* ── Action buttons — icon only ───────────────────────────────────── */
 function buildIconActions(stop) {
   const parts = [`<a class="act-btn tesla" href="${teslaNavUrl(stop)}" target="_blank" rel="noopener">🚗</a>`];
-  if (stop.type !== 'depart' && stop.type !== 'transport') {
-    if (stop.veganFriendly || stop.type === 'food')
+  const sType = getStopType(stop);
+  if (sType !== 'depart' && sType !== 'transport') {
+    if (getStopVegan(stop) || sType === 'food')
       parts.push(`<a class="act-btn vegan" href="${veganNearbyUrl(stop)}" target="_blank" rel="noopener">🌱</a>`);
     parts.push(`<a class="act-btn charge" href="${chargingNearbyUrl(stop)}" target="_blank" rel="noopener">⚡</a>`);
-    if (stop.priority >= 2)
+    if (getStopPriority(stop) >= 2)
       parts.push(`<a class="act-btn poi" href="${poiNearbyUrl(stop)}" target="_blank" rel="noopener">📍</a>`);
   }
   if (stop.mapsUrl && stop.mapsUrl !== 'N/A')
@@ -903,22 +924,22 @@ function openDetail(stop) {
   slidesEl.style.transform  = 'translateX(0)';
   setDetailSlides(getPhotos(stop), stop);
 
-  document.getElementById('detail-body').dataset.type = stop.type;
-  document.getElementById('detail-badge').textContent = typeLabel(stop.type);
+  document.getElementById('detail-body').dataset.type = getStopType(stop);
+  document.getElementById('detail-badge').textContent = typeLabel(getStopType(stop));
   document.getElementById('detail-time').textContent  = getStopTime(stop) + (stop.tz ? ' ' + stop.tz : '');
-  document.getElementById('detail-stars').textContent = priorityStars(stop.priority);
+  document.getElementById('detail-stars').textContent = priorityStars(getStopPriority(stop));
   document.getElementById('detail-name').textContent  = stop.icon + ' ' + stop.location;
-  document.getElementById('detail-reason').textContent = _wikiCache[stop.id]?.extract || stop.reason;
+  document.getElementById('detail-reason').textContent = _wikiCache[stop.id]?.extract || getStopReason(stop);
 
   const tagsEl = document.getElementById('detail-tags');
   tagsEl.innerHTML = '';
-  if (stop.veganFriendly)       tagsEl.innerHTML += '<span class="tl-tag vegan">🌱 Vegan-friendly</span>';
-  if (stop.type === 'charging') tagsEl.innerHTML += '<span class="tl-tag charge">⚡ Supercharger</span>';
-  if (stop.priority >= 3)       tagsEl.innerHTML += '<span class="tl-tag poi">★ Must-see</span>';
+  if (getStopVegan(stop))                    tagsEl.innerHTML += '<span class="tl-tag vegan">🌱 Vegan-friendly</span>';
+  if (getStopType(stop) === 'charging')      tagsEl.innerHTML += '<span class="tl-tag charge">⚡ Supercharger</span>';
+  if (getStopPriority(stop) >= 3)            tagsEl.innerHTML += '<span class="tl-tag poi">★ Must-see</span>';
 
   const actEl = document.getElementById('detail-actions');
   const parts = [`<a class="act-btn-full tesla" href="${teslaNavUrl(stop)}" target="_blank" rel="noopener">🚗 Navigate</a>`];
-  if (stop.veganFriendly || stop.type === 'food')
+  if (getStopVegan(stop) || getStopType(stop) === 'food')
     parts.push(`<a class="act-btn-full vegan" href="${veganNearbyUrl(stop)}" target="_blank" rel="noopener">🌱 Vegan nearby</a>`);
   parts.push(`<a class="act-btn-full charge" href="${chargingNearbyUrl(stop)}" target="_blank" rel="noopener">⚡ Chargers</a>`);
   if (stop.mapsUrl && stop.mapsUrl !== 'N/A')
@@ -1180,7 +1201,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('drawer-overlay').addEventListener('click', closeDrawer);
   document.querySelectorAll('.drawer-item[data-action]').forEach(btn =>
     btn.addEventListener('click', () => {
-      if (btn.dataset.action === 'reset-times')  { state.overrides = {}; state.locOverrides = {}; state.durOverrides = {}; save(); renderView(false); closeDrawer(); }
+      if (btn.dataset.action === 'reset-times')  { state.overrides = {}; state.locOverrides = {}; state.durOverrides = {}; state.typeOverrides = {}; state.priorityOverrides = {}; state.reasonOverrides = {}; state.veganOverrides = {}; save(); renderView(false); closeDrawer(); }
       if (btn.dataset.action === 'reset-checks') { state.checked   = {}; save(); renderView(false); closeDrawer(); }
       if (btn.dataset.action === 'toggle-dark')  {
         document.body.classList.toggle('light');
