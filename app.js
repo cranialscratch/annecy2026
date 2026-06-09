@@ -921,6 +921,58 @@ function initDetailSlider() {
   });
 }
 
+/* ── Detail page nav swipe (right = back, left = next stop) ────────── */
+function initDetailNavSwipe() {
+  const page    = document.getElementById('detail-page');
+  const sliderWrapId = 'detail-slider-wrap';
+
+  let startX = 0, startY = 0, diffX = 0, isHoriz = null, active = false;
+
+  page.addEventListener('touchstart', e => {
+    const sliderWrap = document.getElementById(sliderWrapId);
+    if (sliderWrap && sliderWrap.contains(e.target)) return; // photo slider owns this
+    startX = e.touches[0].clientX;
+    startY = e.touches[0].clientY;
+    diffX = 0; isHoriz = null; active = true;
+  }, { passive: true });
+
+  page.addEventListener('touchmove', e => {
+    if (!active) return;
+    const dx = e.touches[0].clientX - startX;
+    const dy = e.touches[0].clientY - startY;
+    if (isHoriz === null) {
+      if (Math.abs(dx) > Math.abs(dy) + 6)       isHoriz = true;
+      else if (Math.abs(dy) > Math.abs(dx) + 6)  isHoriz = false;
+      else return;
+    }
+    if (!isHoriz) return;
+    diffX = dx;
+    page.style.transition = 'none';
+    // right-swipe: slide out right; left-swipe: slide out left (dampened)
+    page.style.transform = `translateX(${diffX * 0.35}px)`;
+    e.preventDefault();
+  }, { passive: false });
+
+  page.addEventListener('touchend', () => {
+    if (!active) return;
+    active = false;
+    page.style.transition = 'transform .25s ease';
+    page.style.transform  = '';
+
+    if (!isHoriz) return;
+
+    if (diffX > 60) {
+      closeDetail();
+    } else if (diffX < -60) {
+      const day = TRIP_DATA.days.find(d => d.id === state.currentDayId);
+      if (!day || !_detailStop) return;
+      const idx  = day.stops.findIndex(s => s.id === _detailStop.id);
+      const next = day.stops[idx + 1];
+      if (next) openDetail(next);
+    }
+  });
+}
+
 /* ── Check off ─────────────────────────────────────────────────────── */
 function toggleCheck(stopId, itemEl) {
   state.checked[stopId] = !state.checked[stopId];
@@ -1033,6 +1085,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   /* Detail page */
   document.getElementById('detail-back').addEventListener('click', closeDetail);
+  initDetailNavSwipe();
   document.getElementById('detail-check-btn').addEventListener('click', () => {
     if (!_detailStop) return;
     state.checked[_detailStop.id] = !state.checked[_detailStop.id];
