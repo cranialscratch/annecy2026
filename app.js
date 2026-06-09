@@ -98,32 +98,31 @@ const WIKI_TITLES = {
   'd7s3':  'Saint-Valery-sur-Somme',
 };
 
-/* ── Wikipedia image cache ─────────────────────────────────────────── */
+/* ── Wikipedia data cache (img + extract) ──────────────────────────── */
 const _wikiCache = {};
 
 function loadWikiCache() {
   try {
-    const saved = localStorage.getItem('annecy_wiki_v3');
+    const saved = localStorage.getItem('annecy_wiki_v4');
     if (saved) Object.assign(_wikiCache, JSON.parse(saved));
   } catch {}
 }
 function saveWikiCache() {
-  try { localStorage.setItem('annecy_wiki_v3', JSON.stringify(_wikiCache)); } catch {}
+  try { localStorage.setItem('annecy_wiki_v4', JSON.stringify(_wikiCache)); } catch {}
 }
 
-async function fetchWikiImage(stopId) {
+async function fetchWikiData(stopId) {
   if (_wikiCache[stopId] !== undefined) return _wikiCache[stopId];
   const title = WIKI_TITLES[stopId];
   if (!title) { _wikiCache[stopId] = null; return null; }
   try {
-    const url = `https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(title)}&prop=pageimages&format=json&pithumbsize=800&origin=*`;
-    const res = await fetch(url);
+    const res = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`);
+    if (!res.ok) throw new Error('http ' + res.status);
     const data = await res.json();
-    const page = Object.values(data.query.pages)[0];
-    const imgUrl = page?.thumbnail?.source || null;
-    _wikiCache[stopId] = imgUrl;
+    const result = { img: data.thumbnail?.source || null, extract: data.extract || null };
+    _wikiCache[stopId] = result;
     saveWikiCache();
-    return imgUrl;
+    return result;
   } catch {
     _wikiCache[stopId] = null;
     return null;
@@ -136,13 +135,12 @@ function findStop(stopId) {
   return null;
 }
 
-function injectWikiImage(stopId, imgUrl) {
-  if (!imgUrl) return;
+function injectWikiData(stopId, data) {
+  if (!data?.img) return;
   const item = document.getElementById(`stop-${stopId}`);
   if (!item) return;
   const stop = findStop(stopId);
   if (!stop) return;
-  // Rebuild the card slider with the photo as first slide
   const oldSlider = item.querySelector('.card-slider');
   if (!oldSlider) return;
   const tmp = document.createElement('div');
@@ -155,12 +153,12 @@ function injectWikiImage(stopId, imgUrl) {
 function lazyLoadWikiImages(stops) {
   stops.forEach(stop => {
     if (!WIKI_TITLES[stop.id]) return;
-    if (_wikiCache[stop.id] !== undefined) {
-      // Already cached — inject immediately
-      if (_wikiCache[stop.id]) injectWikiImage(stop.id, _wikiCache[stop.id]);
+    const cached = _wikiCache[stop.id];
+    if (cached !== undefined) {
+      if (cached?.img) injectWikiData(stop.id, cached);
       return;
     }
-    fetchWikiImage(stop.id).then(url => injectWikiImage(stop.id, url));
+    fetchWikiData(stop.id).then(data => injectWikiData(stop.id, data));
   });
 }
 
@@ -183,10 +181,9 @@ const TYPE_GRAD = {
 
 /* ── Get slides for a stop ─────────────────────────────────────────── */
 function getPhotos(stop) {
-  const wikiUrl = _wikiCache[stop.id];
-  const osm = `https://staticmap.openstreetmap.de/staticmap.php?center=${stop.lat},${stop.lng}&zoom=15&size=640x380&markers=${stop.lat},${stop.lng},red`;
-  if (wikiUrl) return [wikiUrl, osm];
-  return ['__placeholder__', osm];
+  const wiki = _wikiCache[stop.id];
+  if (wiki?.img) return [wiki.img];
+  return ['__placeholder__'];
 }
 
 /* ── Nav URLs ──────────────────────────────────────────────────────── */
@@ -442,6 +439,7 @@ function initSlider(sliderEl, stop, prefix) {
   const slidesEl = sliderEl.querySelector(`.${prefix}-slides`);
   const total = getPhotos(stop).length;
   let current = 0, startX = 0, startY = 0, diffX = 0, isDragging = false, isHoriz = null;
+  let _tappedByTouch = false;
 
   function goTo(idx) {
     current = Math.max(0, Math.min(total - 1, idx));
@@ -474,9 +472,16 @@ function initSlider(sliderEl, stop, prefix) {
       else if (diffX > 40) goTo(current - 1);
       else goTo(current);
     } else if (Math.abs(diffX) < 8) {
+      _tappedByTouch = true;
+      setTimeout(() => { _tappedByTouch = false; }, 400);
       openDetail(stop);
     }
     isHoriz = null;
+  });
+
+  // Click fallback for when touchend doesn't fire (e.g. desktop, or iOS edge cases)
+  sliderEl.addEventListener('click', () => {
+    if (!_tappedByTouch) openDetail(stop);
   });
 }
 
@@ -530,7 +535,8 @@ function openDetail(stop) {
   document.getElementById('detail-time').textContent  = getStopTime(stop) + (stop.tz ? ' ' + stop.tz : '');
   document.getElementById('detail-stars').textContent = priorityStars(stop.priority);
   document.getElementById('detail-name').textContent  = stop.icon + ' ' + stop.location;
-  document.getElementById('detail-reason').textContent = stop.reason;
+  const wikiExtract = _wikiCache[stop.id]?.extract;
+  document.getElementById('detail-reason').textContent = wikiExtract || stop.reason;
 
   const tagsEl = document.getElementById('detail-tags');
   tagsEl.innerHTML = '';
@@ -553,24 +559,28 @@ function openDetail(stop) {
   initDetailSlider();
   overlay.scrollTop = 0;
 
-  // If wiki image not yet loaded, fetch it and update the detail slider
-  if (!_wikiCache[stop.id] && WIKI_TITLES[stop.id]) {
-    fetchWikiImage(stop.id).then(url => {
-      // Only update if this detail is still open for the same stop
-      if (_detailStop && _detailStop.id === stop.id && url) {
-        _detailTotal = 2;
+  // If wiki data not yet loaded, fetch and update detail page live
+  if (_wikiCache[stop.id] === undefined && WIKI_TITLES[stop.id]) {
+    fetchWikiData(stop.id).then(data => {
+      if (!_detailStop || _detailStop.id !== stop.id || !data) return;
+      if (data.extract) document.getElementById('detail-reason').textContent = data.extract;
+      if (data.img) {
+        _detailTotal = 1;
         _detailCurrent = 0;
         const slidesEl = document.getElementById('detail-slides');
         const dotsEl   = document.getElementById('detail-dots');
         const img = document.createElement('img');
         img.className = 'detail-slide';
-        img.src = url;
+        img.src = data.img;
         img.alt = stop.location;
         slidesEl.style.transition = 'none';
         slidesEl.style.transform = 'translateX(0)';
-        slidesEl.prepend(img);
-        dotsEl.innerHTML = `<span class="detail-dot active"></span><span class="detail-dot"></span>`;
+        slidesEl.innerHTML = '';
+        slidesEl.appendChild(img);
+        dotsEl.innerHTML = '';
         initDetailSlider();
+        // Also update the card thumbnail
+        injectWikiData(stop.id, data);
       }
     });
   }
