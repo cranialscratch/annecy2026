@@ -104,12 +104,12 @@ const _wikiCache = {};
 
 function loadWikiCache() {
   try {
-    const saved = localStorage.getItem('annecy_wiki_v2');
+    const saved = localStorage.getItem('annecy_wiki_v3');
     if (saved) Object.assign(_wikiCache, JSON.parse(saved));
   } catch {}
 }
 function saveWikiCache() {
-  try { localStorage.setItem('annecy_wiki_v2', JSON.stringify(_wikiCache)); } catch {}
+  try { localStorage.setItem('annecy_wiki_v3', JSON.stringify(_wikiCache)); } catch {}
 }
 
 async function fetchWikiImage(stopId) {
@@ -132,6 +132,8 @@ async function fetchWikiImage(stopId) {
 }
 
 function findStop(stopId) {
+  for (const dayId of Object.keys(state.dayEdits))
+    for (const s of state.dayEdits[dayId]) if (s.id === stopId) return s;
   for (const day of TRIP_DATA.days)
     for (const s of day.stops) if (s.id === stopId) return s;
   return null;
