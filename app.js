@@ -104,12 +104,12 @@ const _poiCache  = {}; // stopId → [{ title, img, dist, url }]
 
 function loadWikiCache() {
   try {
-    const saved = localStorage.getItem('annecy_wiki_v4');
+    const saved = localStorage.getItem('annecy_wiki_v5');
     if (saved) Object.assign(_wikiCache, JSON.parse(saved));
   } catch {}
 }
 function saveWikiCache() {
-  try { localStorage.setItem('annecy_wiki_v4', JSON.stringify(_wikiCache)); } catch {}
+  try { localStorage.setItem('annecy_wiki_v5', JSON.stringify(_wikiCache)); } catch {}
 }
 
 function wikiSearchName(stop) {
@@ -215,7 +215,8 @@ function findStop(stopId) {
 
 function injectWikiPhoto(stopId) {
   const data = _wikiCache[stopId];
-  if (!data?.img) return;
+  const commons = _commonsCache[stopId] || [];
+  if (!data?.img && !commons.length) return;
   const item = document.getElementById(`stop-${stopId}`);
   if (!item) return;
   const stop = findStop(stopId);
@@ -231,11 +232,18 @@ function injectWikiPhoto(stopId) {
 
 function lazyLoadWikiImages(stops) {
   stops.forEach(stop => {
-    if (_wikiCache[stop.id] !== undefined) {
-      if (_wikiCache[stop.id]?.img) injectWikiPhoto(stop.id);
+    const wikiDone = _wikiCache[stop.id] !== undefined;
+    const commonsDone = _commonsCache[stop.id] !== undefined;
+
+    if (wikiDone && commonsDone) {
+      if (_wikiCache[stop.id]?.img || _commonsCache[stop.id]?.length) injectWikiPhoto(stop.id);
       return;
     }
-    fetchWikiData(stop).then(() => injectWikiPhoto(stop.id));
+
+    const tasks = [];
+    if (!wikiDone)    tasks.push(fetchWikiData(stop));
+    if (!commonsDone) tasks.push(fetchCommonsPhotos(stop));
+    Promise.all(tasks).then(() => injectWikiPhoto(stop.id));
   });
 }
 
@@ -258,11 +266,55 @@ const TYPE_GRAD = {
 
 /* ── Get slides for a stop ─────────────────────────────────────────── */
 const GKEY = 'AIzaSyBDIpPyqjOtvh1y-1nwyJgIj9TVjQFD_Jo';
+
+// Satellite aerial as a fallback — much more interesting than Street View
+function satelliteUrl(stop) {
+  return `https://maps.googleapis.com/maps/api/staticmap?center=${stop.lat},${stop.lng}&zoom=16&size=640x380&maptype=satellite&key=${GKEY}`;
+}
+
+const _commonsCache = {}; // stopId → [url, ...]
+async function fetchCommonsPhotos(stop) {
+  if (_commonsCache[stop.id] !== undefined) return _commonsCache[stop.id];
+  const name = wikiSearchName(stop);
+  if (!name) { _commonsCache[stop.id] = []; return []; }
+  try {
+    const url = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch=${encodeURIComponent(name)}&gsrnamespace=6&gsrlimit=10&prop=imageinfo&iiprop=url|mime|size&iiurlwidth=640&format=json&origin=*`;
+    const r = await fetch(url);
+    const d = await r.json();
+    const pages = Object.values(d.query?.pages || {});
+    const imgs = pages
+      .filter(p => {
+        const ii = p.imageinfo?.[0];
+        if (!ii) return false;
+        const mime = ii.mime || '';
+        if (!mime.startsWith('image/')) return false;
+        if (mime === 'image/svg+xml') return false;
+        const title = (p.title || '').toLowerCase();
+        // Skip maps, flags, coats of arms, icons
+        if (/map|flag|coat|arms|logo|icon|seal|blank|locator/i.test(title)) return false;
+        return true;
+      })
+      .map(p => p.imageinfo[0].thumburl)
+      .filter(Boolean)
+      .slice(0, 5);
+    _commonsCache[stop.id] = imgs;
+    return imgs;
+  } catch {
+    _commonsCache[stop.id] = [];
+    return [];
+  }
+}
+
 function getPhotos(stop) {
-  const sv   = `https://maps.googleapis.com/maps/api/streetview?size=640x380&location=${stop.lat},${stop.lng}&fov=90&pitch=5&key=${GKEY}`;
-  const wiki = _wikiCache[stop.id]?.img;
-  // Street View first (always unique per lat/lng), Wikipedia second
-  return wiki ? [sv, wiki] : [sv];
+  const wiki    = _wikiCache[stop.id]?.img;
+  const commons = _commonsCache[stop.id] || [];
+  // Best photo first (Wikipedia thumbnail), then Wikimedia Commons extras,
+  // then satellite aerial as final fallback — no Street View
+  const photos = [];
+  if (wiki) photos.push(wiki);
+  for (const u of commons) { if (u !== wiki) photos.push(u); }
+  if (!photos.length) photos.push(satelliteUrl(stop));
+  return photos;
 }
 
 /* ── Nav URLs ──────────────────────────────────────────────────────── */
@@ -648,24 +700,27 @@ function openDetail(stop) {
   updateDetailCheckBtn();
   overlay.scrollTop = 0;
 
-  // If wiki not cached yet, fetch then refresh slides + description + card
-  const wikiPending = _wikiCache[stop.id] === undefined;
-  const wikiPromise = wikiPending
-    ? fetchWikiData(stop)
-    : Promise.resolve(_wikiCache[stop.id]);
+  // Fetch wiki + commons together; refresh slides + description when done
+  const tasks = [];
+  if (_wikiCache[stop.id] === undefined)    tasks.push(fetchWikiData(stop));
+  if (_commonsCache[stop.id] === undefined) tasks.push(fetchCommonsPhotos(stop));
 
-  wikiPromise.then(data => {
-    if (!_detailStop || _detailStop.id !== stop.id) return;
-    if (data?.extract) document.getElementById('detail-reason').textContent = data.extract;
-    if (data?.img && wikiPending) {
-      // Rebuild detail slider with wiki photo now available
+  if (tasks.length) {
+    Promise.all(tasks).then(() => {
+      if (!_detailStop || _detailStop.id !== stop.id) return;
+      const data = _wikiCache[stop.id];
+      if (data?.extract) document.getElementById('detail-reason').textContent = data.extract;
       slidesEl.style.transition = 'none';
       slidesEl.style.transform  = 'translateX(0)';
       _detailCurrent = 0;
       setDetailSlides(getPhotos(stop), stop);
       injectWikiPhoto(stop.id);
-    }
-  });
+    });
+  } else {
+    // already cached — just make sure extract is shown
+    const data = _wikiCache[stop.id];
+    if (data?.extract) document.getElementById('detail-reason').textContent = data.extract;
+  }
 
   // Fetch nearby POIs — add to both the carousel and the detail slider
   fetchNearbyPOI(stop).then(pois => {
