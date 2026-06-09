@@ -112,22 +112,57 @@ function saveWikiCache() {
   try { localStorage.setItem('annecy_wiki_v4', JSON.stringify(_wikiCache)); } catch {}
 }
 
+function wikiSearchName(stop) {
+  // Explicit override always wins
+  if (WIKI_TITLES[stop.id]) return WIKI_TITLES[stop.id];
+
+  const loc = stop.location;
+
+  // Food/café: search by city/area (after comma), never by meal name
+  if (stop.type === 'food') {
+    const city = loc.split(',').slice(1).join(',').trim();
+    return city || null; // null → skip to geosearch
+  }
+
+  // Charging: strip "Tesla Supercharger" prefix and parentheticals
+  if (stop.type === 'charging') {
+    return loc.replace(/Tesla Supercharger\s*/i, '').replace(/\s*\(.*\)/, '').trim();
+  }
+
+  // Depart: strip leading "Depart " verb
+  if (stop.type === 'depart') {
+    return loc.replace(/^Depart\s+/i, '').split(',')[0].trim();
+  }
+
+  // Hotel: use last meaningful word (usually city), e.g. "Moxy Amiens" → "Amiens"
+  if (stop.type === 'hotel') {
+    const words = loc.replace(/\b(hotel|moxy|ibis|novotel|b&b|inn|centre|center)\b/gi, '').trim().split(/\s+/);
+    return words[words.length - 1] || loc;
+  }
+
+  // Default: name before the comma
+  return loc.split(',')[0].trim();
+}
+
 async function fetchWikiData(stop) {
   if (_wikiCache[stop.id] !== undefined) return _wikiCache[stop.id];
 
-  // 1. Try explicit title, or derive from location name
-  const name = (WIKI_TITLES[stop.id] || stop.location.split(',')[0].trim()).replace(/\s+/g, '_');
+  const name = wikiSearchName(stop);
   let result = null;
-  try {
-    const r = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(name)}`);
-    if (r.ok) {
-      const d = await r.json();
-      if (d.type !== 'disambiguation') result = { img: d.thumbnail?.source || null, extract: d.extract || null };
-    }
-  } catch {}
 
-  // 2. Geosearch fallback — find nearest Wikipedia article within 2 km
-  if (!result?.img && !result?.extract && stop.lat && stop.lng) {
+  // 1. Named lookup (skip if name is null — food stops with no city part)
+  if (name) {
+    try {
+      const r = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(name.replace(/\s+/g,'_'))}`);
+      if (r.ok) {
+        const d = await r.json();
+        if (d.type !== 'disambiguation') result = { img: d.thumbnail?.source || null, extract: d.extract || null };
+      }
+    } catch {}
+  }
+
+  // 2. Geosearch fallback — nearest article within 2 km
+  if (!result?.img && !result?.extract) {
     try {
       const gr = await fetch(`https://en.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord=${stop.lat}|${stop.lng}&gsradius=2000&gslimit=3&format=json&origin=*`);
       const gd = await gr.json();
@@ -226,9 +261,8 @@ const GKEY = 'AIzaSyBDIpPyqjOtvh1y-1nwyJgIj9TVjQFD_Jo';
 function getPhotos(stop) {
   const sv   = `https://maps.googleapis.com/maps/api/streetview?size=640x380&location=${stop.lat},${stop.lng}&fov=90&pitch=5&key=${GKEY}`;
   const wiki = _wikiCache[stop.id]?.img;
-  // Wiki photo first (iconic), street view second; placeholder while wiki is loading
-  if (wiki) return [wiki, sv];
-  return ['__placeholder__', sv];
+  // Street View first (always unique per lat/lng), Wikipedia second
+  return wiki ? [sv, wiki] : [sv];
 }
 
 /* ── Nav URLs ──────────────────────────────────────────────────────── */
