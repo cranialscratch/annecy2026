@@ -103,12 +103,12 @@ const _wikiCache = {};
 
 function loadWikiCache() {
   try {
-    const saved = localStorage.getItem('annecy_wiki_v2');
+    const saved = localStorage.getItem('annecy_wiki_v3');
     if (saved) Object.assign(_wikiCache, JSON.parse(saved));
   } catch {}
 }
 function saveWikiCache() {
-  try { localStorage.setItem('annecy_wiki_v2', JSON.stringify(_wikiCache)); } catch {}
+  try { localStorage.setItem('annecy_wiki_v3', JSON.stringify(_wikiCache)); } catch {}
 }
 
 async function fetchWikiImage(stopId) {
