@@ -653,6 +653,23 @@ function buildTimelineItem(stop, isLast) {
     e.stopPropagation();
     toggleCheck(stop.id, item);
   });
+
+  // Whole card opens detail; action icon links and check button stop propagation
+  const card = item.querySelector('.tl-card');
+  card.style.cursor = 'pointer';
+  card.addEventListener('click', e => {
+    // Let act-btn links and check-btn handle themselves
+    if (e.target.closest('.act-btn, .check-btn')) return;
+    openDetail(stop);
+  });
+
+  // Photo slider still handles its own swipe; tap on slider already calls openDetail,
+  // so prevent the card click from double-firing
+  const slider = item.querySelector('.card-slider');
+  if (slider) {
+    slider.addEventListener('click', e => e.stopPropagation());
+  }
+
   initSlider(item.querySelector('.card-slider'), stop, 'card');
   return item;
 }
