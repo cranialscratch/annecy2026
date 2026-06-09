@@ -196,7 +196,6 @@ function injectWikiPhoto(stopId) {
 
 function lazyLoadWikiImages(stops) {
   stops.forEach(stop => {
-    if (stop.type === 'charging' || stop.type === 'transport' || stop.type === 'depart') return;
     if (_wikiCache[stop.id] !== undefined) {
       if (_wikiCache[stop.id]?.img) injectWikiPhoto(stop.id);
       return;
@@ -225,12 +224,11 @@ const TYPE_GRAD = {
 /* ── Get slides for a stop ─────────────────────────────────────────── */
 const GKEY = 'AIzaSyBDIpPyqjOtvh1y-1nwyJgIj9TVjQFD_Jo';
 function getPhotos(stop) {
-  const { lat, lng } = stop;
-  // No photos for utility stops
-  if (stop.type === 'charging' || stop.type === 'transport' || stop.type === 'depart') return ['__placeholder__'];
-  const sv   = `https://maps.googleapis.com/maps/api/streetview?size=640x380&location=${lat},${lng}&fov=90&pitch=5&key=${GKEY}`;
+  const sv   = `https://maps.googleapis.com/maps/api/streetview?size=640x380&location=${stop.lat},${stop.lng}&fov=90&pitch=5&key=${GKEY}`;
   const wiki = _wikiCache[stop.id]?.img;
-  return wiki ? [sv, wiki] : [sv];
+  // Wiki photo first (iconic), street view second; placeholder while wiki is loading
+  if (wiki) return [wiki, sv];
+  return ['__placeholder__', sv];
 }
 
 /* ── Nav URLs ──────────────────────────────────────────────────────── */
@@ -550,22 +548,9 @@ function buildIconActions(stop) {
 /* ── Detail page ───────────────────────────────────────────────────── */
 let _detailStop = null, _detailCurrent = 0, _detailTotal = 0;
 
-function openDetail(stop) {
-  _detailStop = stop;
-  const overlay = document.getElementById('detail-overlay');
-  overlay.classList.remove('hidden');
-  requestAnimationFrame(() => requestAnimationFrame(() => overlay.classList.add('open')));
-
-  const photos = getPhotos(stop);
-  _detailTotal = photos.length;
-  _detailCurrent = 0;
-
-  const slidesEl = document.getElementById('detail-slides');
-  const dotsEl   = document.getElementById('detail-dots');
-  slidesEl.style.transition = 'none';
-  slidesEl.style.transform  = 'translateX(0)';
+function buildDetailSlides(photos, stop) {
   const [dc1, dc2] = TYPE_GRAD[stop.type] || ['#334155','#0f172a'];
-  slidesEl.innerHTML = photos.map(url => {
+  return photos.map(url => {
     if (url === '__placeholder__') {
       return `<div class="detail-slide detail-slide-placeholder" style="background:linear-gradient(145deg,${dc1}55,${dc2})">
         <div class="ph-icon" style="font-size:72px">${stop.icon}</div>
@@ -574,8 +559,30 @@ function openDetail(stop) {
     }
     return `<img class="detail-slide" src="${url}" loading="lazy" alt="${stop.location}">`;
   }).join('');
+}
+
+function setDetailSlides(photos, stop) {
+  const slidesEl = document.getElementById('detail-slides');
+  const dotsEl   = document.getElementById('detail-dots');
+  _detailTotal = photos.length;
+  slidesEl.innerHTML = buildDetailSlides(photos, stop);
   dotsEl.innerHTML = photos.length > 1
     ? photos.map((_,i) => `<span class="detail-dot${i===0?' active':''}"></span>`).join('') : '';
+  initDetailSlider();
+}
+
+function openDetail(stop) {
+  _detailStop = stop;
+  _detailCurrent = 0;
+  const overlay = document.getElementById('detail-overlay');
+  overlay.classList.remove('hidden');
+  requestAnimationFrame(() => requestAnimationFrame(() => overlay.classList.add('open')));
+
+  // Render immediately with whatever photos are available now
+  const slidesEl = document.getElementById('detail-slides');
+  slidesEl.style.transition = 'none';
+  slidesEl.style.transform  = 'translateX(0)';
+  setDetailSlides(getPhotos(stop), stop);
 
   document.getElementById('detail-body').dataset.type = stop.type;
   document.getElementById('detail-badge').textContent = typeLabel(stop.type);
@@ -599,46 +606,50 @@ function openDetail(stop) {
     parts.push(`<a class="act-btn-full maps" href="${stop.mapsUrl}" target="_blank" rel="noopener">🗺️ Maps</a>`);
   actEl.innerHTML = parts.join('');
 
-  // Clear POI carousel
-  const poiSection = document.getElementById('detail-poi-section');
+  const poiSection  = document.getElementById('detail-poi-section');
   const poiCarousel = document.getElementById('detail-poi-carousel');
   poiSection.classList.add('hidden');
   poiCarousel.innerHTML = '';
 
   updateDetailCheckBtn();
-  initDetailSlider();
   overlay.scrollTop = 0;
 
-  // Fetch wiki data if not cached yet — updates description + card photo
-  if (_wikiCache[stop.id] === undefined) {
-    fetchWikiData(stop).then(data => {
-      if (!_detailStop || _detailStop.id !== stop.id) return;
-      if (data?.extract) document.getElementById('detail-reason').textContent = data.extract;
-      if (data?.img) {
-        // Append wiki photo as second slide
-        const photos = getPhotos(stop);
-        _detailTotal = photos.length;
-        _detailCurrent = 0;
-        const slidesEl = document.getElementById('detail-slides');
-        const dotsEl   = document.getElementById('detail-dots');
-        slidesEl.style.transition = 'none';
-        slidesEl.style.transform  = 'translateX(0)';
-        slidesEl.innerHTML = photos.map(url =>
-          url === '__placeholder__'
-            ? `<div class="detail-slide detail-slide-placeholder" style="background:linear-gradient(145deg,${TYPE_GRAD[stop.type]?.[0]||'#334155'}55,${TYPE_GRAD[stop.type]?.[1]||'#0f172a'})"><div class="ph-icon" style="font-size:72px">${stop.icon}</div></div>`
-            : `<img class="detail-slide" src="${url}" loading="lazy" alt="${stop.location}">`
-        ).join('');
-        dotsEl.innerHTML = photos.length > 1
-          ? photos.map((_,i) => `<span class="detail-dot${i===0?' active':''}"></span>`).join('') : '';
-        initDetailSlider();
-        injectWikiPhoto(stop.id);
-      }
-    });
-  }
+  // If wiki not cached yet, fetch then refresh slides + description + card
+  const wikiPending = _wikiCache[stop.id] === undefined;
+  const wikiPromise = wikiPending
+    ? fetchWikiData(stop)
+    : Promise.resolve(_wikiCache[stop.id]);
 
-  // Fetch nearby POIs
+  wikiPromise.then(data => {
+    if (!_detailStop || _detailStop.id !== stop.id) return;
+    if (data?.extract) document.getElementById('detail-reason').textContent = data.extract;
+    if (data?.img && wikiPending) {
+      // Rebuild detail slider with wiki photo now available
+      slidesEl.style.transition = 'none';
+      slidesEl.style.transform  = 'translateX(0)';
+      _detailCurrent = 0;
+      setDetailSlides(getPhotos(stop), stop);
+      injectWikiPhoto(stop.id);
+    }
+  });
+
+  // Fetch nearby POIs — add to both the carousel and the detail slider
   fetchNearbyPOI(stop).then(pois => {
     if (!_detailStop || _detailStop.id !== stop.id || !pois.length) return;
+
+    // Append nearby photos to the detail slider
+    const basePhotos = getPhotos(stop).filter(u => u !== '__placeholder__');
+    const nearbyImgs = pois.map(p => p.img);
+    const allPhotos  = [...basePhotos, ...nearbyImgs];
+    slidesEl.style.transition = 'none';
+    slidesEl.style.transform  = `translateX(-${_detailCurrent * 100}%)`;
+    setDetailSlides(allPhotos, stop);
+    // Restore position
+    const slidesElNew = document.getElementById('detail-slides');
+    slidesElNew.style.transition = 'none';
+    slidesElNew.style.transform  = `translateX(-${_detailCurrent * 100}%)`;
+
+    // Render POI cards
     poiCarousel.innerHTML = pois.map(p => `
       <a class="poi-card" href="${p.url}" target="_blank" rel="noopener">
         <img class="poi-card-img" src="${p.img}" alt="${p.title}" loading="lazy">
