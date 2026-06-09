@@ -53,40 +53,116 @@ function buildTags(stop) {
   return tags.length ? `<div class="tl-card-tags">${tags.join('')}</div>` : '';
 }
 
-/* ── Curated photos (Wikimedia Commons — free, no API key) ─────────── */
-const CURATED = {
-  // Day 1
-  'd1s6':  ['https://upload.wikimedia.org/wikipedia/commons/thumb/9/94/Saint-Valery-sur-Somme_-_La_baie_de_Somme_%281%29.jpg/800px-Saint-Valery-sur-Somme_-_La_baie_de_Somme_%281%29.jpg'],
-  'd1s13': ['https://upload.wikimedia.org/wikipedia/commons/thumb/9/99/Amiens_Kathedrale.jpg/800px-Amiens_Kathedrale.jpg'],
-  // Day 2
-  'd2s2':  ['https://upload.wikimedia.org/wikipedia/commons/thumb/4/48/Hortillonnages_Amiens_01.jpg/800px-Hortillonnages_Amiens_01.jpg'],
-  'd2s6':  ['https://upload.wikimedia.org/wikipedia/commons/thumb/e/e3/Gerberoy1.JPG/800px-Gerberoy1.JPG'],
-  'd2s11': ['https://upload.wikimedia.org/wikipedia/commons/thumb/b/b7/Troyes_-_Ruelle_des_Chats.jpg/800px-Troyes_-_Ruelle_des_Chats.jpg'],
-  'd2s10': ['https://upload.wikimedia.org/wikipedia/commons/thumb/1/1a/Troyes_vue_g%C3%A9n%C3%A9rale.jpg/800px-Troyes_vue_g%C3%A9n%C3%A9rale.jpg'],
-  // Day 3
-  'd3s2':  ['https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/Flavigny-sur-Ozerain_abbaye_2006.jpg/800px-Flavigny-sur-Ozerain_abbaye_2006.jpg'],
-  'd3s4':  ['https://upload.wikimedia.org/wikipedia/commons/thumb/4/44/Fontenay_Abbey_3.jpg/800px-Fontenay_Abbey_3.jpg'],
-  'd3s6':  ['https://upload.wikimedia.org/wikipedia/commons/thumb/1/1d/Semur-en-Auxois_-_panoramio.jpg/800px-Semur-en-Auxois_-_panoramio.jpg'],
-  'd3s8':  ['https://upload.wikimedia.org/wikipedia/commons/thumb/2/2e/Clos_de_Vougeot_01.jpg/800px-Clos_de_Vougeot_01.jpg'],
-  'd3s15': ['https://upload.wikimedia.org/wikipedia/commons/thumb/0/00/Beaune-HDR.jpg/800px-Beaune-HDR.jpg'],
-  // Day 4
-  'd4s7':  ['https://upload.wikimedia.org/wikipedia/commons/thumb/5/5b/Lac_d%27Annecy_vu_du_Roc_de_Ch%C3%A8re.jpg/800px-Lac_d%27Annecy_vu_du_Roc_de_Ch%C3%A8re.jpg'],
-  // Festival
-  'fs3':   ['https://upload.wikimedia.org/wikipedia/commons/thumb/5/5b/Lac_d%27Annecy_vu_du_Roc_de_Ch%C3%A8re.jpg/800px-Lac_d%27Annecy_vu_du_Roc_de_Ch%C3%A8re.jpg'],
-  'fs4':   ['https://upload.wikimedia.org/wikipedia/commons/thumb/6/6e/Annecy_-_Vieille_ville_%281%29.jpg/800px-Annecy_-_Vieille_ville_%281%29.jpg'],
-  'fs7':   ['https://upload.wikimedia.org/wikipedia/commons/thumb/6/60/Menthon-Saint-Bernard_-_Ch%C3%A2teau_de_Menthon_%281%29.jpg/800px-Menthon-Saint-Bernard_-_Ch%C3%A2teau_de_Menthon_%281%29.jpg'],
-  // Day 5
-  'd5s2':  ['https://upload.wikimedia.org/wikipedia/commons/thumb/4/42/ArcetSenans_SalineRoyale.jpg/800px-ArcetSenans_SalineRoyale.jpg'],
-  'd5s6':  ['https://upload.wikimedia.org/wikipedia/commons/thumb/7/7a/Besancon_pano.jpg/800px-Besancon_pano.jpg'],
-  'd5s7':  ['https://upload.wikimedia.org/wikipedia/commons/thumb/e/e3/Citadelle_Besancon.jpg/800px-Citadelle_Besancon.jpg'],
-  // Day 6
-  'd6s3':  ['https://upload.wikimedia.org/wikipedia/commons/thumb/a/aa/Claude_Monet_-_Water_Lilies_-_1906%2C_Ryerson.jpg/800px-Claude_Monet_-_Water_Lilies_-_1906%2C_Ryerson.jpg',
-             'https://upload.wikimedia.org/wikipedia/commons/thumb/f/f7/Giverny_-_Le_jardin_de_Monet_%281%29.jpg/800px-Giverny_-_Le_jardin_de_Monet_%281%29.jpg'],
-  'd6s6':  ['https://upload.wikimedia.org/wikipedia/commons/thumb/9/90/Rouen_-_Cath%C3%A9drale_Notre-Dame_%281%29.jpg/800px-Rouen_-_Cath%C3%A9drale_Notre-Dame_%281%29.jpg'],
-  'd6s5':  ['https://upload.wikimedia.org/wikipedia/commons/thumb/8/82/Rouen_rue_du_Gros_Horloge.jpg/800px-Rouen_rue_du_Gros_Horloge.jpg'],
-  // Day 7
-  'd7s2':  ['https://upload.wikimedia.org/wikipedia/commons/thumb/9/94/Saint-Valery-sur-Somme_-_La_baie_de_Somme_%281%29.jpg/800px-Saint-Valery-sur-Somme_-_La_baie_de_Somme_%281%29.jpg'],
+/* ── Wikipedia article titles per stop (free API, no key needed) ───── */
+const WIKI_TITLES = {
+  'd1s6':  'Saint-Valery-sur-Somme',
+  'd1s7':  'Saint-Valery-sur-Somme',
+  'd1s8':  'Saint-Valery-sur-Somme',
+  'd1s13': 'Amiens_Cathedral',
+  'd2s2':  "Hortillonnages_d'Amiens",
+  'd2s3':  "Hortillonnages_d'Amiens",
+  'd2s6':  'Gerberoy',
+  'd2s7':  'Gerberoy',
+  'd2s10': 'Troyes',
+  'd2s11': 'Ruelle_des_Chats',
+  'd2s12': 'Troyes_Cathedral',
+  'd3s2':  'Flavigny-sur-Ozerain',
+  'd3s3':  'Flavigny-sur-Ozerain',
+  'd3s4':  'Fontenay_Abbey',
+  'd3s5':  'Fontenay_Abbey',
+  'd3s6':  'Semur-en-Auxois',
+  'd3s7':  'Semur-en-Auxois',
+  'd3s8':  'Clos_de_Vougeot',
+  'd3s9':  'Route_des_Grands_Crus',
+  'd3s10': 'Vosne-Romanée',
+  'd3s11': 'Saint-Romain,_Côte-d\'Or',
+  'd3s15': 'Hospices_de_Beaune',
+  'd3s16': 'Beaune',
+  'd4s3':  'Albertville',
+  'd4s7':  'Lake_Annecy',
+  'fs3':   'Lake_Annecy',
+  'fs4':   'Annecy',
+  'fs5':   'Château_d\'Annecy',
+  'fs6':   'Gorges_du_Fier',
+  'fs7':   'Château_de_Menthon-Saint-Bernard',
+  'fs8':   'Talloires',
+  'd5s2':  'Royal_Saltworks_of_Arc-et-Senans',
+  'd5s3':  'Royal_Saltworks_of_Arc-et-Senans',
+  'd5s6':  'Besançon',
+  'd5s7':  'Citadel_of_Besançon',
+  'd6s3':  'Giverny',
+  'd6s4':  'Giverny',
+  'd6s5':  'Rouen',
+  'd6s6':  'Rouen_Cathedral',
+  'd7s2':  'Saint-Valery-sur-Somme',
+  'd7s3':  'Saint-Valery-sur-Somme',
 };
+
+/* ── Wikipedia image cache ─────────────────────────────────────────── */
+const _wikiCache = {};
+
+function loadWikiCache() {
+  try {
+    const saved = localStorage.getItem('annecy_wiki_v2');
+    if (saved) Object.assign(_wikiCache, JSON.parse(saved));
+  } catch {}
+}
+function saveWikiCache() {
+  try { localStorage.setItem('annecy_wiki_v2', JSON.stringify(_wikiCache)); } catch {}
+}
+
+async function fetchWikiImage(stopId) {
+  if (_wikiCache[stopId] !== undefined) return _wikiCache[stopId];
+  const title = WIKI_TITLES[stopId];
+  if (!title) { _wikiCache[stopId] = null; return null; }
+  try {
+    const url = `https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(title)}&prop=pageimages&format=json&pithumbsize=800&origin=*`;
+    const res = await fetch(url);
+    const data = await res.json();
+    const page = Object.values(data.query.pages)[0];
+    const imgUrl = page?.thumbnail?.source || null;
+    _wikiCache[stopId] = imgUrl;
+    saveWikiCache();
+    return imgUrl;
+  } catch {
+    _wikiCache[stopId] = null;
+    return null;
+  }
+}
+
+function findStop(stopId) {
+  for (const day of TRIP_DATA.days)
+    for (const s of day.stops) if (s.id === stopId) return s;
+  return null;
+}
+
+function injectWikiImage(stopId, imgUrl) {
+  if (!imgUrl) return;
+  const item = document.getElementById(`stop-${stopId}`);
+  if (!item) return;
+  const stop = findStop(stopId);
+  if (!stop) return;
+  // Rebuild the card slider with the photo as first slide
+  const oldSlider = item.querySelector('.card-slider');
+  if (!oldSlider) return;
+  const tmp = document.createElement('div');
+  tmp.innerHTML = buildSlider(stop, 'card');
+  const newSlider = tmp.firstChild;
+  oldSlider.replaceWith(newSlider);
+  initSlider(newSlider, stop, 'card');
+}
+
+function lazyLoadWikiImages(stops) {
+  stops.forEach(stop => {
+    if (!WIKI_TITLES[stop.id]) return;
+    if (_wikiCache[stop.id] !== undefined) {
+      // Already cached — inject immediately
+      if (_wikiCache[stop.id]) injectWikiImage(stop.id, _wikiCache[stop.id]);
+      return;
+    }
+    fetchWikiImage(stop.id).then(url => injectWikiImage(stop.id, url));
+  });
+}
 
 /* ── Type gradient colours for placeholder slides ──────────────────── */
 const TYPE_GRAD = {
@@ -107,17 +183,10 @@ const TYPE_GRAD = {
 
 /* ── Get slides for a stop ─────────────────────────────────────────── */
 function getPhotos(stop) {
-  const curated = CURATED[stop.id] || [];
-  // OSM static map — free, no API key needed
+  const wikiUrl = _wikiCache[stop.id];
   const osm = `https://staticmap.openstreetmap.de/staticmap.php?center=${stop.lat},${stop.lng}&zoom=15&size=640x380&markers=${stop.lat},${stop.lng},red`;
-  // placeholder sentinel (rendered as styled div, not img)
-  const placeholder = '__placeholder__';
-
-  if (curated.length) return [...curated, osm];
-  if (stop.type === 'charging' || stop.type === 'transport' || stop.type === 'depart' || stop.type === 'hotel') {
-    return [placeholder, osm];
-  }
-  return [placeholder, osm];
+  if (wikiUrl) return [wikiUrl, osm];
+  return ['__placeholder__', osm];
 }
 
 /* ── Nav URLs ──────────────────────────────────────────────────────── */
@@ -281,6 +350,9 @@ function renderTimeline(container, scrollToNow) {
     const item = buildTimelineItem(stop, idx === day.stops.length - 1);
     container.appendChild(item);
   });
+
+  // Fetch Wikipedia photos lazily after render
+  lazyLoadWikiImages(day.stops);
 
   // Only scroll to now when explicitly requested (Today button)
   if (scrollToNow && nowLineEl) {
@@ -480,6 +552,28 @@ function openDetail(stop) {
   updateDetailCheckBtn();
   initDetailSlider();
   overlay.scrollTop = 0;
+
+  // If wiki image not yet loaded, fetch it and update the detail slider
+  if (!_wikiCache[stop.id] && WIKI_TITLES[stop.id]) {
+    fetchWikiImage(stop.id).then(url => {
+      // Only update if this detail is still open for the same stop
+      if (_detailStop && _detailStop.id === stop.id && url) {
+        _detailTotal = 2;
+        _detailCurrent = 0;
+        const slidesEl = document.getElementById('detail-slides');
+        const dotsEl   = document.getElementById('detail-dots');
+        const img = document.createElement('img');
+        img.className = 'detail-slide';
+        img.src = url;
+        img.alt = stop.location;
+        slidesEl.style.transition = 'none';
+        slidesEl.style.transform = 'translateX(0)';
+        slidesEl.prepend(img);
+        dotsEl.innerHTML = `<span class="detail-dot active"></span><span class="detail-dot"></span>`;
+        initDetailSlider();
+      }
+    });
+  }
 }
 
 function closeDetail() {
@@ -582,6 +676,7 @@ function saveModal() {
 /* ── Init ──────────────────────────────────────────────────────────── */
 document.addEventListener('DOMContentLoaded', () => {
   load();
+  loadWikiCache();
   state.currentDayId = findTodayDayId() || TRIP_DATA.days[0].id;
   buildDayStrip();
   renderView(true); // scroll to now only on first load
