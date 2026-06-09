@@ -440,14 +440,19 @@ html, body { height:100%; overflow:hidden; font-family:-apple-system,BlinkMacSys
 #detail-poi-carousel::-webkit-scrollbar { display:none; }
 .poi-card {
   flex:0 0 130px; text-decoration:none; border-radius:12px;
-  overflow:hidden; background:var(--bg3); display:block;
+  overflow:hidden; background:var(--bg3); display:block; position:relative;
 }
-.poi-card-img { width:130px; height:88px; object-fit:cover; display:block; }
+.poi-card-img { width:130px; height:110px; object-fit:cover; display:block; }
+.poi-card-label {
+  position:absolute; bottom:0; left:0; right:0;
+  background:linear-gradient(to top, rgba(0,0,0,.75) 0%, transparent 100%);
+  padding:20px 7px 6px;
+}
 .poi-card-name {
-  font-size:11px; font-weight:600; color:var(--text1);
-  padding:5px 7px 2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  font-size:11px; font-weight:600; color:#fff;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
 }
-.poi-card-dist { font-size:10px; color:var(--text3); padding:0 7px 7px; }
+.poi-card-dist { font-size:10px; color:rgba(255,255,255,.7); margin-top:1px; }
 
 /* ─── Misc ──────────────────────────────────────────────────────────── */
 .hidden { display:none !important; }

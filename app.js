@@ -226,13 +226,11 @@ const TYPE_GRAD = {
 const GKEY = 'AIzaSyBDIpPyqjOtvh1y-1nwyJgIj9TVjQFD_Jo';
 function getPhotos(stop) {
   const { lat, lng } = stop;
-  const sv  = `https://maps.googleapis.com/maps/api/streetview?size=640x380&location=${lat},${lng}&fov=90&pitch=5&key=${GKEY}`;
-  const sat = `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lng}&zoom=16&size=640x380&maptype=satellite&markers=color:red%7C${lat},${lng}&key=${GKEY}`;
-  const map = `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lng}&zoom=14&size=640x380&maptype=roadmap&markers=${lat},${lng}&key=${GKEY}`;
+  // No photos for utility stops
+  if (stop.type === 'charging' || stop.type === 'transport' || stop.type === 'depart') return ['__placeholder__'];
+  const sv   = `https://maps.googleapis.com/maps/api/streetview?size=640x380&location=${lat},${lng}&fov=90&pitch=5&key=${GKEY}`;
   const wiki = _wikiCache[stop.id]?.img;
-  if (stop.type === 'charging' || stop.type === 'transport' || stop.type === 'depart') return [map];
-  if (wiki) return [wiki, sv, sat, map];
-  return [sv, sat, map];
+  return wiki ? [sv, wiki] : [sv];
 }
 
 /* ── Nav URLs ──────────────────────────────────────────────────────── */
@@ -617,21 +615,22 @@ function openDetail(stop) {
       if (!_detailStop || _detailStop.id !== stop.id) return;
       if (data?.extract) document.getElementById('detail-reason').textContent = data.extract;
       if (data?.img) {
-        // Rebuild detail slider with wiki photo prepended
+        // Append wiki photo as second slide
         const photos = getPhotos(stop);
         _detailTotal = photos.length;
         _detailCurrent = 0;
         const slidesEl = document.getElementById('detail-slides');
-        const dotsEl = document.getElementById('detail-dots');
+        const dotsEl   = document.getElementById('detail-dots');
         slidesEl.style.transition = 'none';
-        slidesEl.style.transform = 'translateX(0)';
+        slidesEl.style.transform  = 'translateX(0)';
         slidesEl.innerHTML = photos.map(url =>
-          `<img class="detail-slide" src="${url}" loading="lazy" alt="${stop.location}">`
+          url === '__placeholder__'
+            ? `<div class="detail-slide detail-slide-placeholder" style="background:linear-gradient(145deg,${TYPE_GRAD[stop.type]?.[0]||'#334155'}55,${TYPE_GRAD[stop.type]?.[1]||'#0f172a'})"><div class="ph-icon" style="font-size:72px">${stop.icon}</div></div>`
+            : `<img class="detail-slide" src="${url}" loading="lazy" alt="${stop.location}">`
         ).join('');
         dotsEl.innerHTML = photos.length > 1
           ? photos.map((_,i) => `<span class="detail-dot${i===0?' active':''}"></span>`).join('') : '';
         initDetailSlider();
-        // Also update the card on the timeline
         injectWikiPhoto(stop.id);
       }
     });
@@ -643,8 +642,10 @@ function openDetail(stop) {
     poiCarousel.innerHTML = pois.map(p => `
       <a class="poi-card" href="${p.url}" target="_blank" rel="noopener">
         <img class="poi-card-img" src="${p.img}" alt="${p.title}" loading="lazy">
-        <div class="poi-card-name">${p.title.replace(/_/g,' ')}</div>
-        <div class="poi-card-dist">${p.dist < 1000 ? Math.round(p.dist)+'m' : (p.dist/1000).toFixed(1)+'km'}</div>
+        <div class="poi-card-label">
+          <div class="poi-card-name">${p.title.replace(/_/g,' ')}</div>
+          <div class="poi-card-dist">${p.dist < 1000 ? Math.round(p.dist)+'m' : (p.dist/1000).toFixed(1)+'km'}</div>
+        </div>
       </a>`).join('');
     poiSection.classList.remove('hidden');
   });
