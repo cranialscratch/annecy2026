@@ -98,8 +98,9 @@ const WIKI_TITLES = {
   'd7s3':  'Saint-Valery-sur-Somme',
 };
 
-/* ── Wikipedia data cache (img + extract) ──────────────────────────── */
-const _wikiCache = {};
+/* ── Wikipedia data cache ──────────────────────────────────────────── */
+const _wikiCache = {}; // stopId → { img, extract } | null
+const _poiCache  = {}; // stopId → [{ title, img, dist, url }]
 
 function loadWikiCache() {
   try {
@@ -111,21 +112,63 @@ function saveWikiCache() {
   try { localStorage.setItem('annecy_wiki_v4', JSON.stringify(_wikiCache)); } catch {}
 }
 
-async function fetchWikiData(stopId) {
-  if (_wikiCache[stopId] !== undefined) return _wikiCache[stopId];
-  const title = WIKI_TITLES[stopId];
-  if (!title) { _wikiCache[stopId] = null; return null; }
+async function fetchWikiData(stop) {
+  if (_wikiCache[stop.id] !== undefined) return _wikiCache[stop.id];
+
+  // 1. Try explicit title, or derive from location name
+  const name = (WIKI_TITLES[stop.id] || stop.location.split(',')[0].trim()).replace(/\s+/g, '_');
+  let result = null;
   try {
-    const res = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`);
-    if (!res.ok) throw new Error('http ' + res.status);
-    const data = await res.json();
-    const result = { img: data.thumbnail?.source || null, extract: data.extract || null };
-    _wikiCache[stopId] = result;
-    saveWikiCache();
-    return result;
+    const r = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(name)}`);
+    if (r.ok) {
+      const d = await r.json();
+      if (d.type !== 'disambiguation') result = { img: d.thumbnail?.source || null, extract: d.extract || null };
+    }
+  } catch {}
+
+  // 2. Geosearch fallback — find nearest Wikipedia article within 2 km
+  if (!result?.img && !result?.extract && stop.lat && stop.lng) {
+    try {
+      const gr = await fetch(`https://en.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord=${stop.lat}|${stop.lng}&gsradius=2000&gslimit=3&format=json&origin=*`);
+      const gd = await gr.json();
+      const nearest = gd.query?.geosearch?.[0];
+      if (nearest) {
+        const sr = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(nearest.title)}`);
+        if (sr.ok) {
+          const sd = await sr.json();
+          result = { img: sd.thumbnail?.source || null, extract: sd.extract || null };
+        }
+      }
+    } catch {}
+  }
+
+  _wikiCache[stop.id] = result;
+  saveWikiCache();
+  return result;
+}
+
+async function fetchNearbyPOI(stop) {
+  if (_poiCache[stop.id] !== undefined) return _poiCache[stop.id];
+  try {
+    const gr = await fetch(`https://en.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord=${stop.lat}|${stop.lng}&gsradius=8000&gslimit=15&format=json&origin=*`);
+    const gd = await gr.json();
+    const places = (gd.query?.geosearch || []).filter(p => p.dist > 100);
+    const summaries = await Promise.all(places.slice(0, 10).map(async p => {
+      try {
+        const sr = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(p.title)}`);
+        if (!sr.ok) return null;
+        const sd = await sr.json();
+        if (!sd.thumbnail?.source) return null;
+        return { title: p.title, img: sd.thumbnail.source, dist: p.dist,
+          url: `https://en.m.wikipedia.org/wiki/${encodeURIComponent(p.title)}` };
+      } catch { return null; }
+    }));
+    const poi = summaries.filter(Boolean);
+    _poiCache[stop.id] = poi;
+    return poi;
   } catch {
-    _wikiCache[stopId] = null;
-    return null;
+    _poiCache[stop.id] = [];
+    return [];
   }
 }
 
@@ -135,12 +178,30 @@ function findStop(stopId) {
   return null;
 }
 
+function injectWikiPhoto(stopId) {
+  const data = _wikiCache[stopId];
+  if (!data?.img) return;
+  const item = document.getElementById(`stop-${stopId}`);
+  if (!item) return;
+  const stop = findStop(stopId);
+  if (!stop) return;
+  const oldSlider = item.querySelector('.card-slider');
+  if (!oldSlider) return;
+  const tmp = document.createElement('div');
+  tmp.innerHTML = buildSlider(stop, 'card');
+  const newSlider = tmp.firstChild;
+  oldSlider.replaceWith(newSlider);
+  initSlider(newSlider, stop, 'card');
+}
+
 function lazyLoadWikiImages(stops) {
-  // Pre-fetch Wikipedia extracts so detail page descriptions are ready
   stops.forEach(stop => {
-    if (!WIKI_TITLES[stop.id]) return;
-    if (_wikiCache[stop.id] !== undefined) return;
-    fetchWikiData(stop.id);
+    if (stop.type === 'charging' || stop.type === 'transport' || stop.type === 'depart') return;
+    if (_wikiCache[stop.id] !== undefined) {
+      if (_wikiCache[stop.id]?.img) injectWikiPhoto(stop.id);
+      return;
+    }
+    fetchWikiData(stop).then(() => injectWikiPhoto(stop.id));
   });
 }
 
@@ -168,8 +229,9 @@ function getPhotos(stop) {
   const sv  = `https://maps.googleapis.com/maps/api/streetview?size=640x380&location=${lat},${lng}&fov=90&pitch=5&key=${GKEY}`;
   const sat = `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lng}&zoom=16&size=640x380&maptype=satellite&markers=color:red%7C${lat},${lng}&key=${GKEY}`;
   const map = `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lng}&zoom=14&size=640x380&maptype=roadmap&markers=${lat},${lng}&key=${GKEY}`;
+  const wiki = _wikiCache[stop.id]?.img;
   if (stop.type === 'charging' || stop.type === 'transport' || stop.type === 'depart') return [map];
-  if (stop.type === 'hotel') return [map, sat];
+  if (wiki) return [wiki, sv, sat, map];
   return [sv, sat, map];
 }
 
@@ -522,8 +584,7 @@ function openDetail(stop) {
   document.getElementById('detail-time').textContent  = getStopTime(stop) + (stop.tz ? ' ' + stop.tz : '');
   document.getElementById('detail-stars').textContent = priorityStars(stop.priority);
   document.getElementById('detail-name').textContent  = stop.icon + ' ' + stop.location;
-  const wikiExtract = _wikiCache[stop.id]?.extract;
-  document.getElementById('detail-reason').textContent = wikiExtract || stop.reason;
+  document.getElementById('detail-reason').textContent = _wikiCache[stop.id]?.extract || stop.reason;
 
   const tagsEl = document.getElementById('detail-tags');
   tagsEl.innerHTML = '';
@@ -536,23 +597,57 @@ function openDetail(stop) {
   if (stop.veganFriendly || stop.type === 'food')
     parts.push(`<a class="act-btn-full vegan" href="${veganNearbyUrl(stop)}" target="_blank" rel="noopener">🌱 Vegan nearby</a>`);
   parts.push(`<a class="act-btn-full charge" href="${chargingNearbyUrl(stop)}" target="_blank" rel="noopener">⚡ Chargers</a>`);
-  if (stop.priority >= 2)
-    parts.push(`<a class="act-btn-full poi" href="${poiNearbyUrl(stop)}" target="_blank" rel="noopener">📍 POI</a>`);
   if (stop.mapsUrl && stop.mapsUrl !== 'N/A')
     parts.push(`<a class="act-btn-full maps" href="${stop.mapsUrl}" target="_blank" rel="noopener">🗺️ Maps</a>`);
   actEl.innerHTML = parts.join('');
+
+  // Clear POI carousel
+  const poiSection = document.getElementById('detail-poi-section');
+  const poiCarousel = document.getElementById('detail-poi-carousel');
+  poiSection.classList.add('hidden');
+  poiCarousel.innerHTML = '';
 
   updateDetailCheckBtn();
   initDetailSlider();
   overlay.scrollTop = 0;
 
-  // If wiki extract not yet loaded, fetch and update description live
-  if (_wikiCache[stop.id] === undefined && WIKI_TITLES[stop.id]) {
-    fetchWikiData(stop.id).then(data => {
-      if (!_detailStop || _detailStop.id !== stop.id || !data?.extract) return;
-      document.getElementById('detail-reason').textContent = data.extract;
+  // Fetch wiki data if not cached yet — updates description + card photo
+  if (_wikiCache[stop.id] === undefined) {
+    fetchWikiData(stop).then(data => {
+      if (!_detailStop || _detailStop.id !== stop.id) return;
+      if (data?.extract) document.getElementById('detail-reason').textContent = data.extract;
+      if (data?.img) {
+        // Rebuild detail slider with wiki photo prepended
+        const photos = getPhotos(stop);
+        _detailTotal = photos.length;
+        _detailCurrent = 0;
+        const slidesEl = document.getElementById('detail-slides');
+        const dotsEl = document.getElementById('detail-dots');
+        slidesEl.style.transition = 'none';
+        slidesEl.style.transform = 'translateX(0)';
+        slidesEl.innerHTML = photos.map(url =>
+          `<img class="detail-slide" src="${url}" loading="lazy" alt="${stop.location}">`
+        ).join('');
+        dotsEl.innerHTML = photos.length > 1
+          ? photos.map((_,i) => `<span class="detail-dot${i===0?' active':''}"></span>`).join('') : '';
+        initDetailSlider();
+        // Also update the card on the timeline
+        injectWikiPhoto(stop.id);
+      }
     });
   }
+
+  // Fetch nearby POIs
+  fetchNearbyPOI(stop).then(pois => {
+    if (!_detailStop || _detailStop.id !== stop.id || !pois.length) return;
+    poiCarousel.innerHTML = pois.map(p => `
+      <a class="poi-card" href="${p.url}" target="_blank" rel="noopener">
+        <img class="poi-card-img" src="${p.img}" alt="${p.title}" loading="lazy">
+        <div class="poi-card-name">${p.title.replace(/_/g,' ')}</div>
+        <div class="poi-card-dist">${p.dist < 1000 ? Math.round(p.dist)+'m' : (p.dist/1000).toFixed(1)+'km'}</div>
+      </a>`).join('');
+    poiSection.classList.remove('hidden');
+  });
 }
 
 function closeDetail() {
