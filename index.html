@@ -121,6 +121,46 @@
     </div>
   </div>
 
+  <!-- Edit stop sheet -->
+  <div id="edit-sheet-overlay" class="hidden">
+    <div id="edit-sheet">
+      <div class="edit-sheet-handle"></div>
+      <div class="edit-sheet-header">
+        <h3 class="edit-sheet-title">Edit stop</h3>
+        <button id="edit-sheet-close" class="icon-btn">✕</button>
+      </div>
+      <div class="edit-sheet-body">
+        <label class="edit-field">
+          <span class="edit-label">Location name</span>
+          <input type="text" id="edit-name" class="edit-input" placeholder="e.g. Amiens Cathedral">
+        </label>
+        <label class="edit-field">
+          <span class="edit-label">Arrival time</span>
+          <input type="time" id="edit-time" class="edit-input">
+        </label>
+        <label class="edit-field">
+          <span class="edit-label">Duration at stop (minutes)</span>
+          <input type="number" id="edit-duration" class="edit-input" min="5" max="480" step="5" placeholder="30">
+        </label>
+        <div class="edit-coords-row">
+          <label class="edit-field edit-field-half">
+            <span class="edit-label">Latitude</span>
+            <input type="number" id="edit-lat" class="edit-input" step="0.0001" placeholder="48.8566">
+          </label>
+          <label class="edit-field edit-field-half">
+            <span class="edit-label">Longitude</span>
+            <input type="number" id="edit-lng" class="edit-input" step="0.0001" placeholder="2.3522">
+          </label>
+        </div>
+        <p class="edit-hint">Changing coordinates recalculates driving time from the previous stop.</p>
+      </div>
+      <div class="edit-sheet-footer">
+        <button id="edit-save-btn" class="pill-btn primary">Save changes</button>
+        <button id="edit-recalc-btn" class="pill-btn recalc">⏱ Recalculate following stops</button>
+      </div>
+    </div>
+  </div>
+
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <script src="data.js"></script>
   <script src="app.js"></script>

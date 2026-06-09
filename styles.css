@@ -454,6 +454,62 @@ html, body { height:100%; overflow:hidden; font-family:-apple-system,BlinkMacSys
 }
 .poi-card-dist { font-size:10px; color:rgba(255,255,255,.7); margin-top:1px; }
 
+/* ─── Edit stop sheet ───────────────────────────────────────────────── */
+#edit-sheet-overlay {
+  position:fixed; inset:0; z-index:300;
+  background:rgba(0,0,0,.55);
+  display:flex; align-items:flex-end;
+  backdrop-filter:blur(2px);
+}
+#edit-sheet-overlay.hidden { display:none !important; }
+#edit-sheet {
+  width:100%; background:var(--bg2);
+  border-radius:20px 20px 0 0;
+  padding:0 0 calc(var(--safe-bot) + 8px);
+  transform:translateY(100%);
+  transition:transform .35s cubic-bezier(.32,1,.23,1);
+  max-height:92dvh; overflow-y:auto;
+}
+#edit-sheet-overlay.open #edit-sheet { transform:translateY(0); }
+
+.edit-sheet-handle {
+  width:36px; height:4px; border-radius:2px;
+  background:var(--bg3); margin:12px auto 0;
+}
+.edit-sheet-header {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:14px 20px 4px;
+}
+.edit-sheet-title { font-size:17px; font-weight:700; }
+.edit-sheet-body  { padding:12px 20px 4px; display:flex; flex-direction:column; gap:14px; }
+.edit-sheet-footer {
+  padding:16px 20px 8px; display:flex; flex-direction:column; gap:10px;
+}
+
+.edit-field { display:flex; flex-direction:column; gap:5px; }
+.edit-field-half { flex:1; }
+.edit-coords-row { display:flex; gap:12px; }
+.edit-label { font-size:12px; font-weight:600; color:var(--text2); text-transform:uppercase; letter-spacing:.05em; }
+.edit-input {
+  background:var(--bg3); border:1px solid var(--bg3);
+  border-radius:10px; padding:11px 14px;
+  color:var(--text); font-size:15px; font-family:inherit;
+  -webkit-appearance:none; appearance:none;
+  transition:border-color .15s;
+  width:100%;
+}
+.edit-input:focus { outline:none; border-color:var(--accent); }
+.edit-hint {
+  font-size:12px; color:var(--text3); line-height:1.5;
+  padding:4px 0;
+}
+
+/* action button variant */
+.act-btn-full.edit { background:var(--bg3); color:var(--text2); border:none; font-size:14px; cursor:pointer; font-family:inherit; }
+.act-btn-full.edit:active { opacity:.7; }
+.pill-btn.recalc { background:var(--accent2); color:#fff; }
+.pill-btn.recalc:disabled { opacity:.55; }
+
 /* ─── Map view ──────────────────────────────────────────────────────── */
 #map-container {
   position:absolute; inset:0;

@@ -3,8 +3,10 @@ const state = {
   currentDayId: null,
   currentView: 'day',
   cascadeEnabled: false,
-  overrides: {},
-  checked: {},
+  overrides: {},        // stopId → time string
+  checked: {},          // stopId → bool
+  locOverrides: {},     // stopId → { name, lat, lng }
+  durOverrides: {},     // stopId → minutes
 };
 
 /* ── Helpers ───────────────────────────────────────────────────────── */
@@ -17,7 +19,11 @@ function minutesToTime(mins) {
   mins = ((mins % 1440) + 1440) % 1440;
   return `${String(Math.floor(mins / 60)).padStart(2,'0')}:${String(mins % 60).padStart(2,'0')}`;
 }
-function getStopTime(stop) { return state.overrides[stop.id] ?? stop.time; }
+function getStopTime(stop)     { return state.overrides[stop.id]          ?? stop.time; }
+function getStopLat(stop)      { return state.locOverrides[stop.id]?.lat  ?? stop.lat; }
+function getStopLng(stop)      { return state.locOverrides[stop.id]?.lng  ?? stop.lng; }
+function getStopName(stop)     { return state.locOverrides[stop.id]?.name ?? stop.location; }
+function getStopDuration(stop) { return state.durOverrides[stop.id]       ?? stop.duration ?? 30; }
 function priorityStars(p) { return p >= 1 ? '★'.repeat(p) + '☆'.repeat(3-p) : ''; }
 function formatDate(dateStr) {
   const d = new Date(dateStr + 'T00:00:00');
@@ -334,16 +340,22 @@ function poiNearbyUrl(stop) {
 /* ── Persist ───────────────────────────────────────────────────────── */
 function save() {
   try {
-    localStorage.setItem('annecy_overrides', JSON.stringify(state.overrides));
-    localStorage.setItem('annecy_checked',   JSON.stringify(state.checked));
+    localStorage.setItem('annecy_overrides',    JSON.stringify(state.overrides));
+    localStorage.setItem('annecy_checked',      JSON.stringify(state.checked));
+    localStorage.setItem('annecy_loc_overrides', JSON.stringify(state.locOverrides));
+    localStorage.setItem('annecy_dur_overrides', JSON.stringify(state.durOverrides));
   } catch {}
 }
 function load() {
   try {
-    const o = localStorage.getItem('annecy_overrides');
-    const c = localStorage.getItem('annecy_checked');
-    if (o) state.overrides = JSON.parse(o);
-    if (c) state.checked   = JSON.parse(c);
+    const o  = localStorage.getItem('annecy_overrides');
+    const c  = localStorage.getItem('annecy_checked');
+    const lo = localStorage.getItem('annecy_loc_overrides');
+    const du = localStorage.getItem('annecy_dur_overrides');
+    if (o)  state.overrides    = JSON.parse(o);
+    if (c)  state.checked      = JSON.parse(c);
+    if (lo) state.locOverrides = JSON.parse(lo);
+    if (du) state.durOverrides = JSON.parse(du);
   } catch {}
   try {
     if (localStorage.getItem('annecy_theme') === 'light') document.body.classList.add('light');
@@ -762,6 +774,96 @@ function buildIconActions(stop) {
   return parts.join('');
 }
 
+/* ── Stop edit sheet ────────────────────────────────────────────────── */
+let _editStop = null, _editDay = null;
+
+async function fetchTravelMins(fromLat, fromLng, toLat, toLng) {
+  try {
+    const url = `https://router.project-osrm.org/route/v1/driving/${fromLng},${fromLat};${toLng},${toLat}?overview=false`;
+    const r = await fetch(url);
+    const d = await r.json();
+    return Math.ceil((d.routes?.[0]?.duration ?? 0) / 60);
+  } catch { return null; }
+}
+
+async function recalculateFromStop(day, fromIdx) {
+  const btn = document.getElementById('edit-recalc-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Recalculating…'; }
+
+  for (let i = fromIdx; i < day.stops.length - 1; i++) {
+    const from = day.stops[i];
+    const to   = day.stops[i + 1];
+    const fromLat = getStopLat(from), fromLng = getStopLng(from);
+    const toLat   = getStopLat(to),   toLng   = getStopLng(to);
+    if (!fromLat || !toLat) continue;
+
+    const arrMins  = timeToMinutes(getStopTime(from));
+    if (arrMins === null) continue;
+    const durMins  = getStopDuration(from);
+    const depMins  = arrMins + durMins;
+    const travelMins = await fetchTravelMins(fromLat, fromLng, toLat, toLng);
+    if (travelMins === null) continue;
+    state.overrides[to.id] = minutesToTime(depMins + travelMins);
+
+    if (btn) btn.textContent = `Recalculating… (${i - fromIdx + 1}/${day.stops.length - 1 - fromIdx})`;
+  }
+
+  save();
+  renderView(false);
+  closeEditSheet();
+  if (btn) { btn.disabled = false; btn.textContent = 'Recalculate following stops'; }
+}
+
+function openEditSheet(stop) {
+  const day = TRIP_DATA.days.find(d => d.stops.some(s => s.id === stop.id));
+  _editStop = stop; _editDay = day;
+
+  document.getElementById('edit-name').value     = getStopName(stop);
+  document.getElementById('edit-lat').value      = getStopLat(stop)  ?? '';
+  document.getElementById('edit-lng').value      = getStopLng(stop)  ?? '';
+  document.getElementById('edit-duration').value = getStopDuration(stop);
+  document.getElementById('edit-time').value     = getStopTime(stop) ?? '';
+
+  const sheet = document.getElementById('edit-sheet-overlay');
+  sheet.classList.remove('hidden');
+  requestAnimationFrame(() => requestAnimationFrame(() => sheet.classList.add('open')));
+}
+
+function closeEditSheet() {
+  const sheet = document.getElementById('edit-sheet-overlay');
+  sheet.classList.remove('open');
+  sheet.addEventListener('transitionend', () => sheet.classList.add('hidden'), { once: true });
+  _editStop = _editDay = null;
+}
+
+function saveEditSheet() {
+  if (!_editStop || !_editDay) return;
+  const name = document.getElementById('edit-name').value.trim();
+  const lat  = parseFloat(document.getElementById('edit-lat').value);
+  const lng  = parseFloat(document.getElementById('edit-lng').value);
+  const dur  = parseInt(document.getElementById('edit-duration').value, 10);
+  const time = document.getElementById('edit-time').value;
+
+  if (name !== getStopName(_editStop) || (!isNaN(lat) && lat !== getStopLat(_editStop)) || (!isNaN(lng) && lng !== getStopLng(_editStop))) {
+    state.locOverrides[_editStop.id] = {
+      name: name || _editStop.location,
+      lat:  isNaN(lat) ? getStopLat(_editStop) : lat,
+      lng:  isNaN(lng) ? getStopLng(_editStop) : lng,
+    };
+  }
+  if (!isNaN(dur) && dur > 0) state.durOverrides[_editStop.id] = dur;
+  if (time) state.overrides[_editStop.id] = time;
+
+  save();
+  renderView(false);
+  // Update detail page header if still open
+  if (_detailStop?.id === _editStop.id) {
+    document.getElementById('detail-name').textContent = _editStop.icon + ' ' + getStopName(_editStop);
+    document.getElementById('detail-time').textContent = getStopTime(_editStop) + (_editStop.tz ? ' ' + _editStop.tz : '');
+  }
+  closeEditSheet();
+}
+
 /* ── Detail page ───────────────────────────────────────────────────── */
 let _detailStop = null, _detailCurrent = 0, _detailTotal = 0;
 
@@ -821,7 +923,9 @@ function openDetail(stop) {
   parts.push(`<a class="act-btn-full charge" href="${chargingNearbyUrl(stop)}" target="_blank" rel="noopener">⚡ Chargers</a>`);
   if (stop.mapsUrl && stop.mapsUrl !== 'N/A')
     parts.push(`<a class="act-btn-full maps" href="${stop.mapsUrl}" target="_blank" rel="noopener">🗺️ Maps</a>`);
+  parts.push(`<button class="act-btn-full edit" id="detail-edit-btn">✎ Edit stop</button>`);
   actEl.innerHTML = parts.join('');
+  actEl.querySelector('#detail-edit-btn').addEventListener('click', () => openEditSheet(stop));
 
   const poiSection  = document.getElementById('detail-poi-section');
   const poiCarousel = document.getElementById('detail-poi-carousel');
@@ -1076,7 +1180,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('drawer-overlay').addEventListener('click', closeDrawer);
   document.querySelectorAll('.drawer-item[data-action]').forEach(btn =>
     btn.addEventListener('click', () => {
-      if (btn.dataset.action === 'reset-times')  { state.overrides = {}; save(); renderView(false); closeDrawer(); }
+      if (btn.dataset.action === 'reset-times')  { state.overrides = {}; state.locOverrides = {}; state.durOverrides = {}; save(); renderView(false); closeDrawer(); }
       if (btn.dataset.action === 'reset-checks') { state.checked   = {}; save(); renderView(false); closeDrawer(); }
       if (btn.dataset.action === 'toggle-dark')  {
         document.body.classList.toggle('light');
@@ -1103,6 +1207,46 @@ document.addEventListener('DOMContentLoaded', () => {
   /* Detail page */
   document.getElementById('detail-back').addEventListener('click', closeDetail);
   initDetailNavSwipe();
+
+  /* Edit sheet */
+  document.getElementById('edit-sheet-close').addEventListener('click', closeEditSheet);
+  document.getElementById('edit-sheet-overlay').addEventListener('click', e => {
+    if (e.target === document.getElementById('edit-sheet-overlay')) closeEditSheet();
+  });
+  document.getElementById('edit-save-btn').addEventListener('click', saveEditSheet);
+  document.getElementById('edit-recalc-btn').addEventListener('click', () => {
+    if (!_editStop || !_editDay) return;
+    // save current edits first, then recalculate
+    saveEditSheet();
+    // re-find stop and day after save (state may have changed)
+    const day = TRIP_DATA.days.find(d => d.stops.some(s => s.id === _editStop?.id));
+    if (!day || !_editStop) return;
+    // We need to re-open recalc — but saveEditSheet already closed it.
+    // So wire it differently: keep sheet open until recalc done.
+  });
+  // Re-wire recalc to save + recalculate without closing first
+  document.getElementById('edit-recalc-btn').onclick = async () => {
+    if (!_editStop || !_editDay) return;
+    const stop = _editStop, day = _editDay;
+    // Apply edits to state without closing sheet
+    const name = document.getElementById('edit-name').value.trim();
+    const lat  = parseFloat(document.getElementById('edit-lat').value);
+    const lng  = parseFloat(document.getElementById('edit-lng').value);
+    const dur  = parseInt(document.getElementById('edit-duration').value, 10);
+    const time = document.getElementById('edit-time').value;
+    if (name || !isNaN(lat) || !isNaN(lng)) {
+      state.locOverrides[stop.id] = {
+        name: name || stop.location,
+        lat:  isNaN(lat) ? getStopLat(stop) : lat,
+        lng:  isNaN(lng) ? getStopLng(stop) : lng,
+      };
+    }
+    if (!isNaN(dur) && dur > 0) state.durOverrides[stop.id] = dur;
+    if (time) state.overrides[stop.id] = time;
+    save();
+    const fromIdx = day.stops.findIndex(s => s.id === stop.id);
+    await recalculateFromStop(day, fromIdx);
+  };
   document.getElementById('detail-check-btn').addEventListener('click', () => {
     if (!_detailStop) return;
     state.checked[_detailStop.id] = !state.checked[_detailStop.id];
