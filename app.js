@@ -797,6 +797,142 @@ function buildIconActions(stop) {
 
 /* ── Stop edit sheet ────────────────────────────────────────────────── */
 let _editStop = null, _editDay = null;
+let _editLocMap = null, _editLocMarker = null;
+let _editLat = null, _editLng = null;
+let _editSearchTimer = null;
+let _editSelectedType = null;
+let _editSelectedPriority = null;
+
+const TYPE_DEFS = [
+  { type:'depart',       icon:'🚗', label:'Depart' },
+  { type:'transport',    icon:'🚂', label:'Transport' },
+  { type:'charging',     icon:'⚡', label:'Charging' },
+  { type:'hotel',        icon:'🏨', label:'Hotel' },
+  { type:'food',         icon:'🍽️', label:'Food' },
+  { type:'wander',       icon:'🚶', label:'Explore' },
+  { type:'architecture', icon:'⛪', label:'Architecture' },
+  { type:'village',      icon:'🏘️', label:'Village' },
+  { type:'town',         icon:'🏙️', label:'Town' },
+  { type:'experience',   icon:'🌿', label:'Experience' },
+  { type:'scenic',       icon:'🏔️', label:'Scenic' },
+  { type:'historic',     icon:'🏛️', label:'Historic' },
+  { type:'festival',     icon:'🎬', label:'Festival' },
+];
+
+const PRIORITY_DEFS = [
+  { value:3, stars:'★★★', label:'Must-see' },
+  { value:2, stars:'★★☆', label:'Should do' },
+  { value:1, stars:'★☆☆', label:'Could do' },
+  { value:0, stars:'○○○', label:'Can skip' },
+];
+
+function buildDurPicker(totalMins) {
+  const hrs = Math.floor(totalMins / 60);
+  const minVal = totalMins % 60;
+  const hCol = document.getElementById('dur-hours');
+  const mCol = document.getElementById('dur-mins');
+  if (!hCol || !mCol) return;
+  hCol.innerHTML = '<div class="dur-pad"></div>' +
+    Array.from({length:9},(_,i)=>`<div class="dur-item">${i}h</div>`).join('') +
+    '<div class="dur-pad"></div>';
+  mCol.innerHTML = '<div class="dur-pad"></div>' +
+    Array.from({length:12},(_,i)=>`<div class="dur-item">${String(i*5).padStart(2,'0')}</div>`).join('') +
+    '<div class="dur-pad"></div>';
+  requestAnimationFrame(() => {
+    hCol.scrollTop = hrs * 44;
+    mCol.scrollTop = (minVal / 5) * 44;
+  });
+}
+
+function getDurPickerMins() {
+  const hCol = document.getElementById('dur-hours');
+  const mCol = document.getElementById('dur-mins');
+  if (!hCol || !mCol) return 30;
+  const hrs = Math.min(8, Math.max(0, Math.round(hCol.scrollTop / 44)));
+  const minIdx = Math.min(11, Math.max(0, Math.round(mCol.scrollTop / 44)));
+  return hrs * 60 + minIdx * 5;
+}
+
+function initEditLocMap(lat, lng) {
+  const el = document.getElementById('edit-map-el');
+  if (!el || !window.L) return;
+  if (_editLocMap) { _editLocMap.remove(); _editLocMap = null; _editLocMarker = null; }
+  _editLat = lat; _editLng = lng;
+  const isDark = !document.body.classList.contains('light');
+  const tiles = isDark
+    ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+    : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
+  _editLocMap = L.map(el, { zoomControl:true, attributionControl:false });
+  L.tileLayer(tiles, { maxZoom:19, subdomains:'abcd' }).addTo(_editLocMap);
+  _editLocMap.setView([lat, lng], 14);
+  _editLocMarker = L.marker([lat, lng], { draggable:true }).addTo(_editLocMap);
+  _editLocMarker.on('dragend', e => {
+    const p = e.target.getLatLng();
+    _editLat = p.lat; _editLng = p.lng;
+  });
+}
+
+async function searchEditLocation(query) {
+  if (query.length < 3) { document.getElementById('edit-loc-results').innerHTML = ''; return; }
+  try {
+    const r = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=5&accept-language=en`);
+    const results = await r.json();
+    const el = document.getElementById('edit-loc-results');
+    if (!results.length) { el.innerHTML = '<div class="edit-loc-no-results">No results</div>'; return; }
+    el.innerHTML = results.map((item, i) =>
+      `<button class="edit-loc-result" data-idx="${i}" data-lat="${item.lat}" data-lng="${item.lon}">${item.display_name}</button>`
+    ).join('');
+    el.querySelectorAll('.edit-loc-result').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const lat = parseFloat(btn.dataset.lat);
+        const lng = parseFloat(btn.dataset.lng);
+        _editLat = lat; _editLng = lng;
+        if (_editLocMap && _editLocMarker) {
+          _editLocMap.setView([lat, lng], 15);
+          _editLocMarker.setLatLng([lat, lng]);
+        }
+        el.innerHTML = '';
+        document.getElementById('edit-loc-search').value = btn.textContent;
+      });
+    });
+  } catch {}
+}
+
+function renderEditTypeGrid(selectedType) {
+  _editSelectedType = selectedType;
+  const grid = document.getElementById('edit-type-grid');
+  if (!grid) return;
+  grid.innerHTML = TYPE_DEFS.map(td =>
+    `<button class="type-pill${td.type === selectedType ? ' active' : ''}" data-type="${td.type}">
+       <span class="type-pill-icon">${td.icon}</span>
+       <span class="type-pill-label">${td.label}</span>
+     </button>`
+  ).join('');
+  grid.querySelectorAll('.type-pill').forEach(btn => {
+    btn.addEventListener('click', () => {
+      _editSelectedType = btn.dataset.type;
+      grid.querySelectorAll('.type-pill').forEach(b => b.classList.toggle('active', b.dataset.type === _editSelectedType));
+    });
+  });
+}
+
+function renderEditPriority(selectedPriority) {
+  _editSelectedPriority = selectedPriority;
+  const grid = document.getElementById('edit-priority-grid');
+  if (!grid) return;
+  grid.innerHTML = PRIORITY_DEFS.map(pd =>
+    `<button class="priority-opt${pd.value === selectedPriority ? ' active' : ''}" data-val="${pd.value}">
+       <span class="priority-opt-stars">${pd.stars}</span>
+       <span class="priority-opt-label">${pd.label}</span>
+     </button>`
+  ).join('');
+  grid.querySelectorAll('.priority-opt').forEach(btn => {
+    btn.addEventListener('click', () => {
+      _editSelectedPriority = parseInt(btn.dataset.val);
+      grid.querySelectorAll('.priority-opt').forEach(b => b.classList.toggle('active', parseInt(b.dataset.val) === _editSelectedPriority));
+    });
+  });
+}
 
 async function fetchTravelMins(fromLat, fromLng, toLat, toLng) {
   try {
@@ -838,46 +974,57 @@ async function recalculateFromStop(day, fromIdx) {
 function openEditSheet(stop) {
   const day = TRIP_DATA.days.find(d => d.stops.some(s => s.id === stop.id));
   _editStop = stop; _editDay = day;
+  _editLat = getStopLat(stop); _editLng = getStopLng(stop);
 
-  document.getElementById('edit-name').value     = getStopName(stop);
-  document.getElementById('edit-lat').value      = getStopLat(stop)  ?? '';
-  document.getElementById('edit-lng').value      = getStopLng(stop)  ?? '';
-  document.getElementById('edit-duration').value = getStopDuration(stop);
-  document.getElementById('edit-time').value     = getStopTime(stop) ?? '';
+  document.getElementById('edit-name').value   = getStopName(stop);
+  document.getElementById('edit-time').value   = getStopTime(stop) ?? '';
+  document.getElementById('edit-reason').value = getStopReason(stop);
+  document.getElementById('edit-vegan').checked = getStopVegan(stop);
+  document.getElementById('edit-loc-search').value = '';
+  document.getElementById('edit-loc-results').innerHTML = '';
+
+  buildDurPicker(getStopDuration(stop));
+  renderEditTypeGrid(getStopType(stop));
+  renderEditPriority(getStopPriority(stop));
 
   const sheet = document.getElementById('edit-sheet-overlay');
   sheet.classList.remove('hidden');
-  requestAnimationFrame(() => requestAnimationFrame(() => sheet.classList.add('open')));
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    sheet.classList.add('open');
+    setTimeout(() => initEditLocMap(_editLat, _editLng), 350);
+  }));
 }
 
 function closeEditSheet() {
   const sheet = document.getElementById('edit-sheet-overlay');
   sheet.classList.remove('open');
   sheet.addEventListener('transitionend', () => sheet.classList.add('hidden'), { once: true });
+  if (_editLocMap) { _editLocMap.remove(); _editLocMap = null; _editLocMarker = null; }
   _editStop = _editDay = null;
 }
 
 function saveEditSheet() {
-  if (!_editStop || !_editDay) return;
-  const name = document.getElementById('edit-name').value.trim();
-  const lat  = parseFloat(document.getElementById('edit-lat').value);
-  const lng  = parseFloat(document.getElementById('edit-lng').value);
-  const dur  = parseInt(document.getElementById('edit-duration').value, 10);
-  const time = document.getElementById('edit-time').value;
+  if (!_editStop) return;
+  const name   = document.getElementById('edit-name').value.trim();
+  const time   = document.getElementById('edit-time').value;
+  const reason = document.getElementById('edit-reason').value.trim();
+  const vegan  = document.getElementById('edit-vegan').checked;
+  const dur    = getDurPickerMins();
 
-  if (name !== getStopName(_editStop) || (!isNaN(lat) && lat !== getStopLat(_editStop)) || (!isNaN(lng) && lng !== getStopLng(_editStop))) {
-    state.locOverrides[_editStop.id] = {
-      name: name || _editStop.location,
-      lat:  isNaN(lat) ? getStopLat(_editStop) : lat,
-      lng:  isNaN(lng) ? getStopLng(_editStop) : lng,
-    };
-  }
-  if (!isNaN(dur) && dur > 0) state.durOverrides[_editStop.id] = dur;
+  state.locOverrides[_editStop.id] = {
+    name: name || _editStop.location,
+    lat: _editLat ?? getStopLat(_editStop),
+    lng: _editLng ?? getStopLng(_editStop),
+  };
+  if (dur >= 0) state.durOverrides[_editStop.id] = dur;
   if (time) state.overrides[_editStop.id] = time;
+  if (reason) state.reasonOverrides[_editStop.id] = reason;
+  state.veganOverrides[_editStop.id] = vegan;
+  if (_editSelectedType) state.typeOverrides[_editStop.id] = _editSelectedType;
+  if (_editSelectedPriority !== null) state.priorityOverrides[_editStop.id] = _editSelectedPriority;
 
   save();
   renderView(false);
-  // Update detail page header if still open
   if (_detailStop?.id === _editStop.id) {
     document.getElementById('detail-name').textContent = _editStop.icon + ' ' + getStopName(_editStop);
     document.getElementById('detail-time').textContent = getStopTime(_editStop) + (_editStop.tz ? ' ' + _editStop.tz : '');
@@ -1232,42 +1379,32 @@ document.addEventListener('DOMContentLoaded', () => {
   /* Edit sheet */
   document.getElementById('edit-sheet-close').addEventListener('click', closeEditSheet);
   document.getElementById('edit-sheet-overlay').addEventListener('click', e => {
-    if (e.target === document.getElementById('edit-sheet-overlay')) closeEditSheet();
+    if (e.target.id === 'edit-sheet-overlay') closeEditSheet();
   });
   document.getElementById('edit-save-btn').addEventListener('click', saveEditSheet);
-  document.getElementById('edit-recalc-btn').addEventListener('click', () => {
-    if (!_editStop || !_editDay) return;
-    // save current edits first, then recalculate
-    saveEditSheet();
-    // re-find stop and day after save (state may have changed)
-    const day = TRIP_DATA.days.find(d => d.stops.some(s => s.id === _editStop?.id));
-    if (!day || !_editStop) return;
-    // We need to re-open recalc — but saveEditSheet already closed it.
-    // So wire it differently: keep sheet open until recalc done.
-  });
-  // Re-wire recalc to save + recalculate without closing first
   document.getElementById('edit-recalc-btn').onclick = async () => {
     if (!_editStop || !_editDay) return;
     const stop = _editStop, day = _editDay;
-    // Apply edits to state without closing sheet
-    const name = document.getElementById('edit-name').value.trim();
-    const lat  = parseFloat(document.getElementById('edit-lat').value);
-    const lng  = parseFloat(document.getElementById('edit-lng').value);
-    const dur  = parseInt(document.getElementById('edit-duration').value, 10);
-    const time = document.getElementById('edit-time').value;
-    if (name || !isNaN(lat) || !isNaN(lng)) {
-      state.locOverrides[stop.id] = {
-        name: name || stop.location,
-        lat:  isNaN(lat) ? getStopLat(stop) : lat,
-        lng:  isNaN(lng) ? getStopLng(stop) : lng,
-      };
-    }
-    if (!isNaN(dur) && dur > 0) state.durOverrides[stop.id] = dur;
+    const name   = document.getElementById('edit-name').value.trim();
+    const time   = document.getElementById('edit-time').value;
+    const reason = document.getElementById('edit-reason').value.trim();
+    const vegan  = document.getElementById('edit-vegan').checked;
+    const dur    = getDurPickerMins();
+    state.locOverrides[stop.id] = { name: name || stop.location, lat: _editLat ?? getStopLat(stop), lng: _editLng ?? getStopLng(stop) };
+    if (dur >= 0) state.durOverrides[stop.id] = dur;
     if (time) state.overrides[stop.id] = time;
+    if (reason) state.reasonOverrides[stop.id] = reason;
+    state.veganOverrides[stop.id] = vegan;
+    if (_editSelectedType) state.typeOverrides[stop.id] = _editSelectedType;
+    if (_editSelectedPriority !== null) state.priorityOverrides[stop.id] = _editSelectedPriority;
     save();
     const fromIdx = day.stops.findIndex(s => s.id === stop.id);
     await recalculateFromStop(day, fromIdx);
   };
+  document.getElementById('edit-loc-search').addEventListener('input', e => {
+    clearTimeout(_editSearchTimer);
+    _editSearchTimer = setTimeout(() => searchEditLocation(e.target.value.trim()), 400);
+  });
   document.getElementById('detail-check-btn').addEventListener('click', () => {
     if (!_detailStop) return;
     state.checked[_detailStop.id] = !state.checked[_detailStop.id];
