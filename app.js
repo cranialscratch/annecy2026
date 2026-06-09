@@ -135,30 +135,12 @@ function findStop(stopId) {
   return null;
 }
 
-function injectWikiData(stopId, data) {
-  if (!data?.img) return;
-  const item = document.getElementById(`stop-${stopId}`);
-  if (!item) return;
-  const stop = findStop(stopId);
-  if (!stop) return;
-  const oldSlider = item.querySelector('.card-slider');
-  if (!oldSlider) return;
-  const tmp = document.createElement('div');
-  tmp.innerHTML = buildSlider(stop, 'card');
-  const newSlider = tmp.firstChild;
-  oldSlider.replaceWith(newSlider);
-  initSlider(newSlider, stop, 'card');
-}
-
 function lazyLoadWikiImages(stops) {
+  // Pre-fetch Wikipedia extracts so detail page descriptions are ready
   stops.forEach(stop => {
     if (!WIKI_TITLES[stop.id]) return;
-    const cached = _wikiCache[stop.id];
-    if (cached !== undefined) {
-      if (cached?.img) injectWikiData(stop.id, cached);
-      return;
-    }
-    fetchWikiData(stop.id).then(data => injectWikiData(stop.id, data));
+    if (_wikiCache[stop.id] !== undefined) return;
+    fetchWikiData(stop.id);
   });
 }
 
@@ -180,10 +162,15 @@ const TYPE_GRAD = {
 };
 
 /* ── Get slides for a stop ─────────────────────────────────────────── */
+const GKEY = 'AIzaSyBDIpPyqjOtvh1y-1nwyJgIj9TVjQFD_Jo';
 function getPhotos(stop) {
-  const wiki = _wikiCache[stop.id];
-  if (wiki?.img) return [wiki.img];
-  return ['__placeholder__'];
+  const { lat, lng } = stop;
+  const sv  = `https://maps.googleapis.com/maps/api/streetview?size=640x380&location=${lat},${lng}&fov=90&pitch=5&key=${GKEY}`;
+  const sat = `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lng}&zoom=16&size=640x380&maptype=satellite&markers=color:red%7C${lat},${lng}&key=${GKEY}`;
+  const map = `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lng}&zoom=14&size=640x380&maptype=roadmap&markers=${lat},${lng}&key=${GKEY}`;
+  if (stop.type === 'charging' || stop.type === 'transport' || stop.type === 'depart') return [map];
+  if (stop.type === 'hotel') return [map, sat];
+  return [sv, sat, map];
 }
 
 /* ── Nav URLs ──────────────────────────────────────────────────────── */
@@ -348,7 +335,7 @@ function renderTimeline(container, scrollToNow) {
     container.appendChild(item);
   });
 
-  // Fetch Wikipedia photos lazily after render
+  // Fetch Wikipedia extracts for detail page descriptions
   lazyLoadWikiImages(day.stops);
 
   // Only scroll to now when explicitly requested (Today button)
@@ -559,29 +546,11 @@ function openDetail(stop) {
   initDetailSlider();
   overlay.scrollTop = 0;
 
-  // If wiki data not yet loaded, fetch and update detail page live
+  // If wiki extract not yet loaded, fetch and update description live
   if (_wikiCache[stop.id] === undefined && WIKI_TITLES[stop.id]) {
     fetchWikiData(stop.id).then(data => {
-      if (!_detailStop || _detailStop.id !== stop.id || !data) return;
-      if (data.extract) document.getElementById('detail-reason').textContent = data.extract;
-      if (data.img) {
-        _detailTotal = 1;
-        _detailCurrent = 0;
-        const slidesEl = document.getElementById('detail-slides');
-        const dotsEl   = document.getElementById('detail-dots');
-        const img = document.createElement('img');
-        img.className = 'detail-slide';
-        img.src = data.img;
-        img.alt = stop.location;
-        slidesEl.style.transition = 'none';
-        slidesEl.style.transform = 'translateX(0)';
-        slidesEl.innerHTML = '';
-        slidesEl.appendChild(img);
-        dotsEl.innerHTML = '';
-        initDetailSlider();
-        // Also update the card thumbnail
-        injectWikiData(stop.id, data);
-      }
+      if (!_detailStop || _detailStop.id !== stop.id || !data?.extract) return;
+      document.getElementById('detail-reason').textContent = data.extract;
     });
   }
 }
