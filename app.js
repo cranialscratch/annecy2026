@@ -391,6 +391,7 @@ function updateHeader() {
   if (state.currentView === 'overview')      { label.textContent = 'Annecy 2026';    sub.textContent = 'Trip overview'; }
   else if (state.currentView === 'vegan')    { label.textContent = '🌱 Vegan Spots'; sub.textContent = 'All vegan-friendly stops'; }
   else if (state.currentView === 'charging') { label.textContent = '⚡ Charging';    sub.textContent = 'Tesla Superchargers'; }
+  else if (state.currentView === 'map' && day) { label.textContent = `${getDayLabel(day)} · ${day.title}`; sub.textContent = 'Route map'; }
   else if (day) { label.textContent = `${getDayLabel(day)} · ${day.title}`; sub.textContent = day.subtitle || ''; }
 }
 
@@ -400,10 +401,123 @@ function renderView(scrollToNow) {
   const tl = document.getElementById('timeline');
   document.querySelectorAll('.nav-btn').forEach(b =>
     b.classList.toggle('active', b.dataset.view === state.currentView));
-  if (state.currentView === 'overview')      renderOverview(tl);
-  else if (state.currentView === 'vegan')    renderFilterList(tl, 'vegan');
-  else if (state.currentView === 'charging') renderFilterList(tl, 'charging');
-  else renderTimeline(tl, scrollToNow);
+  const mapEl = document.getElementById('map-container');
+  if (state.currentView === 'map') {
+    tl.classList.add('hidden');
+    mapEl.classList.remove('hidden');
+    renderMapView();
+  } else {
+    mapEl.classList.add('hidden');
+    tl.classList.remove('hidden');
+    if (state.currentView === 'overview')      renderOverview(tl);
+    else if (state.currentView === 'vegan')    renderFilterList(tl, 'vegan');
+    else if (state.currentView === 'charging') renderFilterList(tl, 'charging');
+    else renderTimeline(tl, scrollToNow);
+  }
+}
+
+/* ── Map view ──────────────────────────────────────────────────────── */
+let _leafletMap = null;
+let _mapDayId   = null;
+
+const TYPE_COLOR = {
+  charging:'#16a34a', hotel:'#0284c7', transport:'#7c3aed', food:'#ea580c',
+  architecture:'#d97706', village:'#0d9488', town:'#0d9488', experience:'#db2777',
+  wander:'#059669', depart:'#475569', scenic:'#16a34a', historic:'#b45309', festival:'#7c3aed',
+};
+
+async function fetchDayRoute(stops) {
+  const pts = stops.filter(s => s.lat && s.lng);
+  if (pts.length < 2) return null;
+  const coords = pts.map(s => `${s.lng},${s.lat}`).join(';');
+  try {
+    const r = await fetch(`https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson`);
+    const d = await r.json();
+    return (d.routes?.[0]?.geometry?.coordinates || []).map(([lng, lat]) => [lat, lng]);
+  } catch { return null; }
+}
+
+function renderMapView() {
+  const day = TRIP_DATA.days.find(d => d.id === state.currentDayId);
+  if (!day) return;
+
+  const container = document.getElementById('map-container');
+
+  // Destroy old map if day changed
+  if (_leafletMap && _mapDayId !== state.currentDayId) {
+    _leafletMap.remove();
+    _leafletMap = null;
+    container.innerHTML = '';
+  }
+
+  if (_leafletMap) {
+    _leafletMap.invalidateSize();
+    return; // already built for this day
+  }
+
+  _mapDayId = state.currentDayId;
+
+  const isDark = !document.body.classList.contains('light');
+  const tileUrl = isDark
+    ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+    : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
+
+  const stops = day.stops.filter(s => s.lat && s.lng);
+  if (!stops.length) return;
+
+  const map = L.map(container, { zoomControl: false, attributionControl: false });
+  _leafletMap = map;
+
+  L.tileLayer(tileUrl, { maxZoom: 19, subdomains: 'abcd' }).addTo(map);
+  L.control.zoom({ position: 'topright' }).addTo(map);
+
+  // Fit bounds to all stops
+  const bounds = L.latLngBounds(stops.map(s => [s.lat, s.lng]));
+  map.fitBounds(bounds, { padding: [48, 48] });
+
+  // Determine next unvisited stop
+  const now = nowMinutes();
+  let nextStopId = null;
+  for (const s of stops) {
+    const t = timeToMinutes(getStopTime(s));
+    if (t !== null && t >= now && !state.checked[s.id]) { nextStopId = s.id; break; }
+  }
+
+  // Draw markers
+  stops.forEach((stop, idx) => {
+    const visited  = !!state.checked[stop.id];
+    const isNext   = stop.id === nextStopId;
+    const color    = TYPE_COLOR[stop.type] || '#475569';
+    const icon = L.divIcon({
+      className: '',
+      html: `<div class="map-marker type-${stop.type}${visited ? ' visited' : ''}${isNext ? ' next-stop' : ''}">
+               <span>${stop.icon}</span>
+               <span class="map-marker-seq">${idx + 1}</span>
+             </div>`,
+      iconSize:   [36, 36],
+      iconAnchor: [18, 18],
+      popupAnchor:[0, -20],
+    });
+    const marker = L.marker([stop.lat, stop.lng], { icon }).addTo(map);
+    marker.on('click', () => openDetail(stop));
+  });
+
+  // Fetch and draw road route
+  fetchDayRoute(stops).then(latlngs => {
+    if (!latlngs || _mapDayId !== state.currentDayId) return;
+    const isDarkNow = !document.body.classList.contains('light');
+    L.polyline(latlngs, {
+      color: isDarkNow ? '#38bdf8' : '#0284c7',
+      weight: 4,
+      opacity: 0.7,
+    }).addTo(map);
+  });
+
+  // Legend
+  const legend = document.createElement('div');
+  legend.className = 'map-legend';
+  legend.textContent = `${stops.length} stops · tap a pin for details`;
+  container.appendChild(legend);
 }
 
 /* ── Overview ──────────────────────────────────────────────────────── */
@@ -898,6 +1012,9 @@ document.addEventListener('DOMContentLoaded', () => {
       if (btn.dataset.action === 'toggle-dark')  {
         document.body.classList.toggle('light');
         try { localStorage.setItem('annecy_theme', document.body.classList.contains('light') ? 'light' : 'dark'); } catch {}
+        // Rebuild map with new tile theme
+        if (_leafletMap) { _leafletMap.remove(); _leafletMap = null; document.getElementById('map-container').innerHTML = ''; }
+        if (state.currentView === 'map') renderMapView();
         closeDrawer();
       }
     }));

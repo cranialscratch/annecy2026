@@ -454,6 +454,78 @@ html, body { height:100%; overflow:hidden; font-family:-apple-system,BlinkMacSys
 }
 .poi-card-dist { font-size:10px; color:rgba(255,255,255,.7); margin-top:1px; }
 
+/* ─── Map view ──────────────────────────────────────────────────────── */
+#map-container {
+  position:absolute; inset:0;
+  width:100%; height:100%;
+}
+#map-container .leaflet-container {
+  width:100%; height:100%;
+  background:var(--bg);
+}
+
+/* Custom stop markers */
+.map-marker {
+  width:36px; height:36px;
+  border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  font-size:16px;
+  border:3px solid rgba(255,255,255,.9);
+  box-shadow:0 2px 8px rgba(0,0,0,.5);
+  cursor:pointer;
+  transition:transform .15s, opacity .15s;
+  position:relative;
+}
+.map-marker.visited {
+  opacity:.45;
+  filter:grayscale(.6);
+}
+.map-marker.next-stop {
+  border-color:#fff;
+  box-shadow:0 0 0 4px rgba(56,189,248,.5), 0 2px 8px rgba(0,0,0,.5);
+  transform:scale(1.15);
+}
+.map-marker-seq {
+  position:absolute; top:-6px; right:-6px;
+  background:#0f172a; color:#fff;
+  font-size:9px; font-weight:800;
+  min-width:16px; height:16px;
+  border-radius:8px; padding:0 3px;
+  display:flex; align-items:center; justify-content:center;
+  border:1.5px solid rgba(255,255,255,.6);
+  line-height:1;
+}
+
+/* type colours */
+.map-marker.type-charging    { background:#16a34a; }
+.map-marker.type-hotel       { background:#0284c7; }
+.map-marker.type-transport   { background:#7c3aed; }
+.map-marker.type-food        { background:#ea580c; }
+.map-marker.type-architecture{ background:#d97706; }
+.map-marker.type-village     { background:#0d9488; }
+.map-marker.type-town        { background:#0d9488; }
+.map-marker.type-experience  { background:#db2777; }
+.map-marker.type-wander      { background:#059669; }
+.map-marker.type-depart      { background:#475569; }
+.map-marker.type-scenic      { background:#16a34a; }
+.map-marker.type-historic    { background:#b45309; }
+.map-marker.type-festival    { background:#7c3aed; }
+
+/* Map legend pill */
+.map-legend {
+  position:absolute; bottom:calc(var(--safe-bot) + 16px); left:50%;
+  transform:translateX(-50%);
+  background:var(--bg2);
+  border:1px solid var(--bg3);
+  border-radius:20px;
+  padding:7px 16px;
+  font-size:12px; color:var(--text2);
+  white-space:nowrap;
+  pointer-events:none;
+  z-index:500;
+  box-shadow:var(--shadow);
+}
+
 /* ─── Misc ──────────────────────────────────────────────────────────── */
 .hidden { display:none !important; }
 ::-webkit-scrollbar { width:4px; height:4px; }
