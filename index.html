@@ -53,6 +53,7 @@
     <nav class="drawer-nav">
       <button class="drawer-item" data-action="reset-times">🔄 Reset all times</button>
       <button class="drawer-item" data-action="reset-checks">☐ Clear visited</button>
+      <button class="drawer-item" data-action="reset-stops">↩ Reset all stop edits</button>
       <button class="drawer-item" data-action="toggle-dark">🌙 Toggle dark/light</button>
       <a class="drawer-item" href="https://www.annecy.org/festival" target="_blank" rel="noopener">🎬 Festival website</a>
       <a class="drawer-item" href="https://www.le-shuttle.com" target="_blank" rel="noopener">🚂 LeShuttle</a>
@@ -89,6 +90,88 @@
     </div>
   </div>
 
+  <!-- Edit / Add stop sheet -->
+  <div id="edit-overlay" class="hidden">
+    <div id="edit-sheet">
+      <div class="edit-header">
+        <button id="edit-close" class="icon-btn">✕</button>
+        <h3 id="edit-title">Edit Stop</h3>
+        <button id="edit-delete-btn" class="icon-btn danger-icon" title="Delete stop">🗑</button>
+      </div>
+
+      <div class="edit-body">
+        <!-- Location search -->
+        <div class="edit-search-row">
+          <input type="search" id="edit-search" placeholder="Search for a place…" autocomplete="off">
+          <button id="edit-search-btn" class="icon-btn">🔍</button>
+        </div>
+        <div id="edit-search-results"></div>
+
+        <div class="edit-fields">
+          <label class="edit-label">Name
+            <input type="text" id="edit-name" class="edit-input" placeholder="Location name">
+          </label>
+
+          <div class="edit-row-2">
+            <label class="edit-label">Time
+              <input type="time" id="edit-time" class="edit-input">
+            </label>
+            <label class="edit-label">Type
+              <select id="edit-type" class="edit-input edit-select">
+                <option value="architecture">Architecture</option>
+                <option value="charging">Charging</option>
+                <option value="depart">Depart</option>
+                <option value="experience">Experience</option>
+                <option value="festival">Festival</option>
+                <option value="food">Food</option>
+                <option value="historic">Historic</option>
+                <option value="hotel">Hotel</option>
+                <option value="scenic">Scenic Drive</option>
+                <option value="town">Town</option>
+                <option value="transport">Transport</option>
+                <option value="village">Village</option>
+                <option value="wander">Explore</option>
+              </select>
+            </label>
+          </div>
+
+          <label class="edit-label">Priority
+            <div class="star-row" id="edit-priority-row">
+              <button class="star-btn" data-val="0">None</button>
+              <button class="star-btn" data-val="1">★</button>
+              <button class="star-btn" data-val="2">★★</button>
+              <button class="star-btn" data-val="3">★★★</button>
+            </div>
+          </label>
+
+          <label class="edit-label">Notes
+            <textarea id="edit-notes" class="edit-input edit-textarea" placeholder="Why visit? What to expect…" rows="3"></textarea>
+          </label>
+
+          <label class="edit-label vegan-row">
+            <input type="checkbox" id="edit-vegan"> Vegan-friendly
+          </label>
+
+          <label class="cascade-label" style="margin-top:4px">
+            <input type="checkbox" id="edit-cascade"> Shift following stops by same time delta
+          </label>
+
+          <!-- Hidden fields populated by search -->
+          <input type="hidden" id="edit-lat">
+          <input type="hidden" id="edit-lng">
+          <input type="hidden" id="edit-maps-url">
+          <input type="hidden" id="edit-stop-id">
+          <input type="hidden" id="edit-day-id">
+        </div>
+      </div>
+
+      <div class="edit-footer">
+        <button id="edit-cancel" class="pill-btn secondary">Cancel</button>
+        <button id="edit-save" class="pill-btn primary">Save</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Detail page -->
   <div id="detail-overlay" class="hidden">
     <div id="detail-page">
@@ -109,6 +192,10 @@
         <h2 id="detail-name"></h2>
         <p id="detail-reason"></p>
         <div id="detail-tags"></div>
+        <div class="detail-edit-row">
+          <button id="detail-edit-btn" class="detail-edit-btn edit">✏️ Edit stop</button>
+          <button id="detail-delete-btn" class="detail-edit-btn delete">🗑 Remove</button>
+        </div>
         <div id="detail-actions"></div>
       </div>
     </div>

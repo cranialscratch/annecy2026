@@ -5,6 +5,7 @@ const state = {
   cascadeEnabled: false,
   overrides: {},
   checked: {},
+  dayEdits: {},   // dayId → full stops array
 };
 
 /* ── Helpers ───────────────────────────────────────────────────────── */
@@ -203,6 +204,197 @@ function poiNearbyUrl(stop) {
   return `https://www.google.com/maps/search/attractions/@${stop.lat},${stop.lng},14z`;
 }
 
+/* ── Mutable stop data ─────────────────────────────────────────────── */
+// dayEdits[dayId] = full stops array (overrides TRIP_DATA)
+// Loaded/saved to localStorage
+
+function getDayStops(dayId) {
+  return state.dayEdits[dayId] || TRIP_DATA.days.find(d => d.id === dayId)?.stops || [];
+}
+
+function saveDayStops(dayId, stops) {
+  state.dayEdits[dayId] = stops;
+  try {
+    localStorage.setItem('annecy_day_edits', JSON.stringify(state.dayEdits));
+  } catch {}
+}
+
+function loadDayEdits() {
+  try {
+    const raw = localStorage.getItem('annecy_day_edits');
+    if (raw) state.dayEdits = JSON.parse(raw);
+  } catch {}
+}
+
+function makeStopId() {
+  return 'custom_' + Date.now();
+}
+
+/* ── Nominatim location search ─────────────────────────────────────── */
+async function searchNominatim(query) {
+  const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=5&addressdetails=1&accept-language=en`;
+  const res = await fetch(url, { headers: { 'User-Agent': 'Annecy2026TripPlanner/1.0' } });
+  return await res.json();
+}
+
+/* ── Edit / Add modal ──────────────────────────────────────────────── */
+let _editIsNew = false;
+let _editPriority = 0;
+
+function openEditModal(stop, dayId) {
+  _editIsNew = false;
+  _editPriority = stop.priority || 0;
+
+  document.getElementById('edit-title').textContent = 'Edit Stop';
+  document.getElementById('edit-delete-btn').classList.remove('hidden');
+  document.getElementById('edit-stop-id').value  = stop.id;
+  document.getElementById('edit-day-id').value   = dayId;
+  document.getElementById('edit-name').value     = stop.location;
+  document.getElementById('edit-time').value     = getStopTime(stop);
+  document.getElementById('edit-type').value     = stop.type;
+  document.getElementById('edit-notes').value    = stop.reason || '';
+  document.getElementById('edit-vegan').checked  = !!stop.veganFriendly;
+  document.getElementById('edit-lat').value      = stop.lat || '';
+  document.getElementById('edit-lng').value      = stop.lng || '';
+  document.getElementById('edit-maps-url').value = stop.mapsUrl || '';
+  document.getElementById('edit-cascade').checked = state.cascadeEnabled;
+  document.getElementById('edit-search').value   = '';
+  document.getElementById('edit-search-results').innerHTML = '';
+  document.getElementById('edit-search-results').classList.remove('visible');
+  updateStarRow();
+
+  document.getElementById('edit-overlay').classList.remove('hidden');
+}
+
+function openAddModal(dayId, afterStopId) {
+  _editIsNew = true;
+  _editPriority = 0;
+
+  document.getElementById('edit-title').textContent = 'Add Stop';
+  document.getElementById('edit-delete-btn').classList.add('hidden');
+  document.getElementById('edit-stop-id').value  = afterStopId || '__end__';
+  document.getElementById('edit-day-id').value   = dayId;
+  document.getElementById('edit-name').value     = '';
+  document.getElementById('edit-time').value     = '';
+  document.getElementById('edit-type').value     = 'wander';
+  document.getElementById('edit-notes').value    = '';
+  document.getElementById('edit-vegan').checked  = false;
+  document.getElementById('edit-lat').value      = '';
+  document.getElementById('edit-lng').value      = '';
+  document.getElementById('edit-maps-url').value = '';
+  document.getElementById('edit-cascade').checked = false;
+  document.getElementById('edit-search').value   = '';
+  document.getElementById('edit-search-results').innerHTML = '';
+  document.getElementById('edit-search-results').classList.remove('visible');
+  updateStarRow();
+
+  document.getElementById('edit-overlay').classList.remove('hidden');
+}
+
+function closeEditModal() {
+  document.getElementById('edit-overlay').classList.add('hidden');
+}
+
+function updateStarRow() {
+  document.querySelectorAll('.star-btn').forEach(btn => {
+    btn.classList.toggle('active', parseInt(btn.dataset.val) === _editPriority);
+  });
+}
+
+function saveEditModal() {
+  const stopId  = document.getElementById('edit-stop-id').value;
+  const dayId   = document.getElementById('edit-day-id').value;
+  const name    = document.getElementById('edit-name').value.trim();
+  const time    = document.getElementById('edit-time').value;
+  const type    = document.getElementById('edit-type').value;
+  const notes   = document.getElementById('edit-notes').value.trim();
+  const vegan   = document.getElementById('edit-vegan').checked;
+  const lat     = parseFloat(document.getElementById('edit-lat').value) || 0;
+  const lng     = parseFloat(document.getElementById('edit-lng').value) || 0;
+  const mapsUrl = document.getElementById('edit-maps-url').value ||
+    `https://maps.google.com/?q=${encodeURIComponent(name)}`;
+  const cascade = document.getElementById('edit-cascade').checked;
+
+  if (!name) return; // require a name
+
+  const typeIcons = {
+    charging:'⚡', hotel:'🏨', transport:'🚂', food:'🍽️', architecture:'🏛️',
+    village:'🏡', town:'⚓', experience:'🌿', wander:'🗺️', depart:'🚗',
+    scenic:'🛣️', historic:'🏰', festival:'🎬'
+  };
+
+  let stops = [...getDayStops(dayId)];
+
+  if (_editIsNew) {
+    const newStop = {
+      id: makeStopId(),
+      order: stops.length + 1,
+      time: time || '12:00',
+      tz: 'FR',
+      location: name,
+      type,
+      priority: _editPriority,
+      lat, lng, mapsUrl,
+      reason: notes || 'Added stop.',
+      icon: typeIcons[type] || '📍',
+      veganFriendly: vegan,
+    };
+    if (stopId === '__end__') {
+      stops.push(newStop);
+    } else {
+      const idx = stops.findIndex(s => s.id === stopId);
+      stops.splice(idx + 1, 0, newStop);
+    }
+  } else {
+    // Editing existing stop
+    const idx = stops.findIndex(s => s.id === stopId);
+    if (idx === -1) return;
+    const original = stops[idx];
+
+    const oldMins = timeToMinutes(getStopTime(original));
+    const newMins = timeToMinutes(time);
+    const delta = (oldMins !== null && newMins !== null) ? newMins - oldMins : 0;
+
+    stops[idx] = {
+      ...original,
+      location: name,
+      time,
+      type,
+      priority: _editPriority,
+      lat: lat || original.lat,
+      lng: lng || original.lng,
+      mapsUrl,
+      reason: notes || original.reason,
+      icon: typeIcons[type] || original.icon,
+      veganFriendly: vegan,
+    };
+
+    if (cascade && delta !== 0) {
+      for (let i = idx + 1; i < stops.length; i++) {
+        const cur = timeToMinutes(state.overrides[stops[i].id] ?? stops[i].time);
+        if (cur !== null) {
+          state.overrides[stops[i].id] = minutesToTime(cur + delta);
+        }
+      }
+    }
+  }
+
+  saveDayStops(dayId, stops);
+  save();
+  closeEditModal();
+  closeDetail();
+  renderView(false);
+}
+
+function deleteStop(stopId, dayId) {
+  if (!confirm('Remove this stop from the day?')) return;
+  const stops = getDayStops(dayId).filter(s => s.id !== stopId);
+  saveDayStops(dayId, stops);
+  closeEditModal();
+  closeDetail();
+  renderView(false);
+}
+
 /* ── Persist ───────────────────────────────────────────────────────── */
 function save() {
   try {
@@ -332,11 +524,12 @@ function renderTimeline(container, scrollToNow) {
     container.appendChild(banner);
   }
 
+  const stops = getDayStops(day.id);
   const now = nowMinutes();
   let nowLineEl = null;
   let nowInserted = false;
 
-  day.stops.forEach((stop, idx) => {
+  stops.forEach((stop, idx) => {
     const stopMins = timeToMinutes(getStopTime(stop));
     if (!nowInserted && stopMins !== null && stopMins > now) {
       nowInserted = true;
@@ -347,12 +540,19 @@ function renderTimeline(container, scrollToNow) {
       container.appendChild(nowLine);
       nowLineEl = nowLine;
     }
-    const item = buildTimelineItem(stop, idx === day.stops.length - 1);
+    const item = buildTimelineItem(stop, idx === stops.length - 1, day.id);
     container.appendChild(item);
   });
 
+  // Add stop button at bottom
+  const addBtn = document.createElement('button');
+  addBtn.className = 'add-stop-btn';
+  addBtn.innerHTML = '＋ Add stop to this day';
+  addBtn.addEventListener('click', () => openAddModal(day.id, '__end__'));
+  container.appendChild(addBtn);
+
   // Fetch Wikipedia photos lazily after render
-  lazyLoadWikiImages(day.stops);
+  lazyLoadWikiImages(stops);
 
   // Only scroll to now when explicitly requested (Today button)
   if (scrollToNow && nowLineEl) {
@@ -365,7 +565,7 @@ function renderTimeline(container, scrollToNow) {
 }
 
 /* ── Build one timeline item ───────────────────────────────────────── */
-function buildTimelineItem(stop, isLast) {
+function buildTimelineItem(stop, isLast, dayId) {
   const item = document.createElement('div');
   item.className = 'tl-item';
   item.dataset.type = stop.type;
@@ -391,7 +591,10 @@ function buildTimelineItem(stop, isLast) {
       <div class="card-body">
         <div class="card-top-row">
           <div class="card-name">${stop.icon} ${stop.location}</div>
-          <button class="check-btn${isVisited ? ' checked' : ''}" data-stop-id="${stop.id}" aria-label="Mark visited">${isVisited ? '✓' : '○'}</button>
+          <div style="display:flex;gap:4px;align-items:center">
+            <button class="edit-card-btn" data-stop-id="${stop.id}" aria-label="Edit stop">✏️</button>
+            <button class="check-btn${isVisited ? ' checked' : ''}" data-stop-id="${stop.id}" aria-label="Mark visited">${isVisited ? '✓' : '○'}</button>
+          </div>
         </div>
         <div class="card-meta-row">
           <span class="tl-card-badge">${typeLabel(stop.type)}</span>
@@ -410,6 +613,10 @@ function buildTimelineItem(stop, isLast) {
   item.querySelector('.check-btn').addEventListener('click', e => {
     e.stopPropagation();
     toggleCheck(stop.id, item);
+  });
+  item.querySelector('.edit-card-btn').addEventListener('click', e => {
+    e.stopPropagation();
+    openEditModal(stop, dayId || state.currentDayId);
   });
   initSlider(item.querySelector('.card-slider'), stop, 'card');
   return item;
@@ -677,6 +884,7 @@ function saveModal() {
 document.addEventListener('DOMContentLoaded', () => {
   load();
   loadWikiCache();
+  loadDayEdits();
   state.currentDayId = findTodayDayId() || TRIP_DATA.days[0].id;
   buildDayStrip();
   renderView(true); // scroll to now only on first load
@@ -720,6 +928,7 @@ document.addEventListener('DOMContentLoaded', () => {
     btn.addEventListener('click', () => {
       if (btn.dataset.action === 'reset-times')  { state.overrides = {}; save(); renderView(false); closeDrawer(); }
       if (btn.dataset.action === 'reset-checks') { state.checked   = {}; save(); renderView(false); closeDrawer(); }
+      if (btn.dataset.action === 'reset-stops')  { state.dayEdits  = {}; try { localStorage.removeItem('annecy_day_edits'); } catch {} renderView(false); closeDrawer(); }
       if (btn.dataset.action === 'toggle-dark')  {
         document.body.classList.toggle('light');
         try { localStorage.setItem('annecy_theme', document.body.classList.contains('light') ? 'light' : 'dark'); } catch {}
@@ -738,6 +947,104 @@ document.addEventListener('DOMContentLoaded', () => {
       const cur = timeToMinutes(input.value || '00:00');
       if (cur !== null) input.value = minutesToTime(cur + parseInt(btn.dataset.delta, 10));
     }));
+
+  /* Edit/Add sheet */
+  document.getElementById('edit-close').addEventListener('click', closeEditModal);
+  document.getElementById('edit-cancel').addEventListener('click', closeEditModal);
+  document.getElementById('edit-overlay').addEventListener('click', e => {
+    if (e.target.id === 'edit-overlay') closeEditModal();
+  });
+  document.getElementById('edit-save').addEventListener('click', saveEditModal);
+  document.getElementById('edit-delete-btn').addEventListener('click', () => {
+    const stopId = document.getElementById('edit-stop-id').value;
+    const dayId  = document.getElementById('edit-day-id').value;
+    deleteStop(stopId, dayId);
+  });
+
+  // Star priority buttons
+  document.querySelectorAll('.star-btn').forEach(btn =>
+    btn.addEventListener('click', () => {
+      _editPriority = parseInt(btn.dataset.val);
+      updateStarRow();
+    }));
+
+  // Location search
+  let _searchTimer = null;
+  document.getElementById('edit-search').addEventListener('input', e => {
+    clearTimeout(_searchTimer);
+    const q = e.target.value.trim();
+    if (q.length < 3) {
+      document.getElementById('edit-search-results').classList.remove('visible');
+      return;
+    }
+    _searchTimer = setTimeout(async () => {
+      try {
+        const results = await searchNominatim(q);
+        const box = document.getElementById('edit-search-results');
+        box.innerHTML = '';
+        if (!results.length) {
+          box.innerHTML = '<div class="search-result"><div class="search-result-name">No results found</div></div>';
+        } else {
+          results.slice(0, 5).forEach(r => {
+            const div = document.createElement('div');
+            div.className = 'search-result';
+            const parts = r.display_name.split(', ');
+            div.innerHTML = `<div class="search-result-name">${parts[0]}</div><div class="search-result-sub">${parts.slice(1,3).join(', ')}</div>`;
+            div.addEventListener('click', () => {
+              document.getElementById('edit-name').value     = parts[0];
+              document.getElementById('edit-lat').value      = r.lat;
+              document.getElementById('edit-lng').value      = r.lon;
+              document.getElementById('edit-maps-url').value = `https://maps.google.com/?q=${r.lat},${r.lon}`;
+              document.getElementById('edit-search').value   = parts[0];
+              box.classList.remove('visible');
+            });
+            box.appendChild(div);
+          });
+        }
+        box.classList.add('visible');
+      } catch {}
+    }, 400);
+  });
+
+  document.getElementById('edit-search-btn').addEventListener('click', async () => {
+    const q = document.getElementById('edit-search').value.trim();
+    if (!q) return;
+    try {
+      const results = await searchNominatim(q);
+      const box = document.getElementById('edit-search-results');
+      box.innerHTML = '';
+      results.slice(0, 5).forEach(r => {
+        const div = document.createElement('div');
+        div.className = 'search-result';
+        const parts = r.display_name.split(', ');
+        div.innerHTML = `<div class="search-result-name">${parts[0]}</div><div class="search-result-sub">${parts.slice(1,3).join(', ')}</div>`;
+        div.addEventListener('click', () => {
+          document.getElementById('edit-name').value     = parts[0];
+          document.getElementById('edit-lat').value      = r.lat;
+          document.getElementById('edit-lng').value      = r.lon;
+          document.getElementById('edit-maps-url').value = `https://maps.google.com/?q=${r.lat},${r.lon}`;
+          document.getElementById('edit-search').value   = parts[0];
+          box.classList.remove('visible');
+        });
+        box.appendChild(div);
+      });
+      box.classList.add('visible');
+    } catch {}
+  });
+
+  /* Detail page edit/delete */
+  document.getElementById('detail-edit-btn').addEventListener('click', () => {
+    if (!_detailStop) return;
+    const dayId = TRIP_DATA.days.find(d =>
+      getDayStops(d.id).some(s => s.id === _detailStop.id))?.id || state.currentDayId;
+    openEditModal(_detailStop, dayId);
+  });
+  document.getElementById('detail-delete-btn').addEventListener('click', () => {
+    if (!_detailStop) return;
+    const dayId = TRIP_DATA.days.find(d =>
+      getDayStops(d.id).some(s => s.id === _detailStop.id))?.id || state.currentDayId;
+    deleteStop(_detailStop.id, dayId);
+  });
 
   /* Detail page */
   document.getElementById('detail-back').addEventListener('click', closeDetail);
