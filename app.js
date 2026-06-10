@@ -526,12 +526,28 @@ function haversineM(lat1, lng1, lat2, lng2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 }
 
+// Sample a polyline [[lat,lng],...] at ~intervalM metre intervals, returning up to maxPts points
+function samplePolyline(pts, intervalM, maxPts) {
+  if (!pts.length) return [];
+  const samples = [pts[0]];
+  let accumulated = 0;
+  for (let i = 1; i < pts.length; i++) {
+    accumulated += haversineM(pts[i-1][0], pts[i-1][1], pts[i][0], pts[i][1]);
+    if (accumulated >= intervalM) {
+      samples.push(pts[i]);
+      accumulated = 0;
+      if (samples.length >= maxPts) break;
+    }
+  }
+  return samples;
+}
+
 async function fetchRoutePOIs(day) {
   // For countdown day, search near user location (or North Cadbury as fallback)
   if (day.isCountdown) {
     const lat = _userLat ?? 51.0333, lng = _userLng ?? -2.5333;
     try {
-      const r = await fetch(`https://en.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord=${lat}|${lng}&gsradius=10000&gslimit=20&format=json&origin=*`);
+      const r = await fetch(`https://en.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord=${lat}|${lng}&gsradius=15000&gslimit=20&format=json&origin=*`);
       const d = await r.json();
       return await resolvePOISummaries(d.query?.geosearch || [], []);
     } catch { return []; }
@@ -540,13 +556,17 @@ async function fetchRoutePOIs(day) {
   const stops = day.stops.filter(s => s.lat && s.lng);
   if (!stops.length) return [];
 
-  // Fetch near stops spread evenly along the route (all types — first stop may be depart)
+  // Get the OSRM route geometry and sample it every ~40km to get search points along the corridor
+  const route = await fetchDayRoute(stops);
+  const searchPts = route
+    ? samplePolyline(route, 40000, 7)
+    : stops.slice(0, 7).map(s => [getStopLat(s), getStopLng(s)]);
+
   const seen = new Set();
   const candidates = [];
-  const keyStops = stops.slice(0, 6);
-  for (const s of keyStops) {
+  for (const [lat, lng] of searchPts) {
     try {
-      const r = await fetch(`https://en.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord=${getStopLat(s)}|${getStopLng(s)}&gsradius=6000&gslimit=8&format=json&origin=*`);
+      const r = await fetch(`https://en.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord=${lat}|${lng}&gsradius=12000&gslimit=10&format=json&origin=*`);
       const d = await r.json();
       for (const p of (d.query?.geosearch || [])) {
         if (!seen.has(p.title)) { seen.add(p.title); candidates.push(p); }
@@ -557,7 +577,7 @@ async function fetchRoutePOIs(day) {
 }
 
 async function resolvePOISummaries(candidates, itineraryStops) {
-  const results = await Promise.all(candidates.slice(0, 15).map(async p => {
+  const results = await Promise.all(candidates.slice(0, 25).map(async p => {
     try {
       const r = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(p.title)}`);
       if (!r.ok) return null;
