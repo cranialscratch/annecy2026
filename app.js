@@ -1374,6 +1374,55 @@ function saveModal() {
   save(); closeModal(); renderView(false);
 }
 
+/* ── Day swipe (edge swipe left/right to change day) ───────────────── */
+function initDaySwipe() {
+  const mc = document.getElementById('main-content');
+  const EDGE = 44; // px from screen edge that activates the gesture
+  let startX = 0, startY = 0, diffX = 0, active = false, isHoriz = null;
+
+  function adjacentDayId(delta) {
+    const days = TRIP_DATA.days;
+    const idx  = days.findIndex(d => d.id === state.currentDayId);
+    const next = days[idx + delta];
+    return next ? next.id : null;
+  }
+
+  mc.addEventListener('touchstart', e => {
+    // Only on day view; ignore if detail/edit/modal is open
+    if (state.currentView !== 'day') return;
+    if (!document.getElementById('detail-overlay').classList.contains('hidden')) return;
+    if (!document.getElementById('edit-sheet-overlay').classList.contains('hidden')) return;
+    const x = e.touches[0].clientX;
+    // Must start from the left or right screen edge
+    if (x > EDGE && x < window.innerWidth - EDGE) return;
+    startX = x;
+    startY = e.touches[0].clientY;
+    diffX = 0; isHoriz = null; active = true;
+  }, { passive: true });
+
+  mc.addEventListener('touchmove', e => {
+    if (!active) return;
+    const dx = e.touches[0].clientX - startX;
+    const dy = e.touches[0].clientY - startY;
+    if (isHoriz === null) {
+      if (Math.abs(dx) > Math.abs(dy) + 6)      isHoriz = true;
+      else if (Math.abs(dy) > Math.abs(dx) + 6) isHoriz = false;
+      else return;
+    }
+    if (!isHoriz) { active = false; return; }
+    diffX = dx;
+  }, { passive: true });
+
+  mc.addEventListener('touchend', () => {
+    if (!active || !isHoriz) { active = false; return; }
+    active = false;
+    if (Math.abs(diffX) < 60) return;
+    const delta = diffX < 0 ? 1 : -1; // left = next day, right = previous day
+    const nextId = adjacentDayId(delta);
+    if (nextId) selectDay(nextId);
+  });
+}
+
 /* ── Init ──────────────────────────────────────────────────────────── */
 document.addEventListener('DOMContentLoaded', () => {
   load();
@@ -1446,6 +1495,7 @@ document.addEventListener('DOMContentLoaded', () => {
   /* Detail page */
   document.getElementById('detail-back').addEventListener('click', closeDetail);
   initDetailNavSwipe();
+  initDaySwipe();
 
   /* Edit sheet */
   document.getElementById('edit-sheet-close').addEventListener('click', closeEditSheet);
