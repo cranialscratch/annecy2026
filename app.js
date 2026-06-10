@@ -540,10 +540,10 @@ async function fetchRoutePOIs(day) {
   const stops = day.stops.filter(s => s.lat && s.lng);
   if (!stops.length) return [];
 
-  // Fetch near each non-depart stop, deduplicate by title
+  // Fetch near stops spread evenly along the route (all types — first stop may be depart)
   const seen = new Set();
   const candidates = [];
-  const keyStops = stops.filter(s => s.type !== 'depart' && s.type !== 'transport' && s.type !== 'charging').slice(0, 6);
+  const keyStops = stops.slice(0, 6);
   for (const s of keyStops) {
     try {
       const r = await fetch(`https://en.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord=${getStopLat(s)}|${getStopLng(s)}&gsradius=6000&gslimit=8&format=json&origin=*`);
