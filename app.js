@@ -697,6 +697,18 @@ function renderTimeline(container, scrollToNow) {
   // Fetch Wikipedia extracts for detail page descriptions
   lazyLoadWikiImages(day.stops);
 
+  // Pre-fetch images for all other days in the background so they're
+  // ready before the user navigates to them
+  setTimeout(() => {
+    TRIP_DATA.days.forEach(d => {
+      if (d.id === state.currentDayId || !d.stops?.length) return;
+      d.stops.forEach(stop => {
+        if (_wikiCache[stop.id]    === undefined) fetchWikiData(stop);
+        if (_commonsCache[stop.id] === undefined) fetchCommonsPhotos(stop);
+      });
+    });
+  }, 1500); // delay so current day fetches get priority
+
   // Only scroll to now when explicitly requested (Today button)
   if (scrollToNow && nowLineEl) {
     requestAnimationFrame(() => {
@@ -778,22 +790,22 @@ function buildTimelineItem(stop, isLast) {
 /* ── Image slider HTML ─────────────────────────────────────────────── */
 function buildSlider(stop, prefix) {
   const photos = getPhotos(stop);
-  const [c1, c2] = TYPE_GRAD[stop.type] || ['#334155','#0f172a'];
-  const slides = photos.map((url, i) => {
+  const [c1, c2] = TYPE_GRAD[getStopType(stop)] || ['#334155','#0f172a'];
+  const slides = photos.map((url) => {
     if (url === '__placeholder__') {
       return `<div class="${prefix}-slide ${prefix}-slide-placeholder" style="background:linear-gradient(145deg,${c1}55,${c2})">
         <div class="ph-icon">${stop.icon}</div>
         <div class="ph-name">${stop.location}</div>
       </div>`;
     }
-    return `<img class="${prefix}-slide" src="${url}" loading="lazy"
-      onerror="this.parentNode.style.transform=this.parentNode.style.transform"
-      alt="${stop.location}">`;
+    return `<img class="${prefix}-slide" src="${url}" loading="lazy" alt="${stop.location}">`;
   }).join('');
   const dots = photos.length > 1
     ? `<div class="${prefix}-dots">${photos.map((_,i) => `<span class="${prefix}-dot${i===0?' active':''}"></span>`).join('')}</div>`
     : '';
-  return `<div class="${prefix}-slider"><div class="${prefix}-slides">${slides}</div>${dots}</div>`;
+  // loading class removed once first image fires onload
+  const hasRealImg = photos.some(u => u !== '__placeholder__');
+  return `<div class="${prefix}-slider${hasRealImg ? ' loading' : ''}"><div class="${prefix}-slides">${slides}</div>${dots}</div>`;
 }
 
 /* ── Slider touch logic ────────────────────────────────────────────── */
@@ -803,6 +815,23 @@ function initSlider(sliderEl, stop, prefix) {
   const total = getPhotos(stop).length;
   let current = 0, startX = 0, startY = 0, diffX = 0, isDragging = false, isHoriz = null;
   let _tappedByTouch = false;
+  const [c1, c2] = TYPE_GRAD[getStopType(stop)] || ['#334155','#0f172a'];
+
+  // Shimmer: remove once any image loads; replace broken images with placeholder
+  const imgs = sliderEl.querySelectorAll(`img.${prefix}-slide`);
+  imgs.forEach((img, i) => {
+    if (img.complete && img.naturalWidth) { sliderEl.classList.remove('loading'); return; }
+    img.addEventListener('load',  () => sliderEl.classList.remove('loading'), { once: true });
+    img.addEventListener('error', () => {
+      // Swap broken img → styled placeholder
+      const ph = document.createElement('div');
+      ph.className = `${prefix}-slide ${prefix}-slide-placeholder`;
+      ph.style.background = `linear-gradient(145deg,${c1}55,${c2})`;
+      ph.innerHTML = `<div class="ph-icon">${stop.icon}</div><div class="ph-name">${stop.location}</div>`;
+      img.replaceWith(ph);
+      sliderEl.classList.remove('loading');
+    }, { once: true });
+  });
 
   function goTo(idx) {
     current = Math.max(0, Math.min(total - 1, idx));

@@ -161,6 +161,18 @@ html, body { height:100%; overflow:hidden; font-family:-apple-system,BlinkMacSys
   cursor:pointer; user-select:none; -webkit-user-select:none;
   border-radius:var(--radius) var(--radius) 0 0;
 }
+
+/* Shimmer skeleton while image is loading */
+@keyframes shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+.card-slider.loading::after {
+  content:''; position:absolute; inset:0; z-index:2; pointer-events:none;
+  background:linear-gradient(90deg, var(--bg3) 20%, var(--bg2) 50%, var(--bg3) 80%);
+  background-size:200% 100%;
+  animation:shimmer 1.4s ease-in-out infinite;
+}
 .card-slides {
   display:flex; height:100%;
   transition:transform .3s ease;
