@@ -561,12 +561,14 @@ async function fetchRoutePOIs(day) {
   for (const [lat, lng] of picked) {
     try {
       const r = await fetch(`https://en.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord=${lat}|${lng}&gsradius=12000&gslimit=10&format=json&origin=*`);
+      if (!r.ok) continue;
       const d = await r.json();
       for (const p of (d.query?.geosearch || [])) {
         if (!seen.has(p.title)) { seen.add(p.title); candidates.push(p); }
       }
-    } catch {}
+    } catch(e) { console.warn('POI geosearch failed', lat, lng, e); }
   }
+  console.log('POI candidates:', candidates.length, 'from', picked.length, 'points');
   return await resolvePOISummaries(candidates, stops);
 }
 
@@ -591,7 +593,9 @@ async function resolvePOISummaries(candidates, itineraryStops) {
       };
     } catch { return null; }
   }));
-  return results.filter(Boolean);
+  const filtered = results.filter(Boolean);
+  console.log('POI resolved:', filtered.length, 'of', candidates.slice(0,25).length);
+  return filtered;
 }
 
 function refreshMapCarouselOrder() {
@@ -752,10 +756,12 @@ function buildAndAppendPOIWrap(container, day) {
   fetchRoutePOIs(day).then(pois => {
     if (_mapDayId !== state.currentDayId) return;
     carousel.innerHTML = '';
-    if (!pois.length) { wrap.remove(); return; }
+    if (!pois.length) { carousel.innerHTML = '<div style="padding:4px 12px;font-size:11px;color:rgba(255,255,255,.4)">No nearby POIs found</div>'; return; }
     // Itinerary-matched POIs first, then others
     const sorted = [...pois].sort((a, b) => (b.itineraryStop ? 1 : 0) - (a.itineraryStop ? 1 : 0));
     sorted.forEach(poi => carousel.appendChild(buildMapPOICard(poi)));
+  }).catch(err => {
+    carousel.innerHTML = `<div style="padding:4px 12px;font-size:11px;color:rgba(255,100,100,.7)">POI error: ${err.message}</div>`;
   });
 }
 
