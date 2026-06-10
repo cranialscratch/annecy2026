@@ -1,4 +1,4 @@
-const CACHE = 'annecy2026-v42';
+const CACHE = 'annecy2026-v43';
 const ASSETS = [
   './',
   './index.html',
@@ -38,17 +38,20 @@ self.addEventListener('fetch', e => {
     );
     return;
   }
-  // Assets: cache-first, offline fallback
+  // Only cache same-origin assets — let Wikipedia/OSRM/Leaflet go straight to network
+  const url = new URL(e.request.url);
+  if (url.origin !== self.location.origin) return;
+  // Same-origin assets: cache-first, offline fallback
   e.respondWith(
     caches.match(e.request).then(cached => {
       if (cached) return cached;
       return fetch(e.request).then(res => {
-        if (res && res.status === 200 && res.type !== 'opaque') {
+        if (res && res.status === 200) {
           const clone = res.clone();
           caches.open(CACHE).then(c => c.put(e.request, clone));
         }
         return res;
-      }).catch(() => cached);
+      }).catch(() => cached || new Response('Offline', { status: 503 }));
     })
   );
 });
