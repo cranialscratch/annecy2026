@@ -556,6 +556,18 @@ async function fetchRoutePOIs(day) {
   const step = Math.max(1, Math.floor(searchPts.length / 8));
   const picked = searchPts.filter((_, i) => i % step === 0).slice(0, 8);
 
+  // Quick connectivity test: single fetch to see what the API returns
+  let geoTestStatus = '?';
+  try {
+    const testLat = picked[0]?.[0] ?? 51.03, testLng = picked[0]?.[1] ?? -2.53;
+    const testUrl = `https://en.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord=${testLat}%7C${testLng}&gsradius=12000&gslimit=3&format=json&origin=*`;
+    const testR = await fetch(testUrl);
+    const testD = await testR.json();
+    const testHits = testD.query?.geosearch || [];
+    geoTestStatus = `HTTP${testR.status},${testHits.length}hits`;
+    console.log('geo test', geoTestStatus, testD);
+  } catch(e) { geoTestStatus = `ERR:${e.message}`; }
+
   const seen = new Set();
   const candidates = [];
   for (const [lat, lng] of picked) {
@@ -565,13 +577,16 @@ async function fetchRoutePOIs(day) {
       if (!r.ok) { console.warn('geosearch !ok', lat, lng, r.status); continue; }
       const d = await r.json();
       const hits = d.query?.geosearch || [];
-      console.log('geosearch', lat.toFixed(3), lng.toFixed(3), '→', hits.length, 'hits');
       for (const p of hits) {
         if (!seen.has(p.title)) { seen.add(p.title); candidates.push(p); }
       }
     } catch(e) { console.warn('POI geosearch failed', lat, lng, e.message); }
   }
   console.log('POI candidates:', candidates.length, 'from', picked.length, 'points');
+  if (!candidates.length) {
+    // Surface the test result so we can see it without a console
+    const fake = []; fake._debug = `geo:${geoTestStatus} pts:${picked.length}`; return fake;
+  }
   const resolved = await resolvePOISummaries(candidates, stops);
   console.log('POI resolved:', resolved.length);
   return resolved;
