@@ -448,12 +448,15 @@ function renderView(scrollToNow) {
   document.querySelectorAll('.nav-btn').forEach(b =>
     b.classList.toggle('active', b.dataset.view === state.currentView));
   const mapEl = document.getElementById('map-container');
+  const mainEl = document.getElementById('main-content');
   if (state.currentView === 'map') {
     tl.classList.add('hidden');
     mapEl.classList.remove('hidden');
+    mainEl.classList.add('map-active');
     renderMapView();
   } else {
     mapEl.classList.add('hidden');
+    mainEl.classList.remove('map-active');
     tl.classList.remove('hidden');
     if (state.currentView === 'overview')      renderOverview(tl);
     else if (state.currentView === 'vegan')    renderFilterList(tl, 'vegan');
@@ -559,7 +562,7 @@ async function resolvePOISummaries(candidates, itineraryStops) {
       const r = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(p.title)}`);
       if (!r.ok) return null;
       const d = await r.json();
-      if (!d.thumbnail?.source) return null;
+      if (!d.title) return null;
       // Check if this POI matches an itinerary stop
       const match = itineraryStops.find(s => {
         const wt = WIKI_TITLES[s.id];
@@ -567,7 +570,7 @@ async function resolvePOISummaries(candidates, itineraryStops) {
                wikiSearchName(s)?.toLowerCase() === p.title.toLowerCase();
       });
       return {
-        title: p.title, img: d.thumbnail.source,
+        title: p.title, img: d.thumbnail?.source || null,
         lat: p.lat, lng: p.lon, dist: p.dist,
         url: `https://en.m.wikipedia.org/wiki/${encodeURIComponent(p.title)}`,
         itineraryStop: match || null,
@@ -606,7 +609,7 @@ function buildMapPOICard(poi) {
   if (!isItinerary) { card.href = poi.url; card.target = '_blank'; card.rel = 'noopener'; }
   card.dataset.dist = distM ?? poi.dist ?? 999999;
   card.innerHTML = `
-    <img class="map-poi-card-img" src="${poi.img}" loading="lazy" alt="${poi.title}">
+    ${poi.img ? `<img class="map-poi-card-img" src="${poi.img}" loading="lazy" alt="${poi.title}">` : `<div class="map-poi-card-img map-poi-no-img">📍</div>`}
     <div class="map-poi-card-body">
       <div class="map-poi-card-name">${isItinerary ? stop.icon + ' ' : ''}${poi.title}</div>
       ${stars ? `<div class="map-poi-card-stars">${stars}</div>` : ''}
