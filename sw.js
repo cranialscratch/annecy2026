@@ -1,4 +1,4 @@
-const CACHE = 'annecy2026-v36';
+const CACHE = 'annecy2026-v37';
 const ASSETS = [
   './',
   './index.html',

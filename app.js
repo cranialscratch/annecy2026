@@ -526,22 +526,6 @@ function haversineM(lat1, lng1, lat2, lng2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 }
 
-// Sample a polyline [[lat,lng],...] at ~intervalM metre intervals, returning up to maxPts points
-function samplePolyline(pts, intervalM, maxPts) {
-  if (!pts.length) return [];
-  const samples = [pts[0]];
-  let accumulated = 0;
-  for (let i = 1; i < pts.length; i++) {
-    accumulated += haversineM(pts[i-1][0], pts[i-1][1], pts[i][0], pts[i][1]);
-    if (accumulated >= intervalM) {
-      samples.push(pts[i]);
-      accumulated = 0;
-      if (samples.length >= maxPts) break;
-    }
-  }
-  return samples;
-}
-
 async function fetchRoutePOIs(day) {
   // For countdown day, search near user location (or North Cadbury as fallback)
   if (day.isCountdown) {
@@ -556,15 +540,25 @@ async function fetchRoutePOIs(day) {
   const stops = day.stops.filter(s => s.lat && s.lng);
   if (!stops.length) return [];
 
-  // Get the OSRM route geometry and sample it every ~40km to get search points along the corridor
-  const route = await fetchDayRoute(stops);
-  const searchPts = route
-    ? samplePolyline(route, 40000, 7)
-    : stops.slice(0, 7).map(s => [getStopLat(s), getStopLng(s)]);
+  // Build search points: each stop + midpoint between consecutive stops
+  // This covers the route corridor without a second OSRM call
+  const searchPts = [];
+  for (let i = 0; i < stops.length; i++) {
+    searchPts.push([getStopLat(stops[i]), getStopLng(stops[i])]);
+    if (i < stops.length - 1) {
+      searchPts.push([
+        (getStopLat(stops[i]) + getStopLat(stops[i+1])) / 2,
+        (getStopLng(stops[i]) + getStopLng(stops[i+1])) / 2,
+      ]);
+    }
+  }
+  // Evenly pick up to 8 points across the full route
+  const step = Math.max(1, Math.floor(searchPts.length / 8));
+  const picked = searchPts.filter((_, i) => i % step === 0).slice(0, 8);
 
   const seen = new Set();
   const candidates = [];
-  for (const [lat, lng] of searchPts) {
+  for (const [lat, lng] of picked) {
     try {
       const r = await fetch(`https://en.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord=${lat}|${lng}&gsradius=12000&gslimit=10&format=json&origin=*`);
       const d = await r.json();
