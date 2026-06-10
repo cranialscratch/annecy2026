@@ -478,10 +478,26 @@ const TYPE_COLOR = {
 function startLocationWatch() {
   if (!navigator.geolocation || _geoWatchId !== null) return;
   _geoWatchId = navigator.geolocation.watchPosition(pos => {
+    const firstFix = _userLat === null;
     _userLat = pos.coords.latitude;
     _userLng = pos.coords.longitude;
     updateLocMarker(pos.coords.accuracy);
     refreshMapCarouselOrder();
+    // On first fix: re-fetch countdown POIs (which used fallback coords)
+    if (firstFix && _leafletMap) {
+      const day = TRIP_DATA.days.find(d => d.id === state.currentDayId);
+      if (day?.isCountdown) {
+        _leafletMap.setView([_userLat, _userLng], 13);
+        const carousel = document.getElementById('map-poi-carousel');
+        if (carousel) {
+          carousel.innerHTML = '<div style="padding:4px 8px;font-size:12px;color:rgba(255,255,255,.5);white-space:nowrap">Updating for your location…</div>';
+          fetchRoutePOIs(day).then(pois => {
+            carousel.innerHTML = '';
+            pois.forEach(poi => carousel.appendChild(buildMapPOICard(poi)));
+          });
+        }
+      }
+    }
   }, null, { enableHighAccuracy: true, maximumAge: 20000, timeout: 15000 });
 }
 
@@ -511,11 +527,11 @@ async function fetchRoutePOIs(day) {
   const stops = day.stops.filter(s => s.lat && s.lng);
   if (!stops.length) return [];
 
-  // For countdown day, search near user location if available, else skip
+  // For countdown day, search near user location (or North Cadbury as fallback)
   if (day.isCountdown) {
-    if (_userLat === null) return [];
+    const lat = _userLat ?? 51.0333, lng = _userLng ?? -2.5333;
     try {
-      const r = await fetch(`https://en.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord=${_userLat}|${_userLng}&gsradius=5000&gslimit=15&format=json&origin=*`);
+      const r = await fetch(`https://en.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord=${lat}|${lng}&gsradius=10000&gslimit=20&format=json&origin=*`);
       const d = await r.json();
       return await resolvePOISummaries(d.query?.geosearch || [], []);
     } catch { return []; }
@@ -710,6 +726,9 @@ function buildAndAppendPOIWrap(container, day) {
   const carousel = document.createElement('div');
   carousel.id = 'map-poi-carousel';
   carousel.innerHTML = '<div style="padding:4px 8px;font-size:12px;color:rgba(255,255,255,.5);white-space:nowrap">Loading nearby places…</div>';
+  // Prevent Leaflet from capturing touch events on the carousel
+  carousel.addEventListener('touchstart', e => e.stopPropagation(), { passive: true });
+  carousel.addEventListener('touchmove',  e => e.stopPropagation(), { passive: true });
   wrap.appendChild(carousel);
   container.appendChild(wrap);
 

@@ -66,7 +66,7 @@ html, body { height:100%; overflow:hidden; font-family:-apple-system,BlinkMacSys
 .day-chip.today .day-dot { display:block; }
 
 /* ─── Main scroll ───────────────────────────────────────────────────── */
-#main-content { flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch; padding:12px 12px calc(max(var(--safe-bot),8px) + var(--bottom-h) + 16px); }
+#main-content { flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch; padding:12px 12px calc(max(var(--safe-bot),8px) + var(--bottom-h) + 16px); position:relative; }
 
 /* ─── Festival banner ───────────────────────────────────────────────── */
 /* ─── Countdown banner ──────────────────────────────────────────────── */
@@ -643,9 +643,9 @@ html, body { height:100%; overflow:hidden; font-family:-apple-system,BlinkMacSys
   background:var(--bg);
 }
 
-/* Brighten dark tiles slightly */
+/* Brighten dark tiles for legibility */
 body:not(.light) #map-container .leaflet-tile-pane {
-  filter: brightness(1.55) contrast(0.92);
+  filter: brightness(2.1) contrast(0.82) saturate(0.9);
 }
 
 /* User location dot */
@@ -656,15 +656,15 @@ body:not(.light) #map-container .leaflet-tile-pane {
   box-shadow:0 0 0 4px rgba(56,189,248,.3), 0 2px 6px rgba(0,0,0,.4);
 }
 
-/* Map POI carousel */
+/* Map POI carousel — sits at bottom of #main-content (above bottom nav) */
 #map-poi-wrap {
   position:absolute; bottom:0; left:0; right:0; z-index:500;
-  background:linear-gradient(to top, rgba(15,23,42,.95) 60%, transparent 100%);
-  padding:32px 0 calc(var(--safe-bot) + 12px);
+  background:linear-gradient(to top, rgba(15,23,42,.96) 55%, transparent 100%);
+  padding:36px 0 calc(var(--safe-bot) + 14px);
   pointer-events:none;
 }
 body.light #map-poi-wrap {
-  background:linear-gradient(to top, rgba(241,245,249,.95) 60%, transparent 100%);
+  background:linear-gradient(to top, rgba(241,245,249,.96) 55%, transparent 100%);
 }
 #map-poi-carousel {
   display:flex; gap:10px; overflow-x:auto; padding:0 16px;
