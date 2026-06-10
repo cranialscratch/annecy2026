@@ -1091,9 +1091,8 @@ function openDetail(stop) {
   parts.push(`<a class="act-btn-full charge" href="${chargingNearbyUrl(stop)}" target="_blank" rel="noopener">⚡ Chargers</a>`);
   if (stop.mapsUrl && stop.mapsUrl !== 'N/A')
     parts.push(`<a class="act-btn-full maps" href="${stop.mapsUrl}" target="_blank" rel="noopener">🗺️ Maps</a>`);
-  parts.push(`<button class="act-btn-full edit" id="detail-edit-btn">✎ Edit stop</button>`);
   actEl.innerHTML = parts.join('');
-  actEl.querySelector('#detail-edit-btn').addEventListener('click', () => openEditSheet(stop));
+  document.getElementById('detail-edit-btn').onclick = () => openEditSheet(stop);
 
   const poiSection  = document.getElementById('detail-poi-section');
   const poiCarousel = document.getElementById('detail-poi-carousel');
