@@ -527,9 +527,6 @@ function haversineM(lat1, lng1, lat2, lng2) {
 }
 
 async function fetchRoutePOIs(day) {
-  const stops = day.stops.filter(s => s.lat && s.lng);
-  if (!stops.length) return [];
-
   // For countdown day, search near user location (or North Cadbury as fallback)
   if (day.isCountdown) {
     const lat = _userLat ?? 51.0333, lng = _userLng ?? -2.5333;
@@ -539,6 +536,9 @@ async function fetchRoutePOIs(day) {
       return await resolvePOISummaries(d.query?.geosearch || [], []);
     } catch { return []; }
   }
+
+  const stops = day.stops.filter(s => s.lat && s.lng);
+  if (!stops.length) return [];
 
   // Fetch near each non-depart stop, deduplicate by title
   const seen = new Set();

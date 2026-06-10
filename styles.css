@@ -661,7 +661,7 @@ body:not(.light) #map-container .leaflet-tile-pane {
 #map-poi-wrap {
   position:absolute; bottom:0; left:0; right:0; z-index:500;
   background:linear-gradient(to top, rgba(15,23,42,.96) 55%, transparent 100%);
-  padding:36px 0 calc(var(--bottom-h) + max(var(--safe-bot),8px) + 8px);
+  padding:36px 0 calc(max(var(--safe-bot),8px) + 12px);
   pointer-events:none;
 }
 body.light #map-poi-wrap {
