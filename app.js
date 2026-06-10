@@ -527,81 +527,45 @@ function haversineM(lat1, lng1, lat2, lng2) {
 }
 
 async function fetchRoutePOIs(day) {
-  // For countdown day, search near user location (or North Cadbury as fallback)
+  // Countdown: search near user's GPS only (no fallback — no point showing random UK articles)
   if (day.isCountdown) {
-    const lat = _userLat ?? 51.0333, lng = _userLng ?? -2.5333;
+    if (_userLat === null) return [];
     try {
-      const r = await fetch(`https://en.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord=${lat}%7C${lng}&gsradius=15000&gslimit=20&format=json&origin=*`);
+      const r = await fetch(`https://en.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord=${_userLat}|${_userLng}&gsradius=20000&gslimit=20&format=json&origin=*`);
       const d = await r.json();
-      return await resolvePOISummaries(d.query?.geosearch || [], []);
+      return resolvePOISummaries(d.query?.geosearch || [], []);
     } catch { return []; }
   }
 
+  // Travel days: search near interesting stops only.
+  // Depart/transport/charging stops are motorway legs — nothing tourist-worthy nearby.
   const stops = day.stops.filter(s => s.lat && s.lng);
-  if (!stops.length) return [];
-
-  // Build search points: each stop + midpoint between consecutive stops
-  // This covers the route corridor without a second OSRM call
-  const searchPts = [];
-  for (let i = 0; i < stops.length; i++) {
-    searchPts.push([getStopLat(stops[i]), getStopLng(stops[i])]);
-    if (i < stops.length - 1) {
-      searchPts.push([
-        (getStopLat(stops[i]) + getStopLat(stops[i+1])) / 2,
-        (getStopLng(stops[i]) + getStopLng(stops[i+1])) / 2,
-      ]);
-    }
-  }
-  // Evenly pick up to 8 points across the full route
-  const step = Math.max(1, Math.floor(searchPts.length / 8));
-  const picked = searchPts.filter((_, i) => i % step === 0).slice(0, 8);
-
-  // Connectivity test with London (known to have many articles)
-  let geoTestStatus = '?';
-  try {
-    const testR = await fetch(`https://en.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord=51.5074|-0.1278&gsradius=5000&gslimit=3&format=json&origin=*`);
-    const testD = await testR.json();
-    const testHits = testD.query?.geosearch || [];
-    geoTestStatus = `LON:${testR.status},${testHits.length}hits`;
-    // Also test the actual first picked point
-    if (picked[0]) {
-      const [plat, plng] = picked[0];
-      const p2 = await fetch(`https://en.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord=${plat}|${plng}&gsradius=12000&gslimit=3&format=json&origin=*`);
-      const p2d = await p2.json();
-      geoTestStatus += ` PT0:${p2.status},${(p2d.query?.geosearch||[]).length}h(${plat.toFixed(2)},${plng.toFixed(2)})`;
-    }
-  } catch(e) { geoTestStatus = `ERR:${e.message}`; }
+  const searchStops = stops.filter(s => !['depart','transport','charging'].includes(getStopType(s))).slice(0, 6);
+  if (!searchStops.length) return [];
 
   const seen = new Set();
   const candidates = [];
-  for (const [lat, lng] of picked) {
+  for (const s of searchStops) {
     try {
-      const r = await fetch(`https://en.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord=${lat}|${lng}&gsradius=12000&gslimit=10&format=json&origin=*`);
+      const r = await fetch(`https://en.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord=${getStopLat(s)}|${getStopLng(s)}&gsradius=8000&gslimit=8&format=json&origin=*`);
       if (!r.ok) continue;
       const d = await r.json();
       for (const p of (d.query?.geosearch || [])) {
         if (!seen.has(p.title)) { seen.add(p.title); candidates.push(p); }
       }
-    } catch(e) { console.warn('geosearch failed', lat, lng, e.message); }
+    } catch {}
   }
-  if (!candidates.length) {
-    const fake = []; fake._debug = geoTestStatus; return fake;
-  }
-  const resolved = await resolvePOISummaries(candidates, stops);
-  console.log('POI resolved:', resolved.length);
-  return resolved;
+  return resolvePOISummaries(candidates, stops);
 }
 
 async function resolvePOISummaries(candidates, itineraryStops) {
   if (!candidates.length) return [];
-  let okCount = 0, errCount = 0;
-  const results = await Promise.all(candidates.slice(0, 25).map(async p => {
+  const results = await Promise.all(candidates.slice(0, 20).map(async p => {
     try {
       const r = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(p.title)}`);
-      if (!r.ok) { errCount++; console.warn('wiki summary !ok', p.title, r.status); return null; }
+      if (!r.ok) return null;
       const d = await r.json();
-      if (!d.title) { errCount++; return null; }
-      okCount++;
+      if (!d.title) return null;
       const match = itineraryStops.find(s => {
         const wt = WIKI_TITLES[s.id];
         return (wt && wt.replace(/_/g,' ').toLowerCase() === p.title.toLowerCase()) ||
@@ -613,13 +577,9 @@ async function resolvePOISummaries(candidates, itineraryStops) {
         url: `https://en.m.wikipedia.org/wiki/${encodeURIComponent(p.title)}`,
         itineraryStop: match || null,
       };
-    } catch(e) { errCount++; console.warn('wiki summary throw', p.title, e.message); return null; }
+    } catch { return null; }
   }));
-  const filtered = results.filter(Boolean);
-  console.log(`POI: ${candidates.length} candidates → ${filtered.length} resolved (${okCount} ok, ${errCount} err)`);
-  // Surface debug info into the carousel temporarily
-  if (!filtered.length) filtered._debug = `${candidates.length}c / ${okCount}ok / ${errCount}err`;
-  return filtered;
+  return results.filter(Boolean);
 }
 
 function refreshMapCarouselOrder() {
@@ -778,14 +738,12 @@ function buildAndAppendPOIWrap(container, day) {
   container.appendChild(wrap);
 
   fetchRoutePOIs(day).then(pois => {
-    if (_mapDayId !== state.currentDayId) { carousel.innerHTML = '<div style="padding:4px 12px;font-size:11px;color:rgba(255,255,100,.5)">guard fired</div>'; return; }
+    if (_mapDayId !== state.currentDayId) return;
     carousel.innerHTML = '';
-    if (!pois.length) { carousel.innerHTML = `<div style="padding:4px 12px;font-size:11px;color:rgba(255,255,255,.5)">0 POIs: ${pois._debug || '?'}</div>`; return; }
+    if (!pois.length) { wrap.remove(); return; }
     // Itinerary-matched POIs first, then others
     const sorted = [...pois].sort((a, b) => (b.itineraryStop ? 1 : 0) - (a.itineraryStop ? 1 : 0));
     sorted.forEach(poi => carousel.appendChild(buildMapPOICard(poi)));
-  }).catch(err => {
-    carousel.innerHTML = `<div style="padding:4px 12px;font-size:11px;color:rgba(255,100,100,.7)">POI error: ${err.message}</div>`;
   });
 }
 
