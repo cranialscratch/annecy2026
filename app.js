@@ -1321,13 +1321,15 @@ function initDetailNavSwipe() {
 
     if (!isHoriz) return;
 
+    const day = TRIP_DATA.days.find(d => d.id === state.currentDayId);
+    const idx  = day && _detailStop ? day.stops.findIndex(s => s.id === _detailStop.id) : -1;
+
     if (diffX > 60) {
-      closeDetail();
+      const prev = idx > 0 ? day.stops[idx - 1] : null;
+      if (prev) openDetail(prev);
+      else closeDetail();
     } else if (diffX < -60) {
-      const day = TRIP_DATA.days.find(d => d.id === state.currentDayId);
-      if (!day || !_detailStop) return;
-      const idx  = day.stops.findIndex(s => s.id === _detailStop.id);
-      const next = day.stops[idx + 1];
+      const next = idx >= 0 ? day.stops[idx + 1] : null;
       if (next) openDetail(next);
     }
   });
