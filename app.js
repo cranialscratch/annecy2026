@@ -429,6 +429,8 @@ function updateHeader() {
 
 /* ── Render dispatcher ─────────────────────────────────────────────── */
 function renderView(scrollToNow) {
+  // Always reset scroll to top when switching views or days
+  if (!scrollToNow) document.getElementById('main-content').scrollTop = 0;
   updateHeader();
   const tl = document.getElementById('timeline');
   document.querySelectorAll('.nav-btn').forEach(b =>
@@ -1062,6 +1064,7 @@ function openDetail(stop) {
   _detailStop = stop;
   _detailCurrent = 0;
   const overlay = document.getElementById('detail-overlay');
+  overlay.scrollTop = 0;
   overlay.classList.remove('hidden');
   requestAnimationFrame(() => requestAnimationFrame(() => overlay.classList.add('open')));
 
