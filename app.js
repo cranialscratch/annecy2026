@@ -1218,8 +1218,10 @@ function initDetailNavSwipe() {
   let startX = 0, startY = 0, diffX = 0, isHoriz = null, active = false;
 
   page.addEventListener('touchstart', e => {
-    const sliderWrap = document.getElementById(sliderWrapId);
-    if (sliderWrap && sliderWrap.contains(e.target)) return; // photo slider owns this
+    const sliderWrap  = document.getElementById(sliderWrapId);
+    const poiCarousel = document.getElementById('detail-poi-carousel');
+    if (sliderWrap  && sliderWrap.contains(e.target))  return; // photo slider owns this
+    if (poiCarousel && poiCarousel.contains(e.target)) return; // POI carousel owns this
     startX = e.touches[0].clientX;
     startY = e.touches[0].clientY;
     diffX = 0; isHoriz = null; active = true;
