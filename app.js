@@ -531,7 +531,7 @@ async function fetchRoutePOIs(day) {
   if (day.isCountdown) {
     const lat = _userLat ?? 51.0333, lng = _userLng ?? -2.5333;
     try {
-      const r = await fetch(`https://en.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord=${lat}|${lng}&gsradius=15000&gslimit=20&format=json&origin=*`);
+      const r = await fetch(`https://en.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord=${lat}%7C${lng}&gsradius=15000&gslimit=20&format=json&origin=*`);
       const d = await r.json();
       return await resolvePOISummaries(d.query?.geosearch || [], []);
     } catch { return []; }
@@ -560,13 +560,16 @@ async function fetchRoutePOIs(day) {
   const candidates = [];
   for (const [lat, lng] of picked) {
     try {
-      const r = await fetch(`https://en.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord=${lat}|${lng}&gsradius=12000&gslimit=10&format=json&origin=*`);
-      if (!r.ok) continue;
+      const url = `https://en.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord=${lat}%7C${lng}&gsradius=12000&gslimit=10&format=json&origin=*`;
+      const r = await fetch(url);
+      if (!r.ok) { console.warn('geosearch !ok', lat, lng, r.status); continue; }
       const d = await r.json();
-      for (const p of (d.query?.geosearch || [])) {
+      const hits = d.query?.geosearch || [];
+      console.log('geosearch', lat.toFixed(3), lng.toFixed(3), '→', hits.length, 'hits');
+      for (const p of hits) {
         if (!seen.has(p.title)) { seen.add(p.title); candidates.push(p); }
       }
-    } catch(e) { console.warn('POI geosearch failed', lat, lng, e); }
+    } catch(e) { console.warn('POI geosearch failed', lat, lng, e.message); }
   }
   console.log('POI candidates:', candidates.length, 'from', picked.length, 'points');
   const resolved = await resolvePOISummaries(candidates, stops);
