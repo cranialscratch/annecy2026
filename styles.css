@@ -68,6 +68,29 @@ html, body { height:100%; overflow:hidden; font-family:-apple-system,BlinkMacSys
 #main-content { flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch; padding:12px 12px calc(max(var(--safe-bot),8px) + var(--bottom-h) + 16px); }
 
 /* ─── Festival banner ───────────────────────────────────────────────── */
+/* ─── Countdown banner ──────────────────────────────────────────────── */
+.countdown-banner {
+  background:linear-gradient(135deg,#0c4a6e,#0369a1,#0ea5e9);
+  border-radius:var(--radius); padding:32px 20px 28px; margin-bottom:14px;
+  text-align:center; color:#fff;
+}
+.cd-emoji  { font-size:40px; margin-bottom:10px; }
+.cd-title  { font-size:22px; font-weight:800; margin-bottom:4px; }
+.cd-sub    { font-size:13px; opacity:.8; margin-bottom:24px; }
+.cd-units  {
+  display:flex; justify-content:center; align-items:center; gap:4px;
+}
+.cd-unit   { display:flex; flex-direction:column; align-items:center; min-width:54px; }
+.cd-num    {
+  font-size:36px; font-weight:800; line-height:1;
+  font-variant-numeric:tabular-nums;
+  background:rgba(255,255,255,.15); border-radius:10px;
+  padding:8px 10px; min-width:54px; text-align:center;
+}
+.cd-label  { font-size:11px; font-weight:600; opacity:.7; margin-top:5px; text-transform:uppercase; letter-spacing:.05em; }
+.cd-sep    { font-size:28px; font-weight:800; opacity:.5; padding-bottom:18px; }
+
+/* ─── Festival banner ───────────────────────────────────────────────── */
 .festival-banner {
   background:linear-gradient(135deg,#312e81,#4f46e5,#7c3aed);
   border-radius:var(--radius); padding:20px; margin-bottom:14px; text-align:center;

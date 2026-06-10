@@ -2,6 +2,16 @@ const TRIP_DATA = {
   title: "Annecy 2026",
   days: [
     {
+      id: "countdown",
+      date: "2026-01-01",
+      dateEnd: "2026-06-16",
+      isCountdown: true,
+      label: "Countdown",
+      title: "Holiday Countdown",
+      subtitle: "Time until departure",
+      stops: []
+    },
+    {
       id: "day1",
       date: "2026-06-17",
       label: "Day 1",

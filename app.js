@@ -38,6 +38,7 @@ function formatDate(dateStr) {
   return d.toLocaleDateString('en-GB', { day:'numeric', month:'short' });
 }
 function getDayLabel(day) {
+  if (day.isCountdown) return '🏖️';
   if (day.isFestival) return 'Fest';
   const names = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
   return names[new Date(day.date + 'T00:00:00').getDay()];
@@ -45,6 +46,7 @@ function getDayLabel(day) {
 function findTodayDayId() {
   const today = new Date().toISOString().slice(0,10);
   for (const day of TRIP_DATA.days) {
+    if (day.isCountdown && today <= day.dateEnd) return day.id;
     if (day.date === today) return day.id;
     if (day.isFestival && today >= day.date && today <= day.dateEnd) return day.id;
   }
@@ -395,7 +397,7 @@ function buildDayStrip() {
       ? (today >= day.date && today <= day.dateEnd)
       : today === day.date;
     if (isTodayChip) chip.classList.add('today');
-    const dateStr = day.isFestival ? '20–27' : formatDate(day.date);
+    const dateStr = day.isCountdown ? 'soon' : day.isFestival ? '20–27' : formatDate(day.date);
     chip.innerHTML = `<span class="day-chip-label">${getDayLabel(day)}</span><span class="day-chip-date">${dateStr}</span><span class="day-dot"></span>`;
     chip.addEventListener('click', () => selectDay(day.id));
     strip.appendChild(chip);
@@ -431,6 +433,10 @@ function updateHeader() {
 function renderView(scrollToNow) {
   // Always reset scroll to top when switching views or days
   if (!scrollToNow) document.getElementById('main-content').scrollTop = 0;
+  // Stop countdown ticker when leaving that view
+  if (state.currentView !== 'day' || TRIP_DATA.days.find(d => d.id === state.currentDayId)?.isCountdown === false) {
+    clearInterval(_countdownInterval);
+  }
   updateHeader();
   const tl = document.getElementById('timeline');
   document.querySelectorAll('.nav-btn').forEach(b =>
@@ -562,8 +568,8 @@ function renderOverview(c) {
   TRIP_DATA.days.forEach(day => {
     const card = document.createElement('div');
     card.className = 'overview-card';
-    const dateStr = day.isFestival ? '20–27 Jun' : formatDate(day.date);
-    card.innerHTML = `<div class="ov-day">${getDayLabel(day)} · ${dateStr}</div><div class="ov-title">${day.title}</div><div class="ov-sub">${day.subtitle||''}</div><div class="ov-stops">${day.stops.length} stops</div>`;
+    const dateStr = day.isCountdown ? 'Until 16 Jun' : day.isFestival ? '20–27 Jun' : formatDate(day.date);
+    card.innerHTML = `<div class="ov-day">${getDayLabel(day)} · ${dateStr}</div><div class="ov-title">${day.title}</div><div class="ov-sub">${day.subtitle||''}</div><div class="ov-stops">${day.isCountdown ? '' : day.stops.length + ' stops'}</div>`;
     card.addEventListener('click', () => selectDay(day.id));
     grid.appendChild(card);
   });
@@ -595,11 +601,66 @@ function renderFilterList(container, kind) {
   });
 }
 
+/* ── Countdown banner ──────────────────────────────────────────────── */
+let _countdownInterval = null;
+
+function renderCountdownBanner(container) {
+  // Departure: Wed 17 Jun 2026 10:30 UK time
+  const DEPARTURE = new Date('2026-06-17T10:30:00+01:00');
+
+  function formatCountdown() {
+    const diff = DEPARTURE - Date.now();
+    if (diff <= 0) return { days:0, hours:0, mins:0, secs:0, departed:true };
+    const secs  = Math.floor(diff / 1000);
+    const mins  = Math.floor(secs / 60);
+    const hours = Math.floor(mins / 60);
+    const days  = Math.floor(hours / 24);
+    return { days, hours: hours % 24, mins: mins % 60, secs: secs % 60, departed: false };
+  }
+
+  function pad(n) { return String(n).padStart(2, '0'); }
+
+  const banner = document.createElement('div');
+  banner.className = 'countdown-banner';
+  container.appendChild(banner);
+
+  function tick() {
+    const { days, hours, mins, secs, departed } = formatCountdown();
+    if (departed) {
+      banner.innerHTML = `<div class="cd-emoji">🚗</div><h2 class="cd-title">We're on our way!</h2><p class="cd-sub">Annecy 2026 · Have a wonderful trip</p>`;
+      clearInterval(_countdownInterval);
+      return;
+    }
+    banner.innerHTML = `
+      <div class="cd-emoji">🏖️</div>
+      <h2 class="cd-title">Holiday Countdown</h2>
+      <p class="cd-sub">Annecy · 17 Jun 2026 · North Cadbury 10:30</p>
+      <div class="cd-units">
+        <div class="cd-unit"><span class="cd-num">${days}</span><span class="cd-label">days</span></div>
+        <div class="cd-sep">:</div>
+        <div class="cd-unit"><span class="cd-num">${pad(hours)}</span><span class="cd-label">hrs</span></div>
+        <div class="cd-sep">:</div>
+        <div class="cd-unit"><span class="cd-num">${pad(mins)}</span><span class="cd-label">min</span></div>
+        <div class="cd-sep">:</div>
+        <div class="cd-unit"><span class="cd-num">${pad(secs)}</span><span class="cd-label">sec</span></div>
+      </div>`;
+  }
+
+  clearInterval(_countdownInterval);
+  tick();
+  _countdownInterval = setInterval(tick, 1000);
+}
+
 /* ── Timeline ──────────────────────────────────────────────────────── */
 function renderTimeline(container, scrollToNow) {
   container.innerHTML = '';
   const day = TRIP_DATA.days.find(d => d.id === state.currentDayId);
   if (!day) return;
+
+  if (day.isCountdown) {
+    renderCountdownBanner(container);
+    return;
+  }
 
   if (day.isFestival) {
     const banner = document.createElement('div');
