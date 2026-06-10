@@ -463,14 +463,142 @@ function renderView(scrollToNow) {
 }
 
 /* ── Map view ──────────────────────────────────────────────────────── */
-let _leafletMap = null;
-let _mapDayId   = null;
+let _leafletMap      = null;
+let _mapDayId        = null;
+let _userLat         = null, _userLng = null;
+let _locMarker       = null, _locCircle = null;
+let _geoWatchId      = null;
 
 const TYPE_COLOR = {
   charging:'#16a34a', hotel:'#0284c7', transport:'#7c3aed', food:'#ea580c',
   architecture:'#d97706', village:'#0d9488', town:'#0d9488', experience:'#db2777',
   wander:'#059669', depart:'#475569', scenic:'#16a34a', historic:'#b45309', festival:'#7c3aed',
 };
+
+function startLocationWatch() {
+  if (!navigator.geolocation || _geoWatchId !== null) return;
+  _geoWatchId = navigator.geolocation.watchPosition(pos => {
+    _userLat = pos.coords.latitude;
+    _userLng = pos.coords.longitude;
+    updateLocMarker(pos.coords.accuracy);
+    refreshMapCarouselOrder();
+  }, null, { enableHighAccuracy: true, maximumAge: 20000, timeout: 15000 });
+}
+
+function updateLocMarker(accuracy) {
+  if (!_leafletMap) return;
+  const ll = [_userLat, _userLng];
+  if (!_locMarker) {
+    _locMarker = L.marker(ll, {
+      icon: L.divIcon({ className:'', html:'<div class="user-loc-dot"></div>', iconSize:[16,16], iconAnchor:[8,8] }),
+      zIndexOffset: 2000
+    }).addTo(_leafletMap);
+    _locCircle = L.circle(ll, { radius: accuracy, color:'#38bdf8', fillColor:'#38bdf8', fillOpacity:.1, weight:1 }).addTo(_leafletMap);
+  } else {
+    _locMarker.setLatLng(ll);
+    _locCircle.setLatLng(ll);
+    _locCircle.setRadius(accuracy);
+  }
+}
+
+function haversineM(lat1, lng1, lat2, lng2) {
+  const R = 6371000, dLat = (lat2-lat1)*Math.PI/180, dLng = (lng2-lng1)*Math.PI/180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+async function fetchRoutePOIs(day) {
+  const stops = day.stops.filter(s => s.lat && s.lng);
+  if (!stops.length) return [];
+
+  // For countdown day, search near user location if available, else skip
+  if (day.isCountdown) {
+    if (_userLat === null) return [];
+    try {
+      const r = await fetch(`https://en.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord=${_userLat}|${_userLng}&gsradius=5000&gslimit=15&format=json&origin=*`);
+      const d = await r.json();
+      return await resolvePOISummaries(d.query?.geosearch || [], []);
+    } catch { return []; }
+  }
+
+  // Fetch near each non-depart stop, deduplicate by title
+  const seen = new Set();
+  const candidates = [];
+  const keyStops = stops.filter(s => s.type !== 'depart' && s.type !== 'transport' && s.type !== 'charging').slice(0, 6);
+  for (const s of keyStops) {
+    try {
+      const r = await fetch(`https://en.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord=${getStopLat(s)}|${getStopLng(s)}&gsradius=6000&gslimit=8&format=json&origin=*`);
+      const d = await r.json();
+      for (const p of (d.query?.geosearch || [])) {
+        if (!seen.has(p.title)) { seen.add(p.title); candidates.push(p); }
+      }
+    } catch {}
+  }
+  return await resolvePOISummaries(candidates, stops);
+}
+
+async function resolvePOISummaries(candidates, itineraryStops) {
+  const results = await Promise.all(candidates.slice(0, 15).map(async p => {
+    try {
+      const r = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(p.title)}`);
+      if (!r.ok) return null;
+      const d = await r.json();
+      if (!d.thumbnail?.source) return null;
+      // Check if this POI matches an itinerary stop
+      const match = itineraryStops.find(s => {
+        const wt = WIKI_TITLES[s.id];
+        return (wt && wt.replace(/_/g,' ').toLowerCase() === p.title.toLowerCase()) ||
+               wikiSearchName(s)?.toLowerCase() === p.title.toLowerCase();
+      });
+      return {
+        title: p.title, img: d.thumbnail.source,
+        lat: p.lat, lng: p.lon, dist: p.dist,
+        url: `https://en.m.wikipedia.org/wiki/${encodeURIComponent(p.title)}`,
+        itineraryStop: match || null,
+      };
+    } catch { return null; }
+  }));
+  return results.filter(Boolean);
+}
+
+function refreshMapCarouselOrder() {
+  const wrap = document.getElementById('map-poi-carousel');
+  if (!wrap || _userLat === null) return;
+  const cards = [...wrap.children];
+  cards.sort((a, b) => {
+    const da = parseFloat(a.dataset.dist || 999999);
+    const db = parseFloat(b.dataset.dist || 999999);
+    return da - db;
+  });
+  cards.forEach(c => wrap.appendChild(c));
+}
+
+function buildMapPOICard(poi) {
+  const isItinerary = !!poi.itineraryStop;
+  const stop        = poi.itineraryStop;
+  const stars       = stop ? priorityStars(getStopPriority(stop)) : '';
+  // Live distance from user
+  const distM = (_userLat !== null)
+    ? haversineM(_userLat, _userLng, poi.lat, poi.lng)
+    : null;
+  const distStr = distM !== null
+    ? distM < 1000 ? `${Math.round(distM)}m` : `${(distM/1000).toFixed(1)}km`
+    : '';
+
+  const card = document.createElement(isItinerary ? 'button' : 'a');
+  card.className = `map-poi-card${isItinerary ? ' itinerary' : ''}`;
+  if (!isItinerary) { card.href = poi.url; card.target = '_blank'; card.rel = 'noopener'; }
+  card.dataset.dist = distM ?? poi.dist ?? 999999;
+  card.innerHTML = `
+    <img class="map-poi-card-img" src="${poi.img}" loading="lazy" alt="${poi.title}">
+    <div class="map-poi-card-body">
+      <div class="map-poi-card-name">${isItinerary ? stop.icon + ' ' : ''}${poi.title}</div>
+      ${stars ? `<div class="map-poi-card-stars">${stars}</div>` : ''}
+      <div class="map-poi-card-meta">${distStr}</div>
+    </div>`;
+  if (isItinerary) card.addEventListener('click', () => openDetail(stop));
+  return card;
+}
 
 async function fetchDayRoute(stops) {
   const pts = stops.filter(s => s.lat && s.lng);
@@ -493,15 +621,17 @@ function renderMapView() {
   if (_leafletMap && _mapDayId !== state.currentDayId) {
     _leafletMap.remove();
     _leafletMap = null;
+    _locMarker = null; _locCircle = null;
     container.innerHTML = '';
   }
 
   if (_leafletMap) {
     _leafletMap.invalidateSize();
-    return; // already built for this day
+    return;
   }
 
   _mapDayId = state.currentDayId;
+  startLocationWatch();
 
   const isDark = !document.body.classList.contains('light');
   const tileUrl = isDark
@@ -509,7 +639,21 @@ function renderMapView() {
     : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
 
   const stops = day.stops.filter(s => s.lat && s.lng);
-  if (!stops.length) return;
+
+  // Countdown day: no route stops, just show user location
+  if (!stops.length) {
+    const fallback = L.map(container, { zoomControl: false, attributionControl: false });
+    _leafletMap = fallback;
+    L.tileLayer(tileUrl, { maxZoom: 19, subdomains: 'abcd' }).addTo(fallback);
+    L.control.zoom({ position: 'topright' }).addTo(fallback);
+    fallback.setView([51.0333, -2.5333], 10); // North Cadbury as default
+    if (_userLat !== null) {
+      fallback.setView([_userLat, _userLng], 13);
+      updateLocMarker(500);
+    }
+    buildAndAppendPOIWrap(container, day);
+    return;
+  }
 
   const map = L.map(container, { zoomControl: false, attributionControl: false });
   _leafletMap = map;
@@ -517,9 +661,12 @@ function renderMapView() {
   L.tileLayer(tileUrl, { maxZoom: 19, subdomains: 'abcd' }).addTo(map);
   L.control.zoom({ position: 'topright' }).addTo(map);
 
-  // Fit bounds to all stops
-  const bounds = L.latLngBounds(stops.map(s => [s.lat, s.lng]));
-  map.fitBounds(bounds, { padding: [48, 48] });
+  // Fit bounds — leave room for the POI carousel at bottom
+  const bounds = L.latLngBounds(stops.map(s => [getStopLat(s), getStopLng(s)]));
+  map.fitBounds(bounds, { paddingTopLeft: [32, 48], paddingBottomRight: [32, 160] });
+
+  // If we already have a user location, add the marker immediately
+  if (_userLat !== null) updateLocMarker(200);
 
   // Determine next unvisited stop
   const now = nowMinutes();
@@ -529,41 +676,51 @@ function renderMapView() {
     if (t !== null && t >= now && !state.checked[s.id]) { nextStopId = s.id; break; }
   }
 
-  // Draw markers
+  // Draw stop markers
   stops.forEach((stop, idx) => {
-    const visited  = !!state.checked[stop.id];
-    const isNext   = stop.id === nextStopId;
-    const color    = TYPE_COLOR[stop.type] || '#475569';
+    const visited = !!state.checked[stop.id];
+    const isNext  = stop.id === nextStopId;
     const icon = L.divIcon({
       className: '',
-      html: `<div class="map-marker type-${stop.type}${visited ? ' visited' : ''}${isNext ? ' next-stop' : ''}">
+      html: `<div class="map-marker type-${getStopType(stop)}${visited?' visited':''}${isNext?' next-stop':''}">
                <span>${stop.icon}</span>
                <span class="map-marker-seq">${idx + 1}</span>
              </div>`,
-      iconSize:   [36, 36],
-      iconAnchor: [18, 18],
-      popupAnchor:[0, -20],
+      iconSize: [36,36], iconAnchor: [18,18], popupAnchor: [0,-20],
     });
-    const marker = L.marker([stop.lat, stop.lng], { icon }).addTo(map);
-    marker.on('click', () => openDetail(stop));
+    const m = L.marker([getStopLat(stop), getStopLng(stop)], { icon }).addTo(map);
+    m.on('click', () => openDetail(stop));
   });
 
-  // Fetch and draw road route
+  // Road route
   fetchDayRoute(stops).then(latlngs => {
     if (!latlngs || _mapDayId !== state.currentDayId) return;
-    const isDarkNow = !document.body.classList.contains('light');
     L.polyline(latlngs, {
-      color: isDarkNow ? '#38bdf8' : '#0284c7',
-      weight: 4,
-      opacity: 0.7,
+      color: !document.body.classList.contains('light') ? '#38bdf8' : '#0284c7',
+      weight: 4, opacity: 0.7,
     }).addTo(map);
   });
 
-  // Legend
-  const legend = document.createElement('div');
-  legend.className = 'map-legend';
-  legend.textContent = `${stops.length} stops · tap a pin for details`;
-  container.appendChild(legend);
+  buildAndAppendPOIWrap(container, day);
+}
+
+function buildAndAppendPOIWrap(container, day) {
+  const wrap = document.createElement('div');
+  wrap.id = 'map-poi-wrap';
+  const carousel = document.createElement('div');
+  carousel.id = 'map-poi-carousel';
+  carousel.innerHTML = '<div style="padding:4px 8px;font-size:12px;color:rgba(255,255,255,.5);white-space:nowrap">Loading nearby places…</div>';
+  wrap.appendChild(carousel);
+  container.appendChild(wrap);
+
+  fetchRoutePOIs(day).then(pois => {
+    if (_mapDayId !== state.currentDayId) return;
+    carousel.innerHTML = '';
+    if (!pois.length) { wrap.remove(); return; }
+    // Itinerary-matched POIs first, then others
+    const sorted = [...pois].sort((a, b) => (b.itineraryStop ? 1 : 0) - (a.itineraryStop ? 1 : 0));
+    sorted.forEach(poi => carousel.appendChild(buildMapPOICard(poi)));
+  });
 }
 
 /* ── Overview ──────────────────────────────────────────────────────── */
@@ -1507,7 +1664,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.body.classList.toggle('light');
         try { localStorage.setItem('annecy_theme', document.body.classList.contains('light') ? 'light' : 'dark'); } catch {}
         // Rebuild map with new tile theme
-        if (_leafletMap) { _leafletMap.remove(); _leafletMap = null; document.getElementById('map-container').innerHTML = ''; }
+        if (_leafletMap) { _leafletMap.remove(); _leafletMap = null; _locMarker = null; _locCircle = null; document.getElementById('map-container').innerHTML = ''; }
         if (state.currentView === 'map') renderMapView();
         closeDrawer();
       }

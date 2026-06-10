@@ -643,6 +643,59 @@ html, body { height:100%; overflow:hidden; font-family:-apple-system,BlinkMacSys
   background:var(--bg);
 }
 
+/* Brighten dark tiles slightly */
+body:not(.light) #map-container .leaflet-tile-pane {
+  filter: brightness(1.55) contrast(0.92);
+}
+
+/* User location dot */
+.user-loc-dot {
+  width:16px; height:16px; border-radius:50%;
+  background:#38bdf8;
+  border:3px solid #fff;
+  box-shadow:0 0 0 4px rgba(56,189,248,.3), 0 2px 6px rgba(0,0,0,.4);
+}
+
+/* Map POI carousel */
+#map-poi-wrap {
+  position:absolute; bottom:0; left:0; right:0; z-index:500;
+  background:linear-gradient(to top, rgba(15,23,42,.95) 60%, transparent 100%);
+  padding:32px 0 calc(var(--safe-bot) + 12px);
+  pointer-events:none;
+}
+body.light #map-poi-wrap {
+  background:linear-gradient(to top, rgba(241,245,249,.95) 60%, transparent 100%);
+}
+#map-poi-carousel {
+  display:flex; gap:10px; overflow-x:auto; padding:0 16px;
+  scrollbar-width:none; -ms-overflow-style:none;
+  pointer-events:all;
+  -webkit-overflow-scrolling:touch;
+}
+#map-poi-carousel::-webkit-scrollbar { display:none; }
+
+.map-poi-card {
+  flex:0 0 120px; border-radius:12px; overflow:hidden;
+  background:var(--bg2); border:1px solid var(--bg3);
+  cursor:pointer; transition:transform .15s;
+  -webkit-tap-highlight-color:transparent;
+  text-decoration:none; color:inherit;
+}
+.map-poi-card.itinerary {
+  border-color:var(--accent);
+  box-shadow:0 0 0 1px var(--accent);
+}
+.map-poi-card:active { transform:scale(.96); }
+.map-poi-card-img { width:100%; height:80px; object-fit:cover; background:var(--bg3); }
+.map-poi-card-body { padding:6px 8px 8px; }
+.map-poi-card-name {
+  font-size:11px; font-weight:700; color:var(--text);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  line-height:1.3;
+}
+.map-poi-card-meta { font-size:10px; color:var(--text3); margin-top:2px; }
+.map-poi-card-stars { font-size:10px; color:var(--amber); margin-top:2px; }
+
 /* Custom stop markers */
 .map-marker {
   width:36px; height:36px;
