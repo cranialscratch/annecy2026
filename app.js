@@ -393,10 +393,14 @@ function buildDayStrip() {
     chip.className = 'day-chip';
     chip.dataset.dayId = day.id;
     const today = new Date().toISOString().slice(0,10);
-    const isTodayChip = day.isFestival
-      ? (today >= day.date && today <= day.dateEnd)
-      : today === day.date;
+    const isTodayChip = day.isCountdown
+      ? today <= day.dateEnd
+      : day.isFestival
+        ? (today >= day.date && today <= day.dateEnd)
+        : today === day.date;
+    const isPast = !day.isCountdown && !day.isFestival && day.date < today;
     if (isTodayChip) chip.classList.add('today');
+    if (isPast)      chip.classList.add('past');
     const dateStr = day.isCountdown ? 'soon' : day.isFestival ? '20–27' : formatDate(day.date);
     chip.innerHTML = `<span class="day-chip-label">${getDayLabel(day)}</span><span class="day-chip-date">${dateStr}</span><span class="day-dot"></span>`;
     chip.addEventListener('click', () => selectDay(day.id));
@@ -669,13 +673,15 @@ function renderTimeline(container, scrollToNow) {
     container.appendChild(banner);
   }
 
+  const today = new Date().toISOString().slice(0,10);
+  const isToday = day.date === today || (day.isFestival && today >= day.date && today <= day.dateEnd);
   const now = nowMinutes();
   let nowLineEl = null;
   let nowInserted = false;
 
   day.stops.forEach((stop, idx) => {
     const stopMins = timeToMinutes(getStopTime(stop));
-    if (!nowInserted && stopMins !== null && stopMins > now) {
+    if (isToday && !nowInserted && stopMins !== null && stopMins > now) {
       nowInserted = true;
       const nowLine = document.createElement('div');
       nowLine.className = 'tl-now-line';

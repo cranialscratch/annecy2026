@@ -59,6 +59,7 @@ html, body { height:100%; overflow:hidden; font-family:-apple-system,BlinkMacSys
   -webkit-tap-highlight-color:transparent;
 }
 .day-chip.active { background:var(--accent); border-color:var(--accent); color:#0f172a; }
+.day-chip.past   { opacity:.4; }
 .day-chip-label { font-size:12px; font-weight:800; letter-spacing:.3px; }
 .day-chip-date  { font-size:10px; opacity:.75; margin-top:1px; }
 .day-dot { display:none; width:5px; height:5px; border-radius:50%; background:var(--orange); margin-top:3px; }
