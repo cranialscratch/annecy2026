@@ -576,13 +576,14 @@ async function fetchRoutePOIs(day) {
 
 async function resolvePOISummaries(candidates, itineraryStops) {
   if (!candidates.length) return [];
+  let okCount = 0, errCount = 0;
   const results = await Promise.all(candidates.slice(0, 25).map(async p => {
     try {
       const r = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(p.title)}`);
-      if (!r.ok) { console.warn('wiki summary !ok', p.title, r.status); return null; }
+      if (!r.ok) { errCount++; console.warn('wiki summary !ok', p.title, r.status); return null; }
       const d = await r.json();
-      if (!d.title) { console.warn('wiki summary no title', p.title); return null; }
-      // Check if this POI matches an itinerary stop
+      if (!d.title) { errCount++; return null; }
+      okCount++;
       const match = itineraryStops.find(s => {
         const wt = WIKI_TITLES[s.id];
         return (wt && wt.replace(/_/g,' ').toLowerCase() === p.title.toLowerCase()) ||
@@ -594,10 +595,12 @@ async function resolvePOISummaries(candidates, itineraryStops) {
         url: `https://en.m.wikipedia.org/wiki/${encodeURIComponent(p.title)}`,
         itineraryStop: match || null,
       };
-    } catch { return null; }
+    } catch(e) { errCount++; console.warn('wiki summary throw', p.title, e.message); return null; }
   }));
   const filtered = results.filter(Boolean);
-  console.log('POI resolved:', filtered.length, 'of', candidates.slice(0,25).length);
+  console.log(`POI: ${candidates.length} candidates → ${filtered.length} resolved (${okCount} ok, ${errCount} err)`);
+  // Surface debug info into the carousel temporarily
+  if (!filtered.length) filtered._debug = `${candidates.length}c / ${okCount}ok / ${errCount}err`;
   return filtered;
 }
 
@@ -759,7 +762,7 @@ function buildAndAppendPOIWrap(container, day) {
   fetchRoutePOIs(day).then(pois => {
     if (_mapDayId !== state.currentDayId) { carousel.innerHTML = '<div style="padding:4px 12px;font-size:11px;color:rgba(255,255,100,.5)">guard fired</div>'; return; }
     carousel.innerHTML = '';
-    if (!pois.length) { carousel.innerHTML = `<div style="padding:4px 12px;font-size:11px;color:rgba(255,255,255,.5)">0 POIs resolved</div>`; return; }
+    if (!pois.length) { carousel.innerHTML = `<div style="padding:4px 12px;font-size:11px;color:rgba(255,255,255,.5)">0 POIs: ${pois._debug || '?'}</div>`; return; }
     // Itinerary-matched POIs first, then others
     const sorted = [...pois].sort((a, b) => (b.itineraryStop ? 1 : 0) - (a.itineraryStop ? 1 : 0));
     sorted.forEach(poi => carousel.appendChild(buildMapPOICard(poi)));
