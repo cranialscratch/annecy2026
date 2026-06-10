@@ -1,20 +1,19 @@
-const CACHE = 'annecy2026-v47';
-const ASSETS = [
-  './',
+const CACHE = 'annecy2026-v48';
+const CORE = [
   './index.html',
   './styles.css?v=46',
   './app.js',
   './data.js',
   './manifest.json',
-  './icons/icon-192.png',
-  './icons/icon-512.png',
 ];
 
 self.addEventListener('install', e => {
+  // Pre-cache core assets, but don't block activation
   e.waitUntil(
-    caches.open(CACHE).then(c => c.addAll(ASSETS.map(url => {
-      return new Request(url, { cache: 'reload' });
-    }))).catch(() => caches.open(CACHE).then(c => c.addAll(['./index.html', './styles.css', './app.js', './data.js'])))
+    caches.open(CACHE)
+      .then(c => Promise.allSettled(CORE.map(url =>
+        fetch(new Request(url, { cache: 'reload' })).then(r => r.ok ? c.put(url, r) : null)
+      )))
   );
   self.skipWaiting();
 });
@@ -31,27 +30,25 @@ self.addEventListener('activate', e => {
 
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
-  // Navigation: network-first so a refresh always picks up a new SW
+
+  // Navigation: always network-first
   if (e.request.mode === 'navigate') {
-    e.respondWith(
-      fetch(e.request).catch(() => caches.match('./index.html'))
-    );
+    e.respondWith(fetch(e.request).catch(() => caches.match('./index.html')));
     return;
   }
-  // Only cache same-origin assets — let Wikipedia/OSRM/Leaflet go straight to network
+
+  // Cross-origin (Wikipedia, OSRM, Leaflet, CDN): never intercept
   const url = new URL(e.request.url);
   if (url.origin !== self.location.origin) return;
-  // Same-origin assets: cache-first, offline fallback
+
+  // Same-origin assets: network-first, cache fallback for offline
   e.respondWith(
-    caches.match(e.request).then(cached => {
-      if (cached) return cached;
-      return fetch(e.request).then(res => {
-        if (res && res.status === 200) {
-          const clone = res.clone();
-          caches.open(CACHE).then(c => c.put(e.request, clone));
-        }
-        return res;
-      }).catch(() => cached || new Response('Offline', { status: 503 }));
-    })
+    fetch(e.request).then(res => {
+      if (res.ok) {
+        const clone = res.clone();
+        caches.open(CACHE).then(c => c.put(e.request, clone));
+      }
+      return res;
+    }).catch(() => caches.match(e.request))
   );
 });
