@@ -569,16 +569,19 @@ async function fetchRoutePOIs(day) {
     } catch(e) { console.warn('POI geosearch failed', lat, lng, e); }
   }
   console.log('POI candidates:', candidates.length, 'from', picked.length, 'points');
-  return await resolvePOISummaries(candidates, stops);
+  const resolved = await resolvePOISummaries(candidates, stops);
+  console.log('POI resolved:', resolved.length);
+  return resolved;
 }
 
 async function resolvePOISummaries(candidates, itineraryStops) {
+  if (!candidates.length) return [];
   const results = await Promise.all(candidates.slice(0, 25).map(async p => {
     try {
       const r = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(p.title)}`);
-      if (!r.ok) return null;
+      if (!r.ok) { console.warn('wiki summary !ok', p.title, r.status); return null; }
       const d = await r.json();
-      if (!d.title) return null;
+      if (!d.title) { console.warn('wiki summary no title', p.title); return null; }
       // Check if this POI matches an itinerary stop
       const match = itineraryStops.find(s => {
         const wt = WIKI_TITLES[s.id];
@@ -754,9 +757,9 @@ function buildAndAppendPOIWrap(container, day) {
   container.appendChild(wrap);
 
   fetchRoutePOIs(day).then(pois => {
-    if (_mapDayId !== state.currentDayId) return;
+    if (_mapDayId !== state.currentDayId) { carousel.innerHTML = '<div style="padding:4px 12px;font-size:11px;color:rgba(255,255,100,.5)">guard fired</div>'; return; }
     carousel.innerHTML = '';
-    if (!pois.length) { carousel.innerHTML = '<div style="padding:4px 12px;font-size:11px;color:rgba(255,255,255,.4)">No nearby POIs found</div>'; return; }
+    if (!pois.length) { carousel.innerHTML = `<div style="padding:4px 12px;font-size:11px;color:rgba(255,255,255,.5)">0 POIs resolved</div>`; return; }
     // Itinerary-matched POIs first, then others
     const sorted = [...pois].sort((a, b) => (b.itineraryStop ? 1 : 0) - (a.itineraryStop ? 1 : 0));
     sorted.forEach(poi => carousel.appendChild(buildMapPOICard(poi)));
