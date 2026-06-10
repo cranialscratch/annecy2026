@@ -416,9 +416,11 @@ function updateDayStrip() {
 }
 function selectDay(dayId) {
   state.currentDayId = dayId;
-  state.currentView = 'day';
+  // Stay on whichever view is active (map, day, etc.) — only switch to day
+  // if currently on a non-day-sensitive view like overview/vegan/charging
+  if (!['day','map'].includes(state.currentView)) state.currentView = 'day';
   updateDayStrip();
-  renderView(false); // don't auto-scroll when manually picking a day
+  renderView(false);
 }
 
 /* ── Header ────────────────────────────────────────────────────────── */
