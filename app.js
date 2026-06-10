@@ -556,36 +556,36 @@ async function fetchRoutePOIs(day) {
   const step = Math.max(1, Math.floor(searchPts.length / 8));
   const picked = searchPts.filter((_, i) => i % step === 0).slice(0, 8);
 
-  // Quick connectivity test: single fetch to see what the API returns
+  // Connectivity test with London (known to have many articles)
   let geoTestStatus = '?';
   try {
-    const testLat = picked[0]?.[0] ?? 51.03, testLng = picked[0]?.[1] ?? -2.53;
-    const testUrl = `https://en.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord=${testLat}%7C${testLng}&gsradius=12000&gslimit=3&format=json&origin=*`;
-    const testR = await fetch(testUrl);
+    const testR = await fetch(`https://en.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord=51.5074|-0.1278&gsradius=5000&gslimit=3&format=json&origin=*`);
     const testD = await testR.json();
     const testHits = testD.query?.geosearch || [];
-    geoTestStatus = `HTTP${testR.status},${testHits.length}hits`;
-    console.log('geo test', geoTestStatus, testD);
+    geoTestStatus = `LON:${testR.status},${testHits.length}hits`;
+    // Also test the actual first picked point
+    if (picked[0]) {
+      const [plat, plng] = picked[0];
+      const p2 = await fetch(`https://en.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord=${plat}|${plng}&gsradius=12000&gslimit=3&format=json&origin=*`);
+      const p2d = await p2.json();
+      geoTestStatus += ` PT0:${p2.status},${(p2d.query?.geosearch||[]).length}h(${plat.toFixed(2)},${plng.toFixed(2)})`;
+    }
   } catch(e) { geoTestStatus = `ERR:${e.message}`; }
 
   const seen = new Set();
   const candidates = [];
   for (const [lat, lng] of picked) {
     try {
-      const url = `https://en.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord=${lat}%7C${lng}&gsradius=12000&gslimit=10&format=json&origin=*`;
-      const r = await fetch(url);
-      if (!r.ok) { console.warn('geosearch !ok', lat, lng, r.status); continue; }
+      const r = await fetch(`https://en.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord=${lat}|${lng}&gsradius=12000&gslimit=10&format=json&origin=*`);
+      if (!r.ok) continue;
       const d = await r.json();
-      const hits = d.query?.geosearch || [];
-      for (const p of hits) {
+      for (const p of (d.query?.geosearch || [])) {
         if (!seen.has(p.title)) { seen.add(p.title); candidates.push(p); }
       }
-    } catch(e) { console.warn('POI geosearch failed', lat, lng, e.message); }
+    } catch(e) { console.warn('geosearch failed', lat, lng, e.message); }
   }
-  console.log('POI candidates:', candidates.length, 'from', picked.length, 'points');
   if (!candidates.length) {
-    // Surface the test result so we can see it without a console
-    const fake = []; fake._debug = `geo:${geoTestStatus} pts:${picked.length}`; return fake;
+    const fake = []; fake._debug = geoTestStatus; return fake;
   }
   const resolved = await resolvePOISummaries(candidates, stops);
   console.log('POI resolved:', resolved.length);
