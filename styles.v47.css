@@ -473,7 +473,7 @@ body.light::before {
     0 2px 8px rgba(0,0,0,0.3);
   border-radius: 100px;
   height: var(--bottom-h);
-  z-index: 200;
+  z-index: 1000;
   padding: 0 4px;
 }
 body.light #bottom-nav {
@@ -859,7 +859,7 @@ body.light .glass-btn {
 .pill-btn.recalc:disabled { opacity: .55; }
 
 /* ─── Map view ──────────────────────────────────────────────────────── */
-#map-container { position: absolute; inset: 0; width: 100%; height: 100%; }
+#map-container { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 0; isolation: isolate; }
 #map-container .leaflet-container { width: 100%; height: 100%; background: var(--bg); }
 
 body:not(.light) #map-container .leaflet-tile-pane {
