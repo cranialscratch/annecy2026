@@ -866,7 +866,7 @@ function renderTimeline(container, scrollToNow) {
   if (day.isFestival) {
     const banner = document.createElement('div');
     banner.className = 'festival-banner';
-    banner.innerHTML = `<div style="font-size:36px;margin-bottom:8px">🎬</div><h2>International Animation<br>Film Festival 2026</h2><p>Annecy, France</p><div class="festival-dates">20 – 27 June 2026</div>`;
+    banner.innerHTML = `<div class="cd-emoji"><i class="ph ph-film-slate"></i></div><h2>International Animation<br>Film Festival 2026</h2><p>Annecy, France</p><div class="festival-dates">20 – 27 June 2026</div>`;
     container.appendChild(banner);
   }
 
