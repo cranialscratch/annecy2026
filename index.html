@@ -11,7 +11,7 @@
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="icons/icon-180.png">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
-  <link rel="stylesheet" href="styles.v64.css">
+  <link rel="stylesheet" href="styles.v65.css">
 </head>
 <body>
   <div id="app">
@@ -201,19 +201,18 @@
     // window.innerHeight is the true physical screen height in standalone
     // PWA mode — more reliable than any CSS unit on iOS WebKit
     (function() {
-      function setDimensions() {
-        const h = window.innerHeight;
-        document.documentElement.style.setProperty('--real-height', h + 'px');
-        // screen.height is physical screen; innerHeight is CSS viewport.
-        // In standalone PWA the gap = home indicator + any OS chrome below viewport.
-        const gap = Math.max(0, window.screen.height - h - (window.screen.height - window.outerHeight || 0));
-        // Clamp to sensible range (0–60px); on most iPhones this is ~34px
-        const safeBot = Math.min(60, Math.max(0, gap > 4 ? gap : 34));
-        document.documentElement.style.setProperty('--nav-bottom', safeBot + 'px');
+      // Measure header height so #main-content padding-top clears it.
+      // Called after fonts/icons load and on resize.
+      function updateHeaderHeight() {
+        var hdr = document.getElementById('app-header');
+        if (hdr) document.documentElement.style.setProperty('--header-h', hdr.offsetHeight + 'px');
       }
-      setDimensions();
-      window.addEventListener('resize', setDimensions);
-      window.addEventListener('orientationchange', function() { setTimeout(setDimensions, 200); });
+      // Run once DOM is ready, again after a short delay for icon fonts
+      document.addEventListener('DOMContentLoaded', function() {
+        updateHeaderHeight();
+        setTimeout(updateHeaderHeight, 300);
+      });
+      window.addEventListener('resize', updateHeaderHeight);
     })();
   </script>
   <script>
