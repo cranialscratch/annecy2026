@@ -148,7 +148,7 @@ body.light::before {
 /* ─── Main scroll ───────────────────────────────────────────────────── */
 #main-content {
   flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch;
-  padding: 16px 14px calc(env(safe-area-inset-bottom, 0px) + var(--bottom-h) + 36px);
+  padding: 16px 14px calc(max(env(safe-area-inset-bottom, 0px), 8px) + var(--bottom-h) + 20px);
   position: relative;
 }
 #main-content.map-active { padding: 0; overflow: hidden; }
@@ -466,7 +466,7 @@ body.light::before {
 /* ─── Bottom nav — floating pill ────────────────────────────────────── */
 #bottom-nav {
   display: flex;
-  position: fixed; bottom: calc(env(safe-area-inset-bottom, 0px) + 8px);
+  position: fixed; bottom: max(env(safe-area-inset-bottom, 0px), 8px);
   left: 50%; transform: translateX(-50%);
   width: min(var(--nav-w), calc(100% - 28px));
   background: var(--glass-bg-strong);
@@ -881,7 +881,7 @@ body:not(.light) #map-container .leaflet-tile-pane {
 #map-poi-wrap {
   position: absolute; bottom: 0; left: 0; right: 0; z-index: 500;
   background: linear-gradient(to top, rgba(0,0,0,.96) 55%, transparent 100%);
-  padding: 36px 0 calc(env(safe-area-inset-bottom, 0px) + var(--bottom-h) + 20px);
+  padding: 36px 0 calc(max(env(safe-area-inset-bottom, 0px), 8px) + var(--bottom-h) + 8px);
   pointer-events: none;
 }
 body.light #map-poi-wrap {
