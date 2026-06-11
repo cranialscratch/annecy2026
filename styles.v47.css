@@ -56,19 +56,10 @@ body.light {
   --shadow: 0 8px 32px rgba(0,0,0,0.18);
 }
 
-html {
-  height: 100%;
-  height: -webkit-fill-available;
-  overflow: hidden;
-}
-body {
-  height: 100%;
-  min-height: 100vh;
-  min-height: -webkit-fill-available;
-  overflow: hidden;
+html, body {
+  height: 100%; width: 100%; overflow: hidden;
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Segoe UI', sans-serif;
-  background: var(--bg);
-  color: var(--text);
+  background: var(--bg); color: var(--text);
   -webkit-font-smoothing: antialiased;
 }
 
@@ -87,12 +78,12 @@ body.light::before {
     radial-gradient(ellipse 60% 50% at 80% 80%, rgba(175,82,222,0.08) 0%, transparent 55%);
 }
 
+/* position:fixed inset:0 is the only reliable full-screen in iOS standalone PWA */
 #app {
   display: flex; flex-direction: column;
-  height: 100vh;
-  height: 100dvh;
-  height: -webkit-fill-available;
-  position: relative; z-index: 1;
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  z-index: 1;
 }
 
 /* ─── Liquid Glass mixin (applied via class) ────────────────────────── */
