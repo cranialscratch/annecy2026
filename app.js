@@ -1703,17 +1703,12 @@ document.addEventListener('DOMContentLoaded', () => {
     let rafId = null;
 
     function applyTransform() {
-      // Smooth gyro towards target
       gyroX += (targetX - gyroX) * 0.08;
       gyroY += (targetY - gyroY) * 0.08;
-      const scrollOffset = mc.scrollTop * 0.25;
-      bg.style.transform = `translateX(${gyroX}px) translateY(${-scrollOffset + gyroY}px)`;
+      bg.style.transform = `translateX(${gyroX}px) translateY(${gyroY}px)`;
       rafId = requestAnimationFrame(applyTransform);
     }
     rafId = requestAnimationFrame(applyTransform);
-
-    // Scroll still works — just let the raf loop pick it up each frame
-    mc.addEventListener('scroll', () => {}, { passive: true });
 
     function handleOrientation(e) {
       const MAX = 20; // max px shift
