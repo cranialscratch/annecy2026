@@ -861,10 +861,16 @@ function renderTimeline(container, scrollToNow) {
   const mainContent = document.getElementById('main-content');
   if (day.isCountdown) {
     mainContent && mainContent.classList.add('soon-active');
+    mainContent && mainContent.classList.remove('day-active');
     renderCountdownBanner(container);
     return;
   }
   mainContent && mainContent.classList.remove('soon-active');
+  if (day.isFestival) {
+    mainContent && mainContent.classList.remove('day-active');
+  } else {
+    mainContent && mainContent.classList.add('day-active');
+  }
 
   if (day.isFestival) {
     const banner = document.createElement('div');
