@@ -1162,7 +1162,7 @@ function initEditLocMap(lat, lng) {
   const tiles = isDark
     ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
     : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
-  _editLocMap = L.map(el, { zoomControl:true, attributionControl:false });
+  _editLocMap = L.map(el, { zoomControl:true, attributionControl:false, tap:false });
   L.tileLayer(tiles, { maxZoom:19, subdomains:'abcd' }).addTo(_editLocMap);
   _editLocMap.setView([lat, lng], 14);
   _editLocMarker = L.marker([lat, lng], { draggable:true }).addTo(_editLocMap);
@@ -1170,18 +1170,25 @@ function initEditLocMap(lat, lng) {
     const p = e.target.getLatLng();
     _editLat = p.lat; _editLng = p.lng;
   });
+  // Ensure map fills container after sheet animation settles
+  setTimeout(() => _editLocMap && _editLocMap.invalidateSize(), 100);
 }
 
 async function searchEditLocation(query) {
-  if (query.length < 3) { document.getElementById('edit-loc-results').innerHTML = ''; return; }
+  const el = document.getElementById('edit-loc-results');
+  if (query.length < 3) { el.innerHTML = ''; el.style.display = 'none'; return; }
   try {
     const r = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=5&accept-language=en`);
     const results = await r.json();
-    const el = document.getElementById('edit-loc-results');
-    if (!results.length) { el.innerHTML = '<div class="edit-loc-no-results">No results</div>'; return; }
+    if (!results.length) {
+      el.innerHTML = '<div class="edit-loc-no-results">No results</div>';
+      positionLocResults();
+      return;
+    }
     el.innerHTML = results.map((item, i) =>
       `<button class="edit-loc-result" data-idx="${i}" data-lat="${item.lat}" data-lng="${item.lon}">${item.display_name}</button>`
     ).join('');
+    positionLocResults();
     el.querySelectorAll('.edit-loc-result').forEach(btn => {
       btn.addEventListener('click', () => {
         const lat = parseFloat(btn.dataset.lat);
@@ -1191,11 +1198,24 @@ async function searchEditLocation(query) {
           _editLocMap.setView([lat, lng], 15);
           _editLocMarker.setLatLng([lat, lng]);
         }
-        el.innerHTML = '';
+        el.innerHTML = ''; el.style.display = 'none';
         document.getElementById('edit-loc-search').value = btn.textContent;
       });
     });
-  } catch {}
+  } catch(e) { console.warn('Location search error', e); }
+}
+
+function positionLocResults() {
+  const input = document.getElementById('edit-loc-search');
+  const el    = document.getElementById('edit-loc-results');
+  if (!input || !el) return;
+  const rect = input.getBoundingClientRect();
+  el.style.position = 'fixed';
+  el.style.top    = rect.bottom + 4 + 'px';
+  el.style.left   = rect.left + 'px';
+  el.style.width  = rect.width + 'px';
+  el.style.display = 'block';
+  el.style.zIndex  = '9999';
 }
 
 function renderEditTypeGrid(selectedType) {
