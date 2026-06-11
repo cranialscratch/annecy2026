@@ -632,7 +632,7 @@ function buildMapPOICard(poi) {
   card.innerHTML = `
     ${poi.img ? `<img class="map-poi-card-img" src="${poi.img}" loading="lazy" alt="${poi.title}">` : `<div class="map-poi-card-img map-poi-no-img"><i class="ph ph-map-pin"></i></div>`}
     <div class="map-poi-card-body">
-      <div class="map-poi-card-name">${isItinerary ? stop.icon + ' ' : ''}${poi.title}</div>
+      <div class="map-poi-card-name">${isItinerary ? stopTypeIcon(stop) + ' ' : ''}${poi.title}</div>
       ${stars ? `<div class="map-poi-card-stars">${stars}</div>` : ''}
       <div class="map-poi-card-meta">${distStr}</div>
     </div>`;
@@ -723,7 +723,7 @@ function renderMapView() {
     const icon = L.divIcon({
       className: '',
       html: `<div class="map-marker type-${getStopType(stop)}${visited?' visited':''}${isNext?' next-stop':''}">
-               <span>${stop.icon}</span>
+               <span>${stopTypeIcon(stop)}</span>
                <span class="map-marker-seq">${idx + 1}</span>
              </div>`,
       iconSize: [36,36], iconAnchor: [18,18], popupAnchor: [0,-20],
@@ -795,7 +795,7 @@ function renderFilterList(container, kind) {
       const card = document.createElement('div');
       card.className = 'filter-card';
       card.innerHTML = `
-        <span class="filter-icon">${stop.icon}</span>
+        <span class="filter-icon">${stopTypeIcon(stop)}</span>
         <div class="filter-info">
           <div class="filter-day">${getDayLabel(day)} · ${day.isFestival ? '20–27 Jun' : formatDate(day.date)}</div>
           <div class="filter-loc">${stop.location}</div>
@@ -833,12 +833,12 @@ function renderCountdownBanner(container) {
   function tick() {
     const { days, hours, mins, secs, departed } = formatCountdown();
     if (departed) {
-      banner.innerHTML = `<div class="cd-emoji">🚗</div><h2 class="cd-title">We're on our way!</h2><p class="cd-sub">Annecy 2026 · Have a wonderful trip</p>`;
+      banner.innerHTML = `<div class="cd-emoji"><i class="ph ph-car"></i></div><h2 class="cd-title">We're on our way!</h2><p class="cd-sub">Annecy 2026 · Have a wonderful trip</p>`;
       clearInterval(_countdownInterval);
       return;
     }
     banner.innerHTML = `
-      <div class="cd-emoji">🏖️</div>
+      <div class="cd-emoji"><i class="ph ph-sun-horizon"></i></div>
       <h2 class="cd-title">Holiday Countdown</h2>
       <p class="cd-sub">Annecy · 17 Jun 2026 · North Cadbury 10:30</p>
       <div class="cd-units">
@@ -996,7 +996,7 @@ function buildSlider(stop, prefix) {
   const slides = photos.map((url) => {
     if (url === '__placeholder__') {
       return `<div class="${prefix}-slide ${prefix}-slide-placeholder" style="background:linear-gradient(145deg,${c1}55,${c2})">
-        <div class="ph-icon">${stop.icon}</div>
+        <div class="ph-icon">${stopTypeIcon(stop)}</div>
         <div class="ph-name">${stop.location}</div>
       </div>`;
     }
@@ -1029,7 +1029,7 @@ function initSlider(sliderEl, stop, prefix) {
       const ph = document.createElement('div');
       ph.className = `${prefix}-slide ${prefix}-slide-placeholder`;
       ph.style.background = `linear-gradient(145deg,${c1}55,${c2})`;
-      ph.innerHTML = `<div class="ph-icon">${stop.icon}</div><div class="ph-name">${stop.location}</div>`;
+      ph.innerHTML = `<div class="ph-icon">${stopTypeIcon(stop)}</div><div class="ph-name">${stop.location}</div>`;
       img.replaceWith(ph);
       sliderEl.classList.remove('loading');
     }, { once: true });
@@ -1104,20 +1104,25 @@ let _editSelectedType = null;
 let _editSelectedPriority = null;
 
 const TYPE_DEFS = [
-  { type:'depart',       icon:'🚗', label:'Depart' },
-  { type:'transport',    icon:'🚂', label:'Transport' },
-  { type:'charging',     icon:'⚡', label:'Charging' },
-  { type:'hotel',        icon:'🏨', label:'Hotel' },
-  { type:'food',         icon:'🍽️', label:'Food' },
-  { type:'wander',       icon:'🚶', label:'Explore' },
-  { type:'architecture', icon:'⛪', label:'Architecture' },
-  { type:'village',      icon:'🏘️', label:'Village' },
-  { type:'town',         icon:'🏙️', label:'Town' },
-  { type:'experience',   icon:'🌿', label:'Experience' },
-  { type:'scenic',       icon:'🏔️', label:'Scenic' },
-  { type:'historic',     icon:'🏛️', label:'Historic' },
-  { type:'festival',     icon:'🎬', label:'Festival' },
+  { type:'depart',       ph:'ph-car',            label:'Depart' },
+  { type:'transport',    ph:'ph-train',           label:'Transport' },
+  { type:'charging',     ph:'ph-lightning',       label:'Charging' },
+  { type:'hotel',        ph:'ph-bed',             label:'Hotel' },
+  { type:'food',         ph:'ph-fork-knife',      label:'Food' },
+  { type:'wander',       ph:'ph-footprints',      label:'Explore' },
+  { type:'architecture', ph:'ph-building',        label:'Architecture' },
+  { type:'village',      ph:'ph-house',           label:'Village' },
+  { type:'town',         ph:'ph-buildings',       label:'Town' },
+  { type:'experience',   ph:'ph-star',            label:'Experience' },
+  { type:'scenic',       ph:'ph-mountains',       label:'Scenic' },
+  { type:'historic',     ph:'ph-castle-turret',   label:'Historic' },
+  { type:'festival',     ph:'ph-film-slate',      label:'Festival' },
 ];
+// Helper: render a Phosphor icon element for a type def
+function typePh(type) {
+  const td = TYPE_DEFS.find(d => d.type === type);
+  return td ? `<i class="ph ${td.ph}"></i>` : '<i class="ph ph-map-pin"></i>';
+}
 
 const PRIORITY_DEFS = [
   { value:3, stars:'★★★', label:'Must-see' },
@@ -1204,7 +1209,7 @@ function renderEditTypeGrid(selectedType) {
   if (!grid) return;
   grid.innerHTML = TYPE_DEFS.map(td =>
     `<button class="type-pill${td.type === selectedType ? ' active' : ''}" data-type="${td.type}">
-       <span class="type-pill-icon">${td.icon}</span>
+       <span class="type-pill-icon"><i class="ph ${td.ph}"></i></span>
        <span class="type-pill-label">${td.label}</span>
      </button>`
   ).join('');
@@ -1326,7 +1331,7 @@ function saveEditSheet() {
   save();
   renderView(false);
   if (_detailStop?.id === _editStop.id) {
-    document.getElementById('detail-name').textContent = _editStop.icon + ' ' + getStopName(_editStop);
+    document.getElementById('detail-name').innerHTML = stopTypeIcon(_editStop) + ' ' + getStopName(_editStop);
     document.getElementById('detail-time').textContent = getStopTime(_editStop) + (_editStop.tz ? ' ' + _editStop.tz : '');
   }
   closeEditSheet();
@@ -1340,7 +1345,7 @@ function buildDetailSlides(photos, stop) {
   return photos.map(url => {
     if (url === '__placeholder__') {
       return `<div class="detail-slide detail-slide-placeholder" style="background:linear-gradient(145deg,${dc1}55,${dc2})">
-        <div class="ph-icon" style="font-size:72px">${stop.icon}</div>
+        <div class="ph-icon" style="font-size:72px">${stopTypeIcon(stop)}</div>
         <div class="ph-name" style="font-size:18px;margin-top:12px;padding:0 24px;text-align:center">${stop.location}</div>
       </div>`;
     }
@@ -1376,7 +1381,7 @@ function openDetail(stop) {
   document.getElementById('detail-badge').textContent = typeLabel(getStopType(stop));
   document.getElementById('detail-time').textContent  = getStopTime(stop) + (stop.tz ? ' ' + stop.tz : '');
   document.getElementById('detail-stars').textContent = priorityStars(getStopPriority(stop));
-  document.getElementById('detail-name').textContent  = stop.icon + ' ' + stop.location;
+  document.getElementById('detail-name').innerHTML = stopTypeIcon(stop) + ' ' + stop.location;
   document.getElementById('detail-reason').textContent = _wikiCache[stop.id]?.extract || getStopReason(stop);
 
   const tagsEl = document.getElementById('detail-tags');
@@ -1580,7 +1585,7 @@ function toggleCheck(stopId, itemEl) {
 let _modalStop = null, _modalDay = null;
 function openTimeModal(stop, day) {
   _modalStop = stop; _modalDay = day;
-  document.getElementById('modal-location').textContent = stop.icon + ' ' + stop.location;
+  document.getElementById('modal-location').innerHTML = stopTypeIcon(stop) + ' ' + stop.location;
   document.getElementById('modal-time-input').value = getStopTime(stop);
   document.getElementById('modal-cascade').checked = state.cascadeEnabled;
   document.getElementById('modal-overlay').classList.remove('hidden');
