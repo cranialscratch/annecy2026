@@ -11,7 +11,7 @@
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="icons/icon-180.png">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
-  <link rel="stylesheet" href="styles.v76.css">
+  <link rel="stylesheet" href="styles.v77.css">
 </head>
 <body>
   <div id="app">
@@ -151,27 +151,38 @@
         </section>
 
         <section class="edit-section">
-          <div class="edit-section-label">Arrival time</div>
-          <input type="time" id="edit-time" class="edit-input">
+          <div class="seg-control" id="time-type-seg">
+            <button class="seg-btn active" data-seg="departure">Departure</button>
+            <button class="seg-btn" data-seg="arrival">Arrival</button>
+          </div>
+          <input type="time" id="edit-time" class="edit-input" style="margin-top:10px">
         </section>
 
-        <section class="edit-section">
-          <div class="edit-section-label">Time at stop</div>
-          <div class="dur-picker">
-            <div class="dur-col-wrap"><div id="dur-hours" class="dur-col"></div></div>
-            <div class="dur-sep">:</div>
-            <div class="dur-col-wrap"><div id="dur-mins" class="dur-col"></div></div>
+        <section class="edit-section" id="dur-section">
+          <div class="ios-form-row" id="dur-row">
+            <span class="ios-form-label">Time at stop</span>
+            <button class="ios-form-value" id="dur-value-btn" type="button">0h 30m</button>
+          </div>
+          <div id="dur-picker-wrap" class="dur-picker-wrap hidden">
+            <div class="dur-picker">
+              <div class="dur-col-wrap"><div id="dur-hours" class="dur-col"></div></div>
+              <div class="dur-sep">:</div>
+              <div class="dur-col-wrap"><div id="dur-mins" class="dur-col"></div></div>
+            </div>
           </div>
         </section>
 
         <section class="edit-section">
-          <div class="edit-section-label">Stop type</div>
-          <div id="edit-type-grid" class="type-pill-grid"></div>
-        </section>
-
-        <section class="edit-section">
-          <div class="edit-section-label">Priority</div>
-          <div id="edit-priority-grid" class="priority-opt-grid"></div>
+          <div class="ios-list-section">
+            <div class="ios-list-row">
+              <span class="ios-list-label">Stop type</span>
+              <select id="edit-type-select" class="ios-list-select"></select>
+            </div>
+            <div class="ios-list-row">
+              <span class="ios-list-label">Priority</span>
+              <div id="edit-stars" class="star-picker"></div>
+            </div>
+          </div>
         </section>
 
         <section class="edit-section">

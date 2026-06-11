@@ -1215,38 +1215,31 @@ async function runEditSearch() {
 
 function renderEditTypeGrid(selectedType) {
   _editSelectedType = selectedType;
-  const grid = document.getElementById('edit-type-grid');
-  if (!grid) return;
-  grid.innerHTML = TYPE_DEFS.map(td =>
-    `<button class="type-pill${td.type === selectedType ? ' active' : ''}" data-type="${td.type}">
-       <span class="type-pill-icon"><i class="ph ${td.ph}"></i></span>
-       <span class="type-pill-label">${td.label}</span>
-     </button>`
+  const sel = document.getElementById('edit-type-select');
+  if (!sel) return;
+  sel.innerHTML = TYPE_DEFS.map(td =>
+    `<option value="${td.type}" ${td.type === selectedType ? 'selected' : ''}>${td.label}</option>`
   ).join('');
-  grid.querySelectorAll('.type-pill').forEach(btn => {
-    btn.addEventListener('click', () => {
-      _editSelectedType = btn.dataset.type;
-      grid.querySelectorAll('.type-pill').forEach(b => b.classList.toggle('active', b.dataset.type === _editSelectedType));
-    });
-  });
+  sel.onchange = () => { _editSelectedType = sel.value; };
 }
 
-function renderEditPriority(selectedPriority) {
-  _editSelectedPriority = selectedPriority;
-  const grid = document.getElementById('edit-priority-grid');
-  if (!grid) return;
-  grid.innerHTML = PRIORITY_DEFS.map(pd =>
-    `<button class="priority-opt${pd.value === selectedPriority ? ' active' : ''}" data-val="${pd.value}">
-       <span class="priority-opt-stars">${pd.stars}</span>
-       <span class="priority-opt-label">${pd.label}</span>
-     </button>`
-  ).join('');
-  grid.querySelectorAll('.priority-opt').forEach(btn => {
-    btn.addEventListener('click', () => {
-      _editSelectedPriority = parseInt(btn.dataset.val);
-      grid.querySelectorAll('.priority-opt').forEach(b => b.classList.toggle('active', parseInt(b.dataset.val) === _editSelectedPriority));
+function renderEditPriority(priority) {
+  _editSelectedPriority = priority ?? 1;
+  const el = document.getElementById('edit-stars');
+  if (!el) return;
+  function render() {
+    el.innerHTML = [1,2,3].map(i =>
+      `<span class="star${i <= _editSelectedPriority ? ' filled' : ''}" data-val="${i}">★</span>`
+    ).join('');
+    el.querySelectorAll('.star').forEach(s => {
+      s.addEventListener('click', () => {
+        const v = parseInt(s.dataset.val);
+        _editSelectedPriority = (v === _editSelectedPriority) ? 0 : v;
+        render();
+      });
     });
-  });
+  }
+  render();
 }
 
 async function fetchTravelMins(fromLat, fromLng, toLat, toLng) {
@@ -1298,7 +1291,13 @@ function openEditSheet(stop) {
   document.getElementById('edit-loc-search').value = '';
   document.getElementById('edit-loc-results').innerHTML = '';
 
-  buildDurPicker(getStopDuration(stop));
+  const dur = getStopDuration(stop);
+  buildDurPicker(dur);
+  const durH = Math.floor(dur/60), durM = dur%60;
+  const durBtn = document.getElementById('dur-value-btn');
+  if (durBtn) durBtn.textContent = `${durH}h ${String(durM).padStart(2,'0')}m`;
+  const durWrap = document.getElementById('dur-picker-wrap');
+  if (durWrap) durWrap.classList.add('hidden');
   renderEditTypeGrid(getStopType(stop));
   renderEditPriority(getStopPriority(stop));
 
@@ -1739,6 +1738,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
   /* Edit sheet */
   document.getElementById('edit-sheet-close').addEventListener('click', closeEditSheet);
+  // Segmented control: Departure / Arrival
+  document.getElementById('time-type-seg').addEventListener('click', e => {
+    const btn = e.target.closest('.seg-btn');
+    if (!btn) return;
+    document.querySelectorAll('#time-type-seg .seg-btn').forEach(b => b.classList.toggle('active', b === btn));
+  });
+  // Duration value button: toggle drum picker
+  document.getElementById('dur-value-btn').addEventListener('click', () => {
+    const wrap = document.getElementById('dur-picker-wrap');
+    wrap.classList.toggle('hidden');
+    if (!wrap.classList.contains('hidden')) {
+      const update = () => {
+        const m = getDurPickerMins();
+        const h = Math.floor(m/60), min = m%60;
+        document.getElementById('dur-value-btn').textContent = `${h}h ${String(min).padStart(2,'0')}m`;
+      };
+      document.getElementById('dur-hours').addEventListener('scroll', update, { passive: true });
+      document.getElementById('dur-mins').addEventListener('scroll', update, { passive: true });
+    }
+  });
   document.getElementById('edit-sheet-overlay').addEventListener('click', e => {
     if (e.target.id === 'edit-sheet-overlay') closeEditSheet();
   });
