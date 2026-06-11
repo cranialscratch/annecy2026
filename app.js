@@ -1692,14 +1692,55 @@ document.addEventListener('DOMContentLoaded', () => {
   renderView(true); // scroll to now only on first load
   if (typeof syncInit === 'function') syncInit();
 
-  /* Parallax — bg moves at 25% of scroll speed */
+  /* Parallax — combined scroll + gyroscope tilt */
   (function() {
     const mc = document.getElementById('main-content');
     const bg = document.getElementById('bg-layer');
     if (!mc || !bg) return;
-    mc.addEventListener('scroll', () => {
-      bg.style.transform = `translateY(-${mc.scrollTop * 0.25}px)`;
-    }, { passive: true });
+
+    let gyroX = 0, gyroY = 0;        // current smoothed gyro offsets (px)
+    let targetX = 0, targetY = 0;    // raw target from sensor
+    let rafId = null;
+
+    function applyTransform() {
+      // Smooth gyro towards target
+      gyroX += (targetX - gyroX) * 0.08;
+      gyroY += (targetY - gyroY) * 0.08;
+      const scrollOffset = mc.scrollTop * 0.25;
+      bg.style.transform = `translateX(${gyroX}px) translateY(${-scrollOffset + gyroY}px)`;
+      rafId = requestAnimationFrame(applyTransform);
+    }
+    rafId = requestAnimationFrame(applyTransform);
+
+    // Scroll still works — just let the raf loop pick it up each frame
+    mc.addEventListener('scroll', () => {}, { passive: true });
+
+    function handleOrientation(e) {
+      const MAX = 20; // max px shift
+      // gamma = left/right tilt (-90..90), beta = front/back (-180..180)
+      const g = Math.max(-45, Math.min(45, e.gamma || 0));
+      const b = Math.max(-45, Math.min(45, (e.beta  || 0) - 30)); // 30° = natural hold angle
+      targetX = -(g / 45) * MAX;
+      targetY = -(b / 45) * MAX;
+    }
+
+    function startGyro() {
+      if (typeof DeviceOrientationEvent !== 'undefined' &&
+          typeof DeviceOrientationEvent.requestPermission === 'function') {
+        // iOS 13+ requires a user-gesture permission request
+        DeviceOrientationEvent.requestPermission()
+          .then(s => { if (s === 'granted') window.addEventListener('deviceorientation', handleOrientation); })
+          .catch(() => {});
+      } else if (window.DeviceOrientationEvent) {
+        window.addEventListener('deviceorientation', handleOrientation);
+      }
+    }
+
+    // Trigger permission on first tap (iOS requirement)
+    document.addEventListener('pointerdown', function tryGyro() {
+      startGyro();
+      document.removeEventListener('pointerdown', tryGyro);
+    });
   })();
 
   /* Nav buttons */
