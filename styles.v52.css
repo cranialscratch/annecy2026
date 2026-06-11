@@ -66,7 +66,7 @@ html, body {
 /* Ambient gradient background */
 body::before {
   content: '';
-  position: fixed; inset: 0; z-index: 0; pointer-events: none;
+ inset: 0; z-index: 0; pointer-events: none;
   background:
     radial-gradient(ellipse 80% 60% at 20% 10%, rgba(10,132,255,0.18) 0%, transparent 60%),
     radial-gradient(ellipse 60% 50% at 80% 80%, rgba(191,90,242,0.12) 0%, transparent 55%),
@@ -78,11 +78,11 @@ body.light::before {
     radial-gradient(ellipse 60% 50% at 80% 80%, rgba(175,82,222,0.08) 0%, transparent 55%);
 }
 
-/* position:fixed inset:0 is the only reliable full-screen in iOS standalone PWA */
+
 #app {
   display: flex; flex-direction: column;
-  position: fixed;
-  top: 0; left: 0; right: 0; bottom: 0;
+
+  position: fixed; top: 0; left: 0; width: 100%; height: var(--app-h, 100vh);
   z-index: 1;
 }
 

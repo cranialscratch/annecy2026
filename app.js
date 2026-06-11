@@ -1,3 +1,13 @@
+/* ── Fix standalone PWA height ──────────────────────────────────────── */
+(function fixHeight() {
+  function set() {
+    document.documentElement.style.setProperty('--app-h', window.innerHeight + 'px');
+  }
+  set();
+  window.addEventListener('resize', set);
+  window.addEventListener('orientationchange', function() { setTimeout(set, 200); });
+})();
+
 /* ── State ─────────────────────────────────────────────────────────── */
 const state = {
   currentDayId: null,
