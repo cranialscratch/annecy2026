@@ -448,8 +448,7 @@ function updateHeader() {
   const day = TRIP_DATA.days.find(d => d.id === state.currentDayId);
   const label = document.getElementById('header-day-label');
   const sub   = document.getElementById('header-day-subtitle');
-  if (state.currentView === 'overview')      { label.textContent = 'Annecy 2026'; }
-  else if (state.currentView === 'vegan')    { label.textContent = 'Vegan Spots'; }
+  if (state.currentView === 'vegan')    { label.textContent = 'Vegan Spots'; }
   else if (state.currentView === 'charging') { label.textContent = 'Charging'; }
   else if (day) { label.textContent = day.title; }
 }
