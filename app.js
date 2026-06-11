@@ -368,7 +368,7 @@ function poiNearbyUrl(stop) {
 }
 
 /* ── Persist ───────────────────────────────────────────────────────── */
-function save() {
+function localSave() {
   try {
     localStorage.setItem('annecy_overrides',          JSON.stringify(state.overrides));
     localStorage.setItem('annecy_checked',            JSON.stringify(state.checked));
@@ -379,6 +379,10 @@ function save() {
     localStorage.setItem('annecy_reason_overrides',   JSON.stringify(state.reasonOverrides));
     localStorage.setItem('annecy_vegan_overrides',    JSON.stringify(state.veganOverrides));
   } catch {}
+}
+function save() {
+  localSave();
+  if (typeof syncSave === 'function') syncSave();
 }
 function load() {
   try {
@@ -1686,6 +1690,7 @@ document.addEventListener('DOMContentLoaded', () => {
   state.currentDayId = findTodayDayId() || TRIP_DATA.days[0].id;
   buildDayStrip();
   renderView(true); // scroll to now only on first load
+  if (typeof syncInit === 'function') syncInit();
 
   /* Nav buttons */
   document.querySelectorAll('.nav-btn').forEach(btn =>
