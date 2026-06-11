@@ -18,7 +18,7 @@
     <header id="app-header">
       <div class="header-inner">
         <div class="header-left">
-          <button id="menu-btn" class="icon-btn" aria-label="Menu">☰</button>
+          <button id="menu-btn" class="icon-btn" aria-label="Menu"><i class="ph ph-list"></i></button>
           <div class="header-titles">
             <h1 id="header-day-label">Annecy 2026</h1>
             <p id="header-day-subtitle"></p>
@@ -26,7 +26,7 @@
         </div>
         <div class="header-right">
           <button id="today-btn" class="pill-btn">Today</button>
-          <button id="cascade-btn" class="icon-btn cascade-off" title="Ripple: shift all following times when you edit one">〜</button>
+          <button id="cascade-btn" class="icon-btn cascade-off" title="Ripple: shift all following times when you edit one"><i class="ph ph-arrows-down-up"></i></button>
         </div>
       </div>
       <div id="day-strip-wrap"><div id="day-strip"></div></div>
@@ -38,11 +38,11 @@
     </main>
 
     <nav id="bottom-nav">
-      <button class="nav-btn active" data-view="day"><span class="nav-icon">📅</span><span class="nav-label">Day</span></button>
-      <button class="nav-btn" data-view="map"><span class="nav-icon">🗺️</span><span class="nav-label">Map</span></button>
-      <button class="nav-btn" data-view="overview"><span class="nav-icon">📋</span><span class="nav-label">Trip</span></button>
-      <button class="nav-btn" data-view="vegan"><span class="nav-icon">🌱</span><span class="nav-label">Vegan</span></button>
-      <button class="nav-btn" data-view="charging"><span class="nav-icon">⚡</span><span class="nav-label">Charging</span></button>
+      <button class="nav-btn active" data-view="day"><i class="ph-fill ph-calendar-dots nav-icon"></i><span class="nav-label">Day</span></button>
+      <button class="nav-btn" data-view="map"><i class="ph-fill ph-map-trifold nav-icon"></i><span class="nav-label">Map</span></button>
+      <button class="nav-btn" data-view="overview"><i class="ph-fill ph-article nav-icon"></i><span class="nav-label">Trip</span></button>
+      <button class="nav-btn" data-view="vegan"><i class="ph-fill ph-leaf nav-icon"></i><span class="nav-label">Vegan</span></button>
+      <button class="nav-btn" data-view="charging"><i class="ph-fill ph-lightning nav-icon"></i><span class="nav-label">Charging</span></button>
     </nav>
   </div>
 
@@ -51,16 +51,16 @@
   <aside id="drawer" class="hidden">
     <div class="drawer-header">
       <span class="drawer-title">🏔️ Annecy 2026</span>
-      <button id="drawer-close" class="icon-btn">✕</button>
+      <button id="drawer-close" class="icon-btn"><i class="ph ph-x"></i></button>
     </div>
     <nav class="drawer-nav">
-      <button class="drawer-item" data-action="reset-times">🔄 Reset all times</button>
-      <button class="drawer-item" data-action="reset-checks">☐ Clear visited</button>
-      <button class="drawer-item" data-action="toggle-dark">🌙 Toggle dark/light</button>
-      <a class="drawer-item" href="https://www.annecy.org/festival" target="_blank" rel="noopener">🎬 Festival website</a>
-      <a class="drawer-item" href="https://www.le-shuttle.com" target="_blank" rel="noopener">🚂 LeShuttle</a>
-      <a class="drawer-item" href="https://www.plugshare.com" target="_blank" rel="noopener">⚡ PlugShare</a>
-      <a class="drawer-item" href="https://www.happycow.net" target="_blank" rel="noopener">🌱 HappyCow</a>
+      <button class="drawer-item" data-action="reset-times"><i class="ph ph-clock-counter-clockwise drawer-icon"></i> Reset all times</button>
+      <button class="drawer-item" data-action="reset-checks"><i class="ph ph-check-square drawer-icon"></i> Clear visited</button>
+      <button class="drawer-item" data-action="toggle-dark"><i class="ph ph-moon drawer-icon"></i> Toggle dark/light</button>
+      <a class="drawer-item" href="https://www.annecy.org/festival" target="_blank" rel="noopener"><i class="ph ph-film-slate drawer-icon"></i> Festival website</a>
+      <a class="drawer-item" href="https://www.le-shuttle.com" target="_blank" rel="noopener"><i class="ph ph-train drawer-icon"></i> LeShuttle</a>
+      <a class="drawer-item" href="https://www.plugshare.com" target="_blank" rel="noopener"><i class="ph ph-plug drawer-icon"></i> PlugShare</a>
+      <a class="drawer-item" href="https://www.happycow.net" target="_blank" rel="noopener"><i class="ph ph-leaf drawer-icon"></i> HappyCow</a>
     </nav>
     <div class="drawer-footer"><p>Works offline · Optimised for iPhone</p></div>
   </aside>
@@ -70,7 +70,7 @@
     <div id="time-modal">
       <div class="modal-header">
         <h3 id="modal-title">Edit time</h3>
-        <button id="modal-close" class="icon-btn">✕</button>
+        <button id="modal-close" class="icon-btn"><i class="ph ph-x"></i></button>
       </div>
       <div class="modal-body">
         <p id="modal-location" class="modal-location"></p>
@@ -96,9 +96,9 @@
   <div id="detail-overlay" class="hidden">
     <div id="detail-page">
       <div class="detail-topbar">
-        <button id="detail-back" class="icon-btn glass-btn">←</button>
+        <button id="detail-back" class="icon-btn glass-btn"><i class="ph ph-arrow-left"></i></button>
         <div class="detail-topbar-right">
-          <button id="detail-edit-btn" class="icon-btn glass-btn" aria-label="Edit stop">✎</button>
+          <button id="detail-edit-btn" class="icon-btn glass-btn" aria-label="Edit stop"><i class="ph ph-pencil-simple"></i></button>
           <button id="detail-check-btn" class="check-pill">Mark visited</button>
         </div>
       </div>
@@ -130,7 +130,7 @@
       <div class="edit-sheet-handle"></div>
       <div class="edit-sheet-header">
         <h3 class="edit-sheet-title">Edit stop</h3>
-        <button id="edit-sheet-close" class="icon-btn">✕</button>
+        <button id="edit-sheet-close" class="icon-btn"><i class="ph ph-x"></i></button>
       </div>
       <div class="edit-sheet-body">
 
@@ -181,7 +181,7 @@
         <section class="edit-section">
           <label class="edit-toggle-row">
             <div>
-              <div class="edit-toggle-label">🌱 Vegan-friendly</div>
+              <div class="edit-toggle-label"><i class="ph ph-leaf"></i> Vegan-friendly</div>
               <div class="edit-toggle-sub">Show vegan nearby button on this stop</div>
             </div>
             <input type="checkbox" id="edit-vegan" class="edit-toggle-cb">
@@ -197,6 +197,7 @@
   </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  <script src="https://unpkg.com/@phosphor-icons/web@2.1.1"></script>
   <script>
     // When a new service worker activates it sends SW_UPDATED — reload to get fresh files
     if ('serviceWorker' in navigator) {

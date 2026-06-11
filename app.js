@@ -63,8 +63,8 @@ function nowMinutes() {
 }
 function buildTags(stop) {
   const tags = [];
-  if (getStopVegan(stop))              tags.push(`<span class="tl-tag vegan">🌱 Vegan-friendly</span>`);
-  if (getStopType(stop) === 'charging') tags.push(`<span class="tl-tag charge">⚡ Supercharger</span>`);
+  if (getStopVegan(stop))              tags.push(`<span class="tl-tag vegan"><i class="ph ph-leaf"></i> Vegan-friendly</span>`);
+  if (getStopType(stop) === 'charging') tags.push(`<span class="tl-tag charge"><i class="ph ph-lightning"></i> Supercharger</span>`);
   if (getStopPriority(stop) >= 3)       tags.push(`<span class="tl-tag poi">★ Must-see</span>`);
   return tags.length ? `<div class="tl-card-tags">${tags.join('')}</div>` : '';
 }
@@ -429,8 +429,8 @@ function updateHeader() {
   const label = document.getElementById('header-day-label');
   const sub   = document.getElementById('header-day-subtitle');
   if (state.currentView === 'overview')      { label.textContent = 'Annecy 2026';    sub.textContent = 'Trip overview'; }
-  else if (state.currentView === 'vegan')    { label.textContent = '🌱 Vegan Spots'; sub.textContent = 'All vegan-friendly stops'; }
-  else if (state.currentView === 'charging') { label.textContent = '⚡ Charging';    sub.textContent = 'Tesla Superchargers'; }
+  else if (state.currentView === 'vegan')    { label.textContent = 'Vegan Spots'; sub.textContent = 'All vegan-friendly stops'; }
+  else if (state.currentView === 'charging') { label.textContent = 'Charging';    sub.textContent = 'Tesla Superchargers'; }
   else if (state.currentView === 'map' && day) { label.textContent = `${getDayLabel(day)} · ${day.title}`; sub.textContent = 'Route map'; }
   else if (day) { label.textContent = `${getDayLabel(day)} · ${day.title}`; sub.textContent = day.subtitle || ''; }
 }
@@ -611,7 +611,7 @@ function buildMapPOICard(poi) {
   if (!isItinerary) { card.href = poi.url; card.target = '_blank'; card.rel = 'noopener'; }
   card.dataset.dist = distM ?? poi.dist ?? 999999;
   card.innerHTML = `
-    ${poi.img ? `<img class="map-poi-card-img" src="${poi.img}" loading="lazy" alt="${poi.title}">` : `<div class="map-poi-card-img map-poi-no-img">📍</div>`}
+    ${poi.img ? `<img class="map-poi-card-img" src="${poi.img}" loading="lazy" alt="${poi.title}">` : `<div class="map-poi-card-img map-poi-no-img"><i class="ph ph-map-pin"></i></div>`}
     <div class="map-poi-card-body">
       <div class="map-poi-card-name">${isItinerary ? stop.icon + ' ' : ''}${poi.title}</div>
       ${stars ? `<div class="map-poi-card-stars">${stars}</div>` : ''}
@@ -768,7 +768,7 @@ function renderFilterList(container, kind) {
   container.innerHTML = '';
   const header = document.createElement('div');
   header.className = 'filter-header';
-  header.textContent = kind === 'vegan' ? '🌱 Vegan-Friendly Stops' : '⚡ Tesla Superchargers';
+  header.textContent = kind === 'vegan' ? 'Vegan-Friendly Stops' : 'Tesla Superchargers';
   container.appendChild(header);
   TRIP_DATA.days.forEach(day => {
     day.stops.forEach(stop => {
@@ -782,7 +782,7 @@ function renderFilterList(container, kind) {
           <div class="filter-loc">${stop.location}</div>
           <div class="filter-reason">${stop.reason}</div>
         </div>
-        <div><a class="act-btn tesla" href="${teslaNavUrl(stop)}" target="_blank" rel="noopener">🚗</a></div>`;
+        <div><a class="act-btn tesla" href="${teslaNavUrl(stop)}" target="_blank" rel="noopener"><i class="ph ph-navigation-arrow"></i></a></div>`;
       container.appendChild(card);
     });
   });
@@ -929,7 +929,7 @@ function buildTimelineItem(stop, isLast) {
       <div class="card-body">
         <div class="card-top-row">
           <div class="card-name">${stop.icon} ${stop.location}</div>
-          <button class="check-btn${isVisited ? ' checked' : ''}" data-stop-id="${stop.id}" aria-label="Mark visited">${isVisited ? '✓' : '○'}</button>
+          <button class="check-btn${isVisited ? ' checked' : ''}" data-stop-id="${stop.id}" aria-label="Mark visited"><i class="ph ${isVisited ? 'ph-check-circle' : 'ph-circle'}"></i></button>
         </div>
         <div class="card-meta-row">
           <span class="tl-card-badge">${typeLabel(getStopType(stop))}</span>
@@ -1062,17 +1062,17 @@ function initSlider(sliderEl, stop, prefix) {
 
 /* ── Action buttons — icon only ───────────────────────────────────── */
 function buildIconActions(stop) {
-  const parts = [`<a class="act-btn tesla" href="${teslaNavUrl(stop)}" target="_blank" rel="noopener">🚗</a>`];
+  const parts = [`<a class="act-btn tesla" href="${teslaNavUrl(stop)}" target="_blank" rel="noopener"><i class="ph ph-navigation-arrow"></i></a>`];
   const sType = getStopType(stop);
   if (sType !== 'depart' && sType !== 'transport') {
     if (getStopVegan(stop) || sType === 'food')
-      parts.push(`<a class="act-btn vegan" href="${veganNearbyUrl(stop)}" target="_blank" rel="noopener">🌱</a>`);
-    parts.push(`<a class="act-btn charge" href="${chargingNearbyUrl(stop)}" target="_blank" rel="noopener">⚡</a>`);
+      parts.push(`<a class="act-btn vegan" href="${veganNearbyUrl(stop)}" target="_blank" rel="noopener"><i class="ph ph-leaf"></i></a>`);
+    parts.push(`<a class="act-btn charge" href="${chargingNearbyUrl(stop)}" target="_blank" rel="noopener"><i class="ph ph-lightning"></i></a>`);
     if (getStopPriority(stop) >= 2)
-      parts.push(`<a class="act-btn poi" href="${poiNearbyUrl(stop)}" target="_blank" rel="noopener">📍</a>`);
+      parts.push(`<a class="act-btn poi" href="${poiNearbyUrl(stop)}" target="_blank" rel="noopener"><i class="ph ph-map-pin"></i></a>`);
   }
   if (stop.mapsUrl && stop.mapsUrl !== 'N/A')
-    parts.push(`<a class="act-btn maps" href="${stop.mapsUrl}" target="_blank" rel="noopener">🗺️</a>`);
+    parts.push(`<a class="act-btn maps" href="${stop.mapsUrl}" target="_blank" rel="noopener"><i class="ph ph-map-trifold"></i></a>`);
   return parts.join('');
 }
 
@@ -1362,17 +1362,17 @@ function openDetail(stop) {
 
   const tagsEl = document.getElementById('detail-tags');
   tagsEl.innerHTML = '';
-  if (getStopVegan(stop))                    tagsEl.innerHTML += '<span class="tl-tag vegan">🌱 Vegan-friendly</span>';
-  if (getStopType(stop) === 'charging')      tagsEl.innerHTML += '<span class="tl-tag charge">⚡ Supercharger</span>';
+  if (getStopVegan(stop))                    tagsEl.innerHTML += '<span class="tl-tag vegan"><i class="ph ph-leaf"></i> Vegan-friendly</span>';
+  if (getStopType(stop) === 'charging')      tagsEl.innerHTML += '<span class="tl-tag charge"><i class="ph ph-lightning"></i> Supercharger</span>';
   if (getStopPriority(stop) >= 3)            tagsEl.innerHTML += '<span class="tl-tag poi">★ Must-see</span>';
 
   const actEl = document.getElementById('detail-actions');
-  const parts = [`<a class="act-btn-full tesla" href="${teslaNavUrl(stop)}" target="_blank" rel="noopener">🚗 Navigate</a>`];
+  const parts = [`<a class="act-btn-full tesla" href="${teslaNavUrl(stop)}" target="_blank" rel="noopener"><i class="ph ph-navigation-arrow"></i> Navigate</a>`];
   if (getStopVegan(stop) || getStopType(stop) === 'food')
-    parts.push(`<a class="act-btn-full vegan" href="${veganNearbyUrl(stop)}" target="_blank" rel="noopener">🌱 Vegan nearby</a>`);
-  parts.push(`<a class="act-btn-full charge" href="${chargingNearbyUrl(stop)}" target="_blank" rel="noopener">⚡ Chargers</a>`);
+    parts.push(`<a class="act-btn-full vegan" href="${veganNearbyUrl(stop)}" target="_blank" rel="noopener"><i class="ph ph-leaf"></i> Vegan nearby</a>`);
+  parts.push(`<a class="act-btn-full charge" href="${chargingNearbyUrl(stop)}" target="_blank" rel="noopener"><i class="ph ph-lightning"></i> Chargers</a>`);
   if (stop.mapsUrl && stop.mapsUrl !== 'N/A')
-    parts.push(`<a class="act-btn-full maps" href="${stop.mapsUrl}" target="_blank" rel="noopener">🗺️ Maps</a>`);
+    parts.push(`<a class="act-btn-full maps" href="${stop.mapsUrl}" target="_blank" rel="noopener"><i class="ph ph-map-trifold"></i> Maps</a>`);
   actEl.innerHTML = parts.join('');
   document.getElementById('detail-edit-btn').onclick = () => openEditSheet(stop);
 
@@ -1554,7 +1554,7 @@ function toggleCheck(stopId, itemEl) {
   const card = itemEl && itemEl.querySelector('.tl-card');
   const btn  = itemEl && itemEl.querySelector('.check-btn');
   if (card) card.classList.toggle('visited', !!state.checked[stopId]);
-  if (btn)  { btn.classList.toggle('checked', !!state.checked[stopId]); btn.textContent = state.checked[stopId] ? '✓' : '○'; }
+  if (btn)  { btn.classList.toggle('checked', !!state.checked[stopId]); btn.innerHTML = `<i class="ph ${state.checked[stopId] ? 'ph-check-circle' : 'ph-circle'}"></i>`; }
 }
 
 /* ── Time modal ────────────────────────────────────────────────────── */
