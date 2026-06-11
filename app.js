@@ -1162,60 +1162,55 @@ function initEditLocMap(lat, lng) {
   const tiles = isDark
     ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
     : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
-  _editLocMap = L.map(el, { zoomControl:true, attributionControl:false, tap:false });
-  L.tileLayer(tiles, { maxZoom:19, subdomains:'abcd' }).addTo(_editLocMap);
+  _editLocMap = L.map(el, { zoomControl: true, attributionControl: false, tap: true, dragging: true });
+  L.tileLayer(tiles, { maxZoom: 19, subdomains: 'abcd' }).addTo(_editLocMap);
   _editLocMap.setView([lat, lng], 14);
-  _editLocMarker = L.marker([lat, lng], { draggable:true }).addTo(_editLocMap);
-  _editLocMarker.on('dragend', e => {
+  _editLocMarker = L.marker([lat, lng], { draggable: true }).addTo(_editLocMap);
+  _editLocMarker.on('drag dragend', e => {
     const p = e.target.getLatLng();
     _editLat = p.lat; _editLng = p.lng;
   });
-  // Ensure map fills container after sheet animation settles
-  setTimeout(() => _editLocMap && _editLocMap.invalidateSize(), 100);
+  // Tap anywhere on map to move pin
+  _editLocMap.on('click', e => {
+    _editLat = e.latlng.lat; _editLng = e.latlng.lng;
+    _editLocMarker.setLatLng(e.latlng);
+  });
+  setTimeout(() => _editLocMap && _editLocMap.invalidateSize(), 150);
 }
 
-async function searchEditLocation(query) {
+function placeEditPin(lat, lng, label) {
+  _editLat = lat; _editLng = lng;
+  if (_editLocMap && _editLocMarker) {
+    _editLocMap.setView([lat, lng], 15);
+    _editLocMarker.setLatLng([lat, lng]);
+  }
   const el = document.getElementById('edit-loc-results');
-  if (query.length < 3) { el.innerHTML = ''; el.style.display = 'none'; return; }
+  el.innerHTML = '';
+  if (label) document.getElementById('edit-loc-search').value = label;
+}
+
+async function runEditSearch() {
+  const input = document.getElementById('edit-loc-search');
+  const query = input ? input.value.trim() : '';
+  const el = document.getElementById('edit-loc-results');
+  if (query.length < 2) { el.innerHTML = ''; return; }
+  el.innerHTML = '<div class="edit-loc-no-results">Searching…</div>';
   try {
-    const r = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=5&accept-language=en`);
+    const r = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=6&accept-language=en`);
     const results = await r.json();
-    if (!results.length) {
-      el.innerHTML = '<div class="edit-loc-no-results">No results</div>';
-      positionLocResults();
-      return;
-    }
+    if (!results.length) { el.innerHTML = '<div class="edit-loc-no-results">No results found</div>'; return; }
     el.innerHTML = results.map((item, i) =>
-      `<button class="edit-loc-result" data-idx="${i}" data-lat="${item.lat}" data-lng="${item.lon}">${item.display_name}</button>`
+      `<button class="edit-loc-result" data-lat="${item.lat}" data-lng="${item.lon}">${item.display_name}</button>`
     ).join('');
-    positionLocResults();
     el.querySelectorAll('.edit-loc-result').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const lat = parseFloat(btn.dataset.lat);
-        const lng = parseFloat(btn.dataset.lng);
-        _editLat = lat; _editLng = lng;
-        if (_editLocMap && _editLocMarker) {
-          _editLocMap.setView([lat, lng], 15);
-          _editLocMarker.setLatLng([lat, lng]);
-        }
-        el.innerHTML = ''; el.style.display = 'none';
-        document.getElementById('edit-loc-search').value = btn.textContent;
+      btn.addEventListener('pointerdown', e => {
+        e.preventDefault();
+        placeEditPin(parseFloat(btn.dataset.lat), parseFloat(btn.dataset.lng), btn.textContent);
       });
     });
-  } catch(e) { console.warn('Location search error', e); }
-}
-
-function positionLocResults() {
-  const input = document.getElementById('edit-loc-search');
-  const el    = document.getElementById('edit-loc-results');
-  if (!input || !el) return;
-  const rect = input.getBoundingClientRect();
-  el.style.position = 'fixed';
-  el.style.top    = rect.bottom + 4 + 'px';
-  el.style.left   = rect.left + 'px';
-  el.style.width  = rect.width + 'px';
-  el.style.display = 'block';
-  el.style.zIndex  = '9999';
+  } catch(err) {
+    el.innerHTML = '<div class="edit-loc-no-results">Search failed — check connection</div>';
+  }
 }
 
 function renderEditTypeGrid(selectedType) {
@@ -1767,9 +1762,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const fromIdx = day.stops.findIndex(s => s.id === stop.id);
     await recalculateFromStop(day, fromIdx);
   };
-  document.getElementById('edit-loc-search').addEventListener('input', e => {
+  document.getElementById('edit-loc-search').addEventListener('input', () => {
     clearTimeout(_editSearchTimer);
-    _editSearchTimer = setTimeout(() => searchEditLocation(e.target.value.trim()), 400);
+    _editSearchTimer = setTimeout(runEditSearch, 500);
+  });
+  document.getElementById('edit-loc-search').addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); clearTimeout(_editSearchTimer); runEditSearch(); }
+  });
+  document.getElementById('edit-loc-search-btn').addEventListener('click', () => {
+    clearTimeout(_editSearchTimer); runEditSearch();
   });
   document.getElementById('detail-check-btn').addEventListener('click', () => {
     if (!_detailStop) return;

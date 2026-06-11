@@ -11,7 +11,7 @@
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="icons/icon-180.png">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
-  <link rel="stylesheet" href="styles.v75.css">
+  <link rel="stylesheet" href="styles.v76.css">
 </head>
 <body>
   <div id="app">
@@ -140,11 +140,14 @@
         <section class="edit-section">
           <div class="edit-section-label">Location</div>
           <div class="edit-search-wrap">
-            <input type="search" id="edit-loc-search" class="edit-input" placeholder="Search for a place…" autocomplete="off">
+            <div class="edit-search-row">
+              <input type="search" id="edit-loc-search" class="edit-input" placeholder="Search for a place…" autocomplete="off" autocorrect="off" spellcheck="false">
+              <button id="edit-loc-search-btn" class="edit-search-btn" type="button"><i class="ph ph-magnifying-glass"></i></button>
+            </div>
             <div id="edit-loc-results" class="edit-loc-results"></div>
           </div>
           <div id="edit-map-el" class="edit-map"></div>
-          <p class="edit-hint">Drag the pin to fine-tune</p>
+          <p class="edit-hint">Tap map to place pin · drag to fine-tune</p>
         </section>
 
         <section class="edit-section">
