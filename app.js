@@ -454,6 +454,12 @@ function updateHeader() {
 }
 
 /* ── Render dispatcher ─────────────────────────────────────────────── */
+function setBgClass(cls) {
+  const app = document.getElementById('app');
+  app.classList.remove('bg-day', 'bg-soon');
+  if (cls) app.classList.add(cls);
+}
+
 function renderView(scrollToNow) {
   // Always reset scroll to top when switching views or days
   if (!scrollToNow) document.getElementById('main-content').scrollTop = 0;
@@ -468,6 +474,7 @@ function renderView(scrollToNow) {
   const mapEl = document.getElementById('map-container');
   const mainEl = document.getElementById('main-content');
   if (state.currentView === 'map') {
+    setBgClass(null);
     tl.classList.add('hidden');
     mapEl.classList.remove('hidden');
     mainEl.classList.add('map-active');
@@ -476,9 +483,9 @@ function renderView(scrollToNow) {
     mapEl.classList.add('hidden');
     mainEl.classList.remove('map-active');
     tl.classList.remove('hidden');
-    if (state.currentView === 'overview')      renderOverview(tl);
-    else if (state.currentView === 'vegan')    renderFilterList(tl, 'vegan');
-    else if (state.currentView === 'charging') renderFilterList(tl, 'charging');
+    if (state.currentView === 'overview')      { setBgClass(null); renderOverview(tl); }
+    else if (state.currentView === 'vegan')    { setBgClass(null); renderFilterList(tl, 'vegan'); }
+    else if (state.currentView === 'charging') { setBgClass(null); renderFilterList(tl, 'charging'); }
     else renderTimeline(tl, scrollToNow);
   }
 }
@@ -858,15 +865,12 @@ function renderTimeline(container, scrollToNow) {
   const day = TRIP_DATA.days.find(d => d.id === state.currentDayId);
   if (!day) return;
 
-  const mainContent = document.getElementById('main-content');
   if (day.isCountdown) {
-    mainContent && mainContent.classList.add('soon-active');
-    mainContent && mainContent.classList.remove('day-active');
+    setBgClass('bg-soon');
     renderCountdownBanner(container);
     return;
   }
-  mainContent && mainContent.classList.remove('soon-active');
-  mainContent && mainContent.classList.add('day-active');
+  setBgClass('bg-day');
 
   if (day.isFestival) {
     const banner = document.createElement('div');
