@@ -519,17 +519,17 @@ body.light #bottom-nav {
   flex: 1; background: none; border: none; cursor: pointer;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: 3px; padding: 8px 4px;
-  color: var(--text2);
+  color: rgba(255,255,255,0.4);
   transition: color .15s; -webkit-tap-highlight-color: transparent;
   border-radius: 100px;
   position: relative;
 }
-body.light .nav-btn { color: rgba(0,0,0,0.45); }
-.nav-btn.active { color: var(--accent); }
+body.light .nav-btn { color: rgba(0,0,0,0.4); }
+.nav-btn.active { color: #ffffff; }
 body.light .nav-btn.active { color: var(--accent); }
 .nav-btn.active::before {
   content: ''; position: absolute; inset: 0;
-  background: rgba(10,132,255,0.12);
+  background: rgba(255,255,255,0.15);
   border-radius: 100px;
 }
 body.light .nav-btn.active::before { background: rgba(0,122,255,0.1); }
