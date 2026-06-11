@@ -858,10 +858,13 @@ function renderTimeline(container, scrollToNow) {
   const day = TRIP_DATA.days.find(d => d.id === state.currentDayId);
   if (!day) return;
 
+  const mainContent = document.getElementById('main-content');
   if (day.isCountdown) {
+    mainContent && mainContent.classList.add('soon-active');
     renderCountdownBanner(container);
     return;
   }
+  mainContent && mainContent.classList.remove('soon-active');
 
   if (day.isFestival) {
     const banner = document.createElement('div');
