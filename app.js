@@ -866,11 +866,7 @@ function renderTimeline(container, scrollToNow) {
     return;
   }
   mainContent && mainContent.classList.remove('soon-active');
-  if (day.isFestival) {
-    mainContent && mainContent.classList.remove('day-active');
-  } else {
-    mainContent && mainContent.classList.add('day-active');
-  }
+  mainContent && mainContent.classList.add('day-active');
 
   if (day.isFestival) {
     const banner = document.createElement('div');
