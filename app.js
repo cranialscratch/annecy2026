@@ -58,7 +58,7 @@ function formatDate(dateStr) {
   return d.toLocaleDateString('en-GB', { day:'numeric', month:'short' });
 }
 function getDayLabel(day) {
-  if (day.isCountdown) return '🏖️';
+  if (day.isCountdown) return '<i class="ph ph-sun-horizon"></i>';
   if (day.isFestival) return 'Fest';
   const names = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
   return names[new Date(day.date + 'T00:00:00').getDay()];
@@ -785,10 +785,6 @@ function renderOverview(c) {
 /* ── Filter list ───────────────────────────────────────────────────── */
 function renderFilterList(container, kind) {
   container.innerHTML = '';
-  const header = document.createElement('div');
-  header.className = 'filter-header';
-  header.textContent = kind === 'vegan' ? 'Vegan-Friendly Stops' : 'Tesla Superchargers';
-  container.appendChild(header);
   TRIP_DATA.days.forEach(day => {
     day.stops.forEach(stop => {
       if (kind === 'vegan' ? !stop.veganFriendly : stop.type !== 'charging') return;
