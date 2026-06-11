@@ -1692,6 +1692,16 @@ document.addEventListener('DOMContentLoaded', () => {
   renderView(true); // scroll to now only on first load
   if (typeof syncInit === 'function') syncInit();
 
+  /* Parallax — bg moves at 25% of scroll speed */
+  (function() {
+    const mc = document.getElementById('main-content');
+    const bg = document.getElementById('bg-layer');
+    if (!mc || !bg) return;
+    mc.addEventListener('scroll', () => {
+      bg.style.transform = `translateY(-${mc.scrollTop * 0.25}px)`;
+    }, { passive: true });
+  })();
+
   /* Nav buttons */
   document.querySelectorAll('.nav-btn').forEach(btn =>
     btn.addEventListener('click', () => {
