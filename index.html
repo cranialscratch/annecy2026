@@ -11,7 +11,7 @@
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="icons/icon-180.png">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
-  <link rel="stylesheet" href="styles.v59.css">
+  <link rel="stylesheet" href="styles.v60.css">
 </head>
 <body>
   <div id="app">
@@ -198,6 +198,18 @@
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <script src="https://unpkg.com/@phosphor-icons/web@2.1.1"></script>
+  <script>
+    // window.innerHeight is the true physical screen height in standalone
+    // PWA mode — more reliable than any CSS unit on iOS WebKit
+    (function() {
+      function setRealHeight() {
+        document.documentElement.style.setProperty('--real-height', window.innerHeight + 'px');
+      }
+      setRealHeight();
+      window.addEventListener('resize', setRealHeight);
+      window.addEventListener('orientationchange', function() { setTimeout(setRealHeight, 200); });
+    })();
+  </script>
   <script>
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.addEventListener('message', e => {
