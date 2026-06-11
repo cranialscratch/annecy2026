@@ -428,11 +428,10 @@ function updateHeader() {
   const day = TRIP_DATA.days.find(d => d.id === state.currentDayId);
   const label = document.getElementById('header-day-label');
   const sub   = document.getElementById('header-day-subtitle');
-  if (state.currentView === 'overview')      { label.textContent = 'Annecy 2026';    sub.textContent = 'Trip overview'; }
-  else if (state.currentView === 'vegan')    { label.textContent = 'Vegan Spots'; sub.textContent = 'All vegan-friendly stops'; }
-  else if (state.currentView === 'charging') { label.textContent = 'Charging';    sub.textContent = 'Tesla Superchargers'; }
-  else if (state.currentView === 'map' && day) { label.textContent = `${getDayLabel(day)} · ${day.title}`; sub.textContent = 'Route map'; }
-  else if (day) { label.textContent = `${getDayLabel(day)} · ${day.title}`; sub.textContent = day.subtitle || ''; }
+  if (state.currentView === 'overview')      { label.textContent = 'Annecy 2026'; }
+  else if (state.currentView === 'vegan')    { label.textContent = 'Vegan Spots'; }
+  else if (state.currentView === 'charging') { label.textContent = 'Charging'; }
+  else if (day) { label.textContent = day.title; }
 }
 
 /* ── Render dispatcher ─────────────────────────────────────────────── */
@@ -1651,14 +1650,6 @@ document.addEventListener('DOMContentLoaded', () => {
       state.currentView = btn.dataset.view;
       renderView(false);
     }));
-
-  /* Today button — jump to now and scroll to it */
-  document.getElementById('today-btn').addEventListener('click', () => {
-    state.currentDayId = findTodayDayId() || TRIP_DATA.days[0].id;
-    state.currentView = 'day';
-    updateDayStrip();
-    renderView(true); // scroll to now
-  });
 
   /* Cascade toggle */
   document.getElementById('cascade-btn').addEventListener('click', () => {
