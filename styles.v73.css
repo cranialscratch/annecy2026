@@ -696,7 +696,8 @@ body.light .glass-btn {
 
 .detail-meta-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
 .detail-time-lbl { font-size: 13px; font-weight: 700; color: var(--text2); }
-#detail-name { font-size: 26px; font-weight: 800; line-height: 1.2; margin-bottom: 12px; letter-spacing: -0.5px; }
+#detail-name { font-size: 26px; font-weight: 800; line-height: 1.2; margin-bottom: 12px; letter-spacing: -0.5px; display: flex; align-items: center; gap: 8px; }
+#detail-name .card-type-icon { font-size: 26px; opacity: 1; flex-shrink: 0; }
 #detail-reason { font-size: 15px; color: var(--text2); line-height: 1.65; margin-bottom: 18px; }
 #detail-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 18px; }
 #detail-actions { display: flex; gap: 8px; flex-wrap: wrap; }
