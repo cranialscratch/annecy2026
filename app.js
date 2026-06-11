@@ -29,6 +29,26 @@ function getStopLng(stop)      { return state.locOverrides[stop.id]?.lng  ?? sto
 function getStopName(stop)     { return state.locOverrides[stop.id]?.name ?? stop.location; }
 function getStopDuration(stop) { return state.durOverrides[stop.id]       ?? stop.duration ?? 30; }
 function getStopType(stop)     { return state.typeOverrides[stop.id]     ?? stop.type; }
+
+const TYPE_ICON = {
+  depart:       'ph-car',
+  charging:     'ph-lightning',
+  transport:    'ph-train',
+  food:         'ph-fork-knife',
+  hotel:        'ph-bed',
+  town:         'ph-buildings',
+  village:      'ph-house',
+  wander:       'ph-footprints',
+  architecture: 'ph-building',
+  experience:   'ph-star',
+  scenic:       'ph-mountains',
+  historic:     'ph-castle-turret',
+  festival:     'ph-film-slate',
+};
+function stopTypeIcon(stop) {
+  const ph = TYPE_ICON[getStopType(stop)] || 'ph-map-pin';
+  return `<i class="ph ${ph} card-type-icon"></i>`;
+}
 function getStopPriority(stop) { return state.priorityOverrides[stop.id] ?? stop.priority ?? 0; }
 function getStopReason(stop)   { return state.reasonOverrides[stop.id]   ?? stop.reason; }
 function getStopVegan(stop)    { return stop.id in state.veganOverrides ? state.veganOverrides[stop.id] : !!stop.veganFriendly; }
@@ -927,7 +947,7 @@ function buildTimelineItem(stop, isLast) {
       ${buildSlider(stop, 'card')}
       <div class="card-body">
         <div class="card-top-row">
-          <div class="card-name">${stop.icon} ${stop.location}</div>
+          <div class="card-name">${stopTypeIcon(stop)} ${stop.location}</div>
           <button class="check-btn${isVisited ? ' checked' : ''}" data-stop-id="${stop.id}" aria-label="Mark visited"><i class="ph ${isVisited ? 'ph-check-circle' : 'ph-circle'}"></i></button>
         </div>
         <div class="card-meta-row">
