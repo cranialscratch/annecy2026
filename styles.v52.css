@@ -56,8 +56,9 @@ body.light {
   --shadow: 0 8px 32px rgba(0,0,0,0.18);
 }
 
-html, body {
-  height: 100%; width: 100%; overflow: hidden;
+html { height: 100%; }
+body {
+  height: 100%; overflow: hidden;
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Segoe UI', sans-serif;
   background: var(--bg); color: var(--text);
   -webkit-font-smoothing: antialiased;
@@ -81,9 +82,8 @@ body.light::before {
 
 #app {
   display: flex; flex-direction: column;
-
-  position: fixed; top: 0; left: 0; width: 100%; height: var(--app-h, 100vh);
-  z-index: 1;
+  height: 100%; width: 100%;
+  position: relative; z-index: 1; overflow: hidden;
 }
 
 /* ─── Liquid Glass mixin (applied via class) ────────────────────────── */
@@ -466,7 +466,7 @@ body.light::before {
 /* ─── Bottom nav — floating pill ────────────────────────────────────── */
 #bottom-nav {
   display: flex;
-  position: absolute; bottom: max(env(safe-area-inset-bottom, 0px), 8px);
+  position: fixed; bottom: env(safe-area-inset-bottom, 0px);
   left: 50%; transform: translateX(-50%);
   width: min(var(--nav-w), calc(100% - 28px));
   background: var(--glass-bg-strong);
@@ -480,6 +480,7 @@ body.light::before {
   height: var(--bottom-h);
   z-index: 1000;
   padding: 0 4px;
+  margin-bottom: 8px;
 }
 body.light #bottom-nav {
   background: rgba(255,255,255,0.65);
@@ -503,12 +504,12 @@ body.light #bottom-nav {
 
 /* ─── Drawer ────────────────────────────────────────────────────────── */
 #drawer-overlay { /* abs */
-  position: absolute; inset: 0; z-index: 100;
+  position: fixed; inset: 0; z-index: 100;
   background: rgba(0,0,0,.5);
   backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
 }
 #drawer {
-  position: absolute; top: 0; left: 0; bottom: 0; z-index: 101;
+  position: fixed; top: 0; left: 0; bottom: 0; z-index: 101;
   width: min(300px, 85vw);
   background: var(--glass-bg-strong);
   backdrop-filter: var(--glass); -webkit-backdrop-filter: var(--glass);
@@ -535,7 +536,7 @@ body.light #bottom-nav {
 
 /* ─── Time modal ────────────────────────────────────────────────────── */
 #modal-overlay {
-  position: absolute; inset: 0; z-index: 200;
+  position: fixed; inset: 0; z-index: 200;
   background: rgba(0,0,0,.6);
   backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
   display: flex; align-items: flex-end; justify-content: center;
@@ -582,7 +583,7 @@ body.light #bottom-nav {
 
 /* ─── Detail page ───────────────────────────────────────────────────── */
 #detail-overlay {
-  position: absolute; inset: 0; z-index: 300;
+  position: fixed; inset: 0; z-index: 300;
   background: var(--bg);
   overflow-y: auto; -webkit-overflow-scrolling: touch;
   transform: translateY(100%);
@@ -707,7 +708,7 @@ body.light .glass-btn {
 
 /* ─── Edit stop sheet ───────────────────────────────────────────────── */
 #edit-sheet-overlay {
-  position: absolute; inset: 0; z-index: 300;
+  position: fixed; inset: 0; z-index: 300;
   background: rgba(0,0,0,.55);
   display: flex; align-items: flex-end;
   backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
