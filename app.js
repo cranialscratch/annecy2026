@@ -1692,29 +1692,26 @@ document.addEventListener('DOMContentLoaded', () => {
   renderView(true); // scroll to now only on first load
   if (typeof syncInit === 'function') syncInit();
 
-  /* Parallax — combined scroll + gyroscope tilt */
+  /* Gyroscope parallax */
   (function() {
-    const mc = document.getElementById('main-content');
     const bg = document.getElementById('bg-layer');
-    if (!mc || !bg) return;
+    if (!bg) return;
 
-    let gyroX = 0, gyroY = 0;        // current smoothed gyro offsets (px)
-    let targetX = 0, targetY = 0;    // raw target from sensor
-    let rafId = null;
+    let gyroX = 0, gyroY = 0, targetX = 0, targetY = 0;
+    const MAX = 28;
 
     function applyTransform() {
-      gyroX += (targetX - gyroX) * 0.08;
-      gyroY += (targetY - gyroY) * 0.08;
+      gyroX += (targetX - gyroX) * 0.07;
+      gyroY += (targetY - gyroY) * 0.07;
       bg.style.transform = `translateX(${gyroX}px) translateY(${gyroY}px)`;
-      rafId = requestAnimationFrame(applyTransform);
+      requestAnimationFrame(applyTransform);
     }
-    rafId = requestAnimationFrame(applyTransform);
+    applyTransform();
 
     function handleOrientation(e) {
-      const MAX = 20; // max px shift
-      // gamma = left/right tilt (-90..90), beta = front/back (-180..180)
-      const g = Math.max(-45, Math.min(45, e.gamma || 0));
-      const b = Math.max(-45, Math.min(45, (e.beta  || 0) - 30)); // 30° = natural hold angle
+      if (e.gamma === null) return;
+      const g = Math.max(-45, Math.min(45, e.gamma));
+      const b = Math.max(-45, Math.min(45, (e.beta || 0) - 30));
       targetX = -(g / 45) * MAX;
       targetY = -(b / 45) * MAX;
     }
@@ -1722,20 +1719,33 @@ document.addEventListener('DOMContentLoaded', () => {
     function startGyro() {
       if (typeof DeviceOrientationEvent !== 'undefined' &&
           typeof DeviceOrientationEvent.requestPermission === 'function') {
-        // iOS 13+ requires a user-gesture permission request
         DeviceOrientationEvent.requestPermission()
-          .then(s => { if (s === 'granted') window.addEventListener('deviceorientation', handleOrientation); })
-          .catch(() => {});
-      } else if (window.DeviceOrientationEvent) {
-        window.addEventListener('deviceorientation', handleOrientation);
+          .then(state => {
+            const btn = document.getElementById('gyro-btn');
+            if (state === 'granted') {
+              window.addEventListener('deviceorientation', handleOrientation, true);
+              if (btn) btn.style.display = 'none';
+            } else {
+              if (btn) btn.textContent = 'Motion denied — check Settings';
+            }
+          }).catch(() => {});
+      } else {
+        // Android / non-iOS — no permission needed
+        window.addEventListener('deviceorientation', handleOrientation, true);
+        const btn = document.getElementById('gyro-btn');
+        if (btn) btn.style.display = 'none';
       }
     }
 
-    // Trigger permission on first tap (iOS requirement)
-    document.addEventListener('pointerdown', function tryGyro() {
+    // Show enable button; hide it once granted
+    const btn = document.getElementById('gyro-btn');
+    if (btn) btn.addEventListener('click', startGyro);
+
+    // Also try silently on Android (no permission API)
+    if (typeof DeviceOrientationEvent !== 'undefined' &&
+        typeof DeviceOrientationEvent.requestPermission !== 'function') {
       startGyro();
-      document.removeEventListener('pointerdown', tryGyro);
-    });
+    }
   })();
 
   /* Nav buttons */
