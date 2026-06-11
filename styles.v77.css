@@ -184,6 +184,16 @@ body.light #app-header {
 }
 #main-content.map-active { padding: 0; overflow: hidden; }
 
+/* ─── Soon page background ──────────────────────────────────────────── */
+#main-content.soon-active {
+  background: url('soon-bg.png') center top / cover no-repeat;
+}
+#main-content.soon-active::before {
+  content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 0;
+  background: linear-gradient(to bottom, rgba(0,0,0,0.25) 0%, rgba(0,0,0,0.1) 60%, rgba(0,0,0,0.4) 100%);
+}
+#main-content.soon-active #timeline { position: relative; z-index: 1; }
+
 /* ─── Countdown banner ──────────────────────────────────────────────── */
 .countdown-banner {
   border-radius: var(--radius-lg);
@@ -192,13 +202,15 @@ body.light #app-header {
   text-align: center;
   color: #fff;
   position: relative; overflow: hidden;
-  background: linear-gradient(145deg, #0055cc, #0a84ff, #34aadc);
-  box-shadow: 0 12px 40px rgba(10,132,255,0.45), inset 0 1px 0 rgba(255,255,255,0.35);
-  border: 1px solid rgba(255,255,255,0.2);
+  background: rgba(0,0,0,0.35);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  box-shadow: 0 12px 40px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.2);
+  border: 1px solid rgba(255,255,255,0.18);
 }
 .countdown-banner::before {
   content: ''; position: absolute; inset: 0; pointer-events: none;
-  background: radial-gradient(ellipse 70% 50% at 50% 0%, rgba(255,255,255,0.25) 0%, transparent 60%);
+  background: radial-gradient(ellipse 70% 50% at 50% 0%, rgba(255,255,255,0.12) 0%, transparent 60%);
 }
 .cd-emoji  { font-size: 56px; margin-bottom: 12px; position: relative; }
 .cd-emoji i { font-size: 56px; }
