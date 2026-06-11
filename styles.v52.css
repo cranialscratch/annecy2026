@@ -466,7 +466,7 @@ body.light::before {
 /* ─── Bottom nav — floating pill ────────────────────────────────────── */
 #bottom-nav {
   display: flex;
-  position: fixed; bottom: max(env(safe-area-inset-bottom, 0px), 8px);
+  position: absolute; bottom: max(env(safe-area-inset-bottom, 0px), 8px);
   left: 50%; transform: translateX(-50%);
   width: min(var(--nav-w), calc(100% - 28px));
   background: var(--glass-bg-strong);
@@ -502,13 +502,13 @@ body.light #bottom-nav {
 .nav-label { font-size: 9px; font-weight: 600; letter-spacing: .2px; position: relative; }
 
 /* ─── Drawer ────────────────────────────────────────────────────────── */
-#drawer-overlay {
-  position: fixed; inset: 0; z-index: 100;
+#drawer-overlay { /* abs */
+  position: absolute; inset: 0; z-index: 100;
   background: rgba(0,0,0,.5);
   backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
 }
 #drawer {
-  position: fixed; top: 0; left: 0; bottom: 0; z-index: 101;
+  position: absolute; top: 0; left: 0; bottom: 0; z-index: 101;
   width: min(300px, 85vw);
   background: var(--glass-bg-strong);
   backdrop-filter: var(--glass); -webkit-backdrop-filter: var(--glass);
@@ -535,7 +535,7 @@ body.light #bottom-nav {
 
 /* ─── Time modal ────────────────────────────────────────────────────── */
 #modal-overlay {
-  position: fixed; inset: 0; z-index: 200;
+  position: absolute; inset: 0; z-index: 200;
   background: rgba(0,0,0,.6);
   backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
   display: flex; align-items: flex-end; justify-content: center;
@@ -582,7 +582,7 @@ body.light #bottom-nav {
 
 /* ─── Detail page ───────────────────────────────────────────────────── */
 #detail-overlay {
-  position: fixed; inset: 0; z-index: 300;
+  position: absolute; inset: 0; z-index: 300;
   background: var(--bg);
   overflow-y: auto; -webkit-overflow-scrolling: touch;
   transform: translateY(100%);
@@ -707,7 +707,7 @@ body.light .glass-btn {
 
 /* ─── Edit stop sheet ───────────────────────────────────────────────── */
 #edit-sheet-overlay {
-  position: fixed; inset: 0; z-index: 300;
+  position: absolute; inset: 0; z-index: 300;
   background: rgba(0,0,0,.55);
   display: flex; align-items: flex-end;
   backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
