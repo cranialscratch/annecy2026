@@ -1703,7 +1703,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function applyTransform() {
       gyroX += (targetX - gyroX) * 0.07;
       gyroY += (targetY - gyroY) * 0.07;
-      bg.style.transform = `scale(1.06) translateX(${gyroX}px) translateY(${gyroY}px)`;
+      bg.style.transform = `translateX(${gyroX}px) translateY(${gyroY}px)`;
       requestAnimationFrame(applyTransform);
     }
     applyTransform();
