@@ -1698,7 +1698,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!bg) return;
 
     let gyroX = 0, gyroY = 0, targetX = 0, targetY = 0;
-    const MAX = 28;
+    const MAX = 14;
 
     function applyTransform() {
       gyroX += (targetX - gyroX) * 0.07;
