@@ -11,7 +11,7 @@
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="icons/icon-180.png">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
-  <link rel="stylesheet" href="styles.v95.css">
+  <link rel="stylesheet" href="styles.v96.css">
 </head>
 <body>
   <div id="app">
@@ -54,17 +54,39 @@
       <button id="drawer-close" class="icon-btn"><i class="ph ph-x"></i></button>
     </div>
     <nav class="drawer-nav">
-      <button class="drawer-item" data-action="reset-times"><i class="ph ph-clock-counter-clockwise drawer-icon"></i> Reset all times</button>
-      <button class="drawer-item" data-action="reset-checks"><i class="ph ph-check-square drawer-icon"></i> Clear visited</button>
-      <button class="drawer-item" data-action="toggle-dark"><i class="ph ph-moon drawer-icon"></i> Toggle dark/light</button>
-      <button class="drawer-item" id="gyro-btn"><i class="ph ph-compass drawer-icon"></i> Enable tilt parallax</button>
-      <a class="drawer-item" href="https://www.annecy.org/festival" target="_blank" rel="noopener"><i class="ph ph-film-slate drawer-icon"></i> Festival website</a>
-      <a class="drawer-item" href="https://www.le-shuttle.com" target="_blank" rel="noopener"><i class="ph ph-train drawer-icon"></i> LeShuttle</a>
-      <a class="drawer-item" href="https://www.plugshare.com" target="_blank" rel="noopener"><i class="ph ph-plug drawer-icon"></i> PlugShare</a>
-      <a class="drawer-item" href="https://www.happycow.net" target="_blank" rel="noopener"><i class="ph ph-leaf drawer-icon"></i> HappyCow</a>
+      <button class="drawer-item" data-action="home"><i class="ph ph-house drawer-icon"></i> Home</button>
+      <a class="drawer-item inapp-link" href="https://www.annecy.org/festival" rel="noopener"><i class="ph ph-film-slate drawer-icon"></i> Festival website</a>
+      <a class="drawer-item inapp-link" href="https://www.le-shuttle.com" rel="noopener"><i class="ph ph-train drawer-icon"></i> LeShuttle</a>
+      <a class="drawer-item inapp-link" href="https://www.plugshare.com" rel="noopener"><i class="ph ph-plug drawer-icon"></i> PlugShare</a>
+      <a class="drawer-item inapp-link" href="https://www.happycow.net" rel="noopener"><i class="ph ph-leaf drawer-icon"></i> HappyCow</a>
     </nav>
-    <div class="drawer-footer"><p>Works offline · Optimised for iPhone</p></div>
+    <div class="drawer-bottom">
+      <button class="drawer-item" data-action="toggle-dark" id="dark-mode-btn"><i class="ph ph-moon drawer-icon" id="dark-mode-icon"></i> <span id="dark-mode-label">Dark mode</span></button>
+      <div class="drawer-settings-wrap">
+        <button class="drawer-item drawer-settings-toggle" id="settings-toggle">
+          <i class="ph ph-gear drawer-icon"></i> Settings
+          <i class="ph ph-caret-right drawer-caret" id="settings-caret"></i>
+        </button>
+        <div class="drawer-settings-body" id="settings-body">
+          <button class="drawer-item drawer-sub-item" id="gyro-btn"><i class="ph ph-compass drawer-icon"></i> <span id="gyro-label">Motion disabled</span></button>
+          <button class="drawer-item drawer-sub-item" data-action="reset-times"><i class="ph ph-clock-counter-clockwise drawer-icon"></i> Reset all times</button>
+          <button class="drawer-item drawer-sub-item" data-action="reset-checks"><i class="ph ph-check-square drawer-icon"></i> Clear visited</button>
+        </div>
+      </div>
+    </div>
   </aside>
+
+  <!-- In-app browser -->
+  <div id="inapp-overlay" class="hidden">
+    <div id="inapp-header">
+      <button id="inapp-back" class="icon-btn"><i class="ph ph-arrow-left"></i></button>
+      <span id="inapp-domain"></span>
+      <a id="inapp-external" class="icon-btn" target="_blank" rel="noopener" title="Open in browser"><i class="ph ph-arrow-square-out"></i></a>
+    </div>
+    <div id="inapp-body">
+      <iframe id="inapp-frame" src="" sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-top-navigation-by-user-activation"></iframe>
+    </div>
+  </div>
 
   <!-- Time edit modal -->
   <div id="modal-overlay" class="hidden">

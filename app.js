@@ -1724,16 +1724,18 @@ document.addEventListener('DOMContentLoaded', () => {
             const btn = document.getElementById('gyro-btn');
             if (state === 'granted') {
               window.addEventListener('deviceorientation', handleOrientation, true);
-              if (btn) btn.style.display = 'none';
+              const lbl = document.getElementById('gyro-label');
+              if (lbl) lbl.textContent = 'Motion enabled';
             } else {
-              if (btn) btn.textContent = 'Motion denied — check Settings';
+              const lbl = document.getElementById('gyro-label');
+              if (lbl) lbl.textContent = 'Motion denied — check Settings';
             }
           }).catch(() => {});
       } else {
         // Android / non-iOS — no permission needed
         window.addEventListener('deviceorientation', handleOrientation, true);
-        const btn = document.getElementById('gyro-btn');
-        if (btn) btn.style.display = 'none';
+        const lbl = document.getElementById('gyro-label');
+        if (lbl) lbl.textContent = 'Motion enabled';
       }
     }
 
@@ -1764,6 +1766,15 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   /* Drawer */
+  function updateDrawerLabels() {
+    const isLight = document.body.classList.contains('light');
+    const lbl = document.getElementById('dark-mode-label');
+    const ico = document.getElementById('dark-mode-icon');
+    if (lbl) lbl.textContent = isLight ? 'Light mode' : 'Dark mode';
+    if (ico) { ico.className = isLight ? 'ph ph-sun drawer-icon' : 'ph ph-moon drawer-icon'; }
+  }
+  updateDrawerLabels();
+
   const openDrawer = () => {
     document.getElementById('drawer').classList.remove('hidden');
     document.getElementById('drawer-overlay').classList.remove('hidden');
@@ -1775,19 +1786,48 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('menu-btn').addEventListener('click', openDrawer);
   document.getElementById('drawer-close').addEventListener('click', closeDrawer);
   document.getElementById('drawer-overlay').addEventListener('click', closeDrawer);
+
+  // Settings accordion
+  document.getElementById('settings-toggle').addEventListener('click', () => {
+    const body  = document.getElementById('settings-body');
+    const caret = document.getElementById('settings-caret');
+    const open  = body.classList.toggle('open');
+    caret.style.transform = open ? 'rotate(90deg)' : '';
+  });
+
   document.querySelectorAll('.drawer-item[data-action]').forEach(btn =>
     btn.addEventListener('click', () => {
+      if (btn.dataset.action === 'home')         { state.currentView = 'day'; renderView(false); closeDrawer(); }
       if (btn.dataset.action === 'reset-times')  { state.overrides = {}; state.locOverrides = {}; state.durOverrides = {}; state.typeOverrides = {}; state.priorityOverrides = {}; state.reasonOverrides = {}; state.veganOverrides = {}; save(); renderView(false); closeDrawer(); }
       if (btn.dataset.action === 'reset-checks') { state.checked   = {}; save(); renderView(false); closeDrawer(); }
       if (btn.dataset.action === 'toggle-dark')  {
         document.body.classList.toggle('light');
         try { localStorage.setItem('annecy_theme', document.body.classList.contains('light') ? 'light' : 'dark'); } catch {}
-        // Rebuild map with new tile theme
+        updateDrawerLabels();
         if (_leafletMap) { _leafletMap.remove(); _leafletMap = null; _locMarker = null; _locCircle = null; document.getElementById('map-container').innerHTML = ''; }
         if (state.currentView === 'map') renderMapView();
         closeDrawer();
       }
     }));
+
+  /* In-app browser */
+  function openInApp(url) {
+    try {
+      const domain = new URL(url).hostname.replace(/^www\./, '');
+      document.getElementById('inapp-domain').textContent = domain;
+    } catch { document.getElementById('inapp-domain').textContent = url; }
+    document.getElementById('inapp-external').href = url;
+    document.getElementById('inapp-frame').src = url;
+    document.getElementById('inapp-overlay').classList.remove('hidden');
+    closeDrawer();
+  }
+  function closeInApp() {
+    document.getElementById('inapp-overlay').classList.add('hidden');
+    document.getElementById('inapp-frame').src = '';
+  }
+  document.getElementById('inapp-back').addEventListener('click', closeInApp);
+  document.querySelectorAll('.inapp-link').forEach(a =>
+    a.addEventListener('click', e => { e.preventDefault(); openInApp(a.href); }));
 
   /* Time modal */
   document.getElementById('modal-close').addEventListener('click', closeModal);
