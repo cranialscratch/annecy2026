@@ -187,8 +187,8 @@ body.light #app-header {
 /* ─── Background layer — sits behind all content, never scrolls ─────── */
 #bg-layer {
   position: absolute;
-  top: -5%; left: -5%; right: -5%;
-  height: 110%; /* slightly oversized so gyro tilt never exposes an edge */
+  top: -3%; left: -3%; right: -3%;
+  height: 106%; /* slightly oversized so gyro tilt never exposes an edge */
   z-index: 0;
   pointer-events: none;
   background-size: cover;
