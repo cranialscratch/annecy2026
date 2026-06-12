@@ -955,7 +955,7 @@ function buildTimelineItem(stop, isLast) {
       ${buildSlider(stop, 'card')}
       <div class="card-body">
         <div class="card-top-row">
-          <div class="card-name">${stopTypeIcon(stop)} ${stop.location}</div>
+          <div class="card-name">${stopTypeIcon(stop)} ${getStopName(stop)}</div>
           <button class="check-btn${isVisited ? ' checked' : ''}" data-stop-id="${stop.id}" aria-label="Mark visited"><i class="ph ${isVisited ? 'ph-check-circle' : 'ph-circle'}"></i></button>
         </div>
         <div class="card-meta-row">
@@ -1101,6 +1101,15 @@ function buildIconActions(stop) {
   if (stop.mapsUrl && stop.mapsUrl !== 'N/A')
     parts.push(`<a class="act-btn maps" href="${stop.mapsUrl}" target="_blank" rel="noopener"><i class="ph ph-map-trifold"></i></a>`);
   return parts.join('');
+}
+
+function minsToHHMM(mins) {
+  return `${String(Math.floor(mins/60)).padStart(2,'0')}:${String(mins%60).padStart(2,'0')}`;
+}
+function HHMMtoMins(str) {
+  if (!str) return 30;
+  const [h,m] = str.split(':').map(Number);
+  return (h||0)*60+(m||0);
 }
 
 /* ── Stop edit sheet ────────────────────────────────────────────────── */
@@ -1304,13 +1313,8 @@ function openEditSheet(stop) {
   document.getElementById('edit-loc-search').value = '';
   document.getElementById('edit-loc-results').innerHTML = '';
 
-  const dur = getStopDuration(stop);
-  buildDurPicker(dur);
-  const durH = Math.floor(dur/60), durM = dur%60;
-  const durBtn = document.getElementById('dur-value-btn');
-  if (durBtn) durBtn.textContent = `${durH}h ${String(durM).padStart(2,'0')}m`;
-  const durWrap = document.getElementById('dur-picker-wrap');
-  if (durWrap) durWrap.classList.add('hidden');
+  const durEl = document.getElementById('edit-dur-native');
+  if (durEl) durEl.value = minsToHHMM(getStopDuration(stop));
   renderEditTypeGrid(getStopType(stop));
   renderEditPriority(getStopPriority(stop));
 
@@ -1336,7 +1340,7 @@ function saveEditSheet() {
   const time   = document.getElementById('edit-time').value;
   const reason = document.getElementById('edit-reason').value.trim();
   const vegan  = document.getElementById('edit-vegan').checked;
-  const dur    = getDurPickerMins();
+  const dur    = HHMMtoMins(document.getElementById('edit-dur-native')?.value);
 
   state.locOverrides[_editStop.id] = {
     name: name || _editStop.location,
@@ -1403,7 +1407,7 @@ function openDetail(stop) {
   document.getElementById('detail-badge').textContent = typeLabel(getStopType(stop));
   document.getElementById('detail-time').textContent  = getStopTime(stop) + (stop.tz ? ' ' + stop.tz : '');
   document.getElementById('detail-stars').textContent = priorityStars(getStopPriority(stop));
-  document.getElementById('detail-name').innerHTML = stopTypeIcon(stop) + ' ' + stop.location;
+  document.getElementById('detail-name').innerHTML = stopTypeIcon(stop) + ' ' + getStopName(stop);
   document.getElementById('detail-reason').textContent = _wikiCache[stop.id]?.extract || getStopReason(stop);
 
   const tagsEl = document.getElementById('detail-tags');
@@ -1879,8 +1883,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const time   = document.getElementById('edit-time').value;
     const reason = document.getElementById('edit-reason').value.trim();
     const vegan  = document.getElementById('edit-vegan').checked;
-    const dur    = getDurPickerMins();
-    state.locOverrides[stop.id] = { name: name || stop.location, lat: _editLat ?? getStopLat(stop), lng: _editLng ?? getStopLng(stop) };
+    const dur    = HHMMtoMins(document.getElementById('edit-dur-native')?.value);
+    state.locOverrides[stop.id] = { name: name || getStopName(stop), lat: _editLat ?? getStopLat(stop), lng: _editLng ?? getStopLng(stop) };
     if (dur >= 0) state.durOverrides[stop.id] = dur;
     if (time) state.overrides[stop.id] = time;
     if (reason) state.reasonOverrides[stop.id] = reason;

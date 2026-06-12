@@ -41,20 +41,22 @@ function syncInit() {
 
 /* Merge remote state into local, re-render if anything changed */
 function applyRemoteState(remote) {
+  // Don't let stale remote data overwrite a more recent local save
+  if (remote._ts && state._localTs && remote._ts < state._localTs) return;
+
   let changed = false;
   const keys = ['overrides','checked','locOverrides','durOverrides',
                  'typeOverrides','priorityOverrides','reasonOverrides','veganOverrides'];
   keys.forEach(k => {
     const incoming = remote[k] || {};
-    // Merge: remote wins for any key it has
-    const merged = Object.assign({}, state[k], incoming);
+    // Local wins for keys we've touched more recently; remote fills in anything we don't have
+    const merged = Object.assign({}, incoming, state[k]);
     if (JSON.stringify(merged) !== JSON.stringify(state[k])) {
       state[k] = merged;
       changed = true;
     }
   });
   if (changed) {
-    // Also persist locally so offline still works
     localSave();
     if (typeof renderView === 'function') renderView(false);
     setSyncStatus('synced');
@@ -76,6 +78,7 @@ function syncSave() {
     veganOverrides:    state.veganOverrides,
     _ts:               Date.now(),
   };
+  state._localTs = payload._ts;
   _db.ref(DB_PATH).set(payload)
     .then(() => setSyncStatus('synced'))
     .catch(() => setSyncStatus('error'));

@@ -11,7 +11,7 @@
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="icons/icon-180.png">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
-  <link rel="stylesheet" href="styles.v97.css">
+  <link rel="stylesheet" href="styles.v98.css">
 </head>
 <body>
   <div id="app">
@@ -176,24 +176,24 @@
         </section>
 
         <section class="edit-section">
-          <div class="seg-control" id="time-type-seg">
-            <button class="seg-btn active" data-seg="departure">Departure</button>
-            <button class="seg-btn" data-seg="arrival">Arrival</button>
+          <div class="ios-list-section">
+            <div class="seg-control seg-control-inset" id="time-type-seg">
+              <button class="seg-btn active" data-seg="departure">Departure</button>
+              <button class="seg-btn" data-seg="arrival">Arrival</button>
+            </div>
+            <label class="ios-list-row">
+              <span class="ios-list-label">Time</span>
+              <input type="time" id="edit-time" class="ios-time-input">
+            </label>
           </div>
-          <input type="time" id="edit-time" class="edit-input" style="margin-top:10px">
         </section>
 
         <section class="edit-section" id="dur-section">
-          <div class="ios-form-row" id="dur-row">
-            <span class="ios-form-label">Time at stop</span>
-            <button class="ios-form-value" id="dur-value-btn" type="button">0h 30m</button>
-          </div>
-          <div id="dur-picker-wrap" class="dur-picker-wrap hidden">
-            <div class="dur-picker">
-              <div class="dur-col-wrap"><div id="dur-hours" class="dur-col"></div></div>
-              <div class="dur-sep">:</div>
-              <div class="dur-col-wrap"><div id="dur-mins" class="dur-col"></div></div>
-            </div>
+          <div class="ios-list-section">
+            <label class="ios-list-row">
+              <span class="ios-list-label">Time at stop</span>
+              <input type="time" id="edit-dur-native" class="ios-time-input" step="300">
+            </label>
           </div>
         </section>
 
