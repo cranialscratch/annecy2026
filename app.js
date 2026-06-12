@@ -1720,37 +1720,45 @@ document.addEventListener('DOMContentLoaded', () => {
       targetY = -(b / 45) * MAX;
     }
 
+    let _gyroActive = false;
+    function setGyroActive() {
+      _gyroActive = true;
+      window.addEventListener('deviceorientation', handleOrientation, true);
+      const lbl = document.getElementById('gyro-label');
+      if (lbl) lbl.textContent = 'Motion enabled';
+      try { localStorage.setItem('annecy_gyro', '1'); } catch {}
+    }
+
     function startGyro() {
       if (typeof DeviceOrientationEvent !== 'undefined' &&
           typeof DeviceOrientationEvent.requestPermission === 'function') {
         DeviceOrientationEvent.requestPermission()
-          .then(state => {
-            const btn = document.getElementById('gyro-btn');
-            if (state === 'granted') {
-              window.addEventListener('deviceorientation', handleOrientation, true);
-              const lbl = document.getElementById('gyro-label');
-              if (lbl) lbl.textContent = 'Motion enabled';
+          .then(result => {
+            if (result === 'granted') {
+              setGyroActive();
             } else {
               const lbl = document.getElementById('gyro-label');
               if (lbl) lbl.textContent = 'Motion denied — check Settings';
+              try { localStorage.removeItem('annecy_gyro'); } catch {}
             }
           }).catch(() => {});
       } else {
-        // Android / non-iOS — no permission needed
-        window.addEventListener('deviceorientation', handleOrientation, true);
-        const lbl = document.getElementById('gyro-label');
-        if (lbl) lbl.textContent = 'Motion enabled';
+        setGyroActive();
       }
     }
 
-    // Show enable button; hide it once granted
+    // Show enable button; hook up click
     const btn = document.getElementById('gyro-btn');
     if (btn) btn.addEventListener('click', startGyro);
 
-    // Also try silently on Android (no permission API)
+    // Auto-start: Android (no permission API) or previously granted on iOS
     if (typeof DeviceOrientationEvent !== 'undefined' &&
         typeof DeviceOrientationEvent.requestPermission !== 'function') {
       startGyro();
+    } else {
+      try {
+        if (localStorage.getItem('annecy_gyro') === '1') startGyro();
+      } catch {}
     }
   })();
 
@@ -1786,6 +1794,11 @@ document.addEventListener('DOMContentLoaded', () => {
   const closeDrawer = () => {
     document.getElementById('drawer').classList.add('hidden');
     document.getElementById('drawer-overlay').classList.add('hidden');
+    // Collapse settings accordion
+    const body  = document.getElementById('settings-body');
+    const caret = document.getElementById('settings-caret');
+    if (body)  body.classList.remove('open');
+    if (caret) caret.style.transform = '';
   };
   document.getElementById('menu-btn').addEventListener('click', openDrawer);
   document.getElementById('drawer-close').addEventListener('click', closeDrawer);
