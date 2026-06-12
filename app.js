@@ -1751,13 +1751,19 @@ document.addEventListener('DOMContentLoaded', () => {
     const btn = document.getElementById('gyro-btn');
     if (btn) btn.addEventListener('click', startGyro);
 
-    // Auto-start: Android (no permission API) or previously granted on iOS
+    // Auto-start: Android (no permission API) — no gesture needed
     if (typeof DeviceOrientationEvent !== 'undefined' &&
         typeof DeviceOrientationEvent.requestPermission !== 'function') {
       startGyro();
     } else {
+      // iOS: requestPermission() needs a user gesture, so re-trigger on first touch
       try {
-        if (localStorage.getItem('annecy_gyro') === '1') startGyro();
+        if (localStorage.getItem('annecy_gyro') === '1') {
+          document.addEventListener('touchstart', function restore() {
+            document.removeEventListener('touchstart', restore);
+            startGyro();
+          }, { once: true, passive: true });
+        }
       } catch {}
     }
   })();
@@ -1827,20 +1833,26 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }));
 
-  /* In-app browser */
+  /* In-app launcher (external sites block iframing, so we show a clean handoff page) */
+  const SITE_NAMES = {
+    'annecy.org':    'Annecy Festival',
+    'le-shuttle.com':'LeShuttle',
+    'plugshare.com': 'PlugShare',
+    'happycow.net':  'HappyCow',
+  };
   function openInApp(url) {
-    try {
-      const domain = new URL(url).hostname.replace(/^www\./, '');
-      document.getElementById('inapp-domain').textContent = domain;
-    } catch { document.getElementById('inapp-domain').textContent = url; }
-    document.getElementById('inapp-external').href = url;
-    document.getElementById('inapp-frame').src = url;
+    let domain = url;
+    try { domain = new URL(url).hostname.replace(/^www\./, ''); } catch {}
+    const siteName = Object.entries(SITE_NAMES).find(([k]) => domain.includes(k))?.[1] || domain;
+    document.getElementById('inapp-domain').textContent = siteName;
+    document.getElementById('inapp-site-name').textContent = siteName;
+    document.getElementById('inapp-site-url').textContent = domain;
+    document.getElementById('inapp-open-btn').href = url;
     document.getElementById('inapp-overlay').classList.remove('hidden');
     closeDrawer();
   }
   function closeInApp() {
     document.getElementById('inapp-overlay').classList.add('hidden');
-    document.getElementById('inapp-frame').src = '';
   }
   document.getElementById('inapp-back').addEventListener('click', closeInApp);
   document.querySelectorAll('.inapp-link').forEach(a =>

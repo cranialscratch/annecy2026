@@ -11,7 +11,7 @@
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="icons/icon-180.png">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
-  <link rel="stylesheet" href="styles.v100.css">
+  <link rel="stylesheet" href="styles.v101.css">
 </head>
 <body>
   <div id="app">
@@ -81,10 +81,17 @@
     <div id="inapp-header">
       <button id="inapp-back" class="icon-btn"><i class="ph ph-arrow-left"></i></button>
       <span id="inapp-domain"></span>
-      <a id="inapp-external" class="icon-btn" target="_blank" rel="noopener" title="Open in browser"><i class="ph ph-arrow-square-out"></i></a>
+      <div style="width:44px"></div>
     </div>
     <div id="inapp-body">
-      <iframe id="inapp-frame" src="" sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-top-navigation-by-user-activation"></iframe>
+      <div id="inapp-card">
+        <div id="inapp-site-icon"><i class="ph ph-globe"></i></div>
+        <div id="inapp-site-name"></div>
+        <div id="inapp-site-url"></div>
+        <a id="inapp-open-btn" target="_blank" rel="noopener" class="pill-btn primary inapp-open-pill">
+          <i class="ph ph-arrow-square-out"></i> Open in browser
+        </a>
+      </div>
     </div>
   </div>
 
