@@ -1833,30 +1833,6 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }));
 
-  /* In-app launcher (external sites block iframing, so we show a clean handoff page) */
-  const SITE_NAMES = {
-    'annecy.org':    'Annecy Festival',
-    'le-shuttle.com':'LeShuttle',
-    'plugshare.com': 'PlugShare',
-    'happycow.net':  'HappyCow',
-  };
-  function openInApp(url) {
-    let domain = url;
-    try { domain = new URL(url).hostname.replace(/^www\./, ''); } catch {}
-    const siteName = Object.entries(SITE_NAMES).find(([k]) => domain.includes(k))?.[1] || domain;
-    document.getElementById('inapp-domain').textContent = siteName;
-    document.getElementById('inapp-site-name').textContent = siteName;
-    document.getElementById('inapp-site-url').textContent = domain;
-    document.getElementById('inapp-open-btn').href = url;
-    document.getElementById('inapp-overlay').classList.remove('hidden');
-    closeDrawer();
-  }
-  function closeInApp() {
-    document.getElementById('inapp-overlay').classList.add('hidden');
-  }
-  document.getElementById('inapp-back').addEventListener('click', closeInApp);
-  document.querySelectorAll('.inapp-link').forEach(a =>
-    a.addEventListener('click', e => { e.preventDefault(); openInApp(a.href); }));
 
   /* Time modal */
   document.getElementById('modal-close').addEventListener('click', closeModal);

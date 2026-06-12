@@ -11,7 +11,7 @@
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="icons/icon-180.png">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
-  <link rel="stylesheet" href="styles.v101.css">
+  <link rel="stylesheet" href="styles.v102.css">
 </head>
 <body>
   <div id="app">
@@ -55,10 +55,10 @@
     </div>
     <nav class="drawer-nav">
       <button class="drawer-item" data-action="home"><i class="ph ph-house drawer-icon"></i> Home</button>
-      <a class="drawer-item inapp-link" href="https://www.annecy.org/festival" rel="noopener"><i class="ph ph-film-slate drawer-icon"></i> Festival website</a>
-      <a class="drawer-item inapp-link" href="https://www.le-shuttle.com" rel="noopener"><i class="ph ph-train drawer-icon"></i> LeShuttle</a>
-      <a class="drawer-item inapp-link" href="https://www.plugshare.com" rel="noopener"><i class="ph ph-plug drawer-icon"></i> PlugShare</a>
-      <a class="drawer-item inapp-link" href="https://www.happycow.net" rel="noopener"><i class="ph ph-leaf drawer-icon"></i> HappyCow</a>
+      <a class="drawer-item" href="https://www.annecy.org/festival" target="_blank" rel="noopener"><i class="ph ph-film-slate drawer-icon"></i> Festival website</a>
+      <a class="drawer-item" href="https://www.le-shuttle.com" target="_blank" rel="noopener"><i class="ph ph-train drawer-icon"></i> LeShuttle</a>
+      <a class="drawer-item" href="https://www.plugshare.com" target="_blank" rel="noopener"><i class="ph ph-plug drawer-icon"></i> PlugShare</a>
+      <a class="drawer-item" href="https://www.happycow.net" target="_blank" rel="noopener"><i class="ph ph-leaf drawer-icon"></i> HappyCow</a>
     </nav>
     <div class="drawer-bottom">
       <button class="drawer-item" data-action="toggle-dark" id="dark-mode-btn"><i class="ph ph-moon drawer-icon" id="dark-mode-icon"></i> <span id="dark-mode-label">Dark mode</span></button>
@@ -75,25 +75,6 @@
       </div>
     </div>
   </aside>
-
-  <!-- In-app browser -->
-  <div id="inapp-overlay" class="hidden">
-    <div id="inapp-header">
-      <button id="inapp-back" class="icon-btn"><i class="ph ph-arrow-left"></i></button>
-      <span id="inapp-domain"></span>
-      <div style="width:44px"></div>
-    </div>
-    <div id="inapp-body">
-      <div id="inapp-card">
-        <div id="inapp-site-icon"><i class="ph ph-globe"></i></div>
-        <div id="inapp-site-name"></div>
-        <div id="inapp-site-url"></div>
-        <a id="inapp-open-btn" target="_blank" rel="noopener" class="pill-btn primary inapp-open-pill">
-          <i class="ph ph-arrow-square-out"></i> Open in browser
-        </a>
-      </div>
-    </div>
-  </div>
 
   <!-- Time edit modal -->
   <div id="modal-overlay" class="hidden">
