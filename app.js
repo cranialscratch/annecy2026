@@ -81,6 +81,50 @@ function typeLabel(type) {
 function nowMinutes() {
   const n = new Date(); return n.getHours() * 60 + n.getMinutes();
 }
+
+/* ── Leave-by countdown helpers ────────────────────────────────────── */
+function hasExplicitDuration(stop) {
+  return stop.id in state.durOverrides || stop.duration !== undefined;
+}
+function leaveByInfo(stop) {
+  if (!hasExplicitDuration(stop)) return null;
+  const arrMins = timeToMinutes(getStopTime(stop));
+  if (arrMins === null) return null;
+  const leaveMins = arrMins + getStopDuration(stop);
+  const leaveStr  = minutesToTime(leaveMins);
+  const now       = nowMinutes();
+  if (now >= arrMins && now <= leaveMins) {
+    const rem     = leaveMins - now;
+    const urgent  = rem <= 15;
+    const remStr  = rem < 60
+      ? `${rem}m`
+      : `${Math.floor(rem/60)}h ${rem % 60 ? (rem%60)+'m' : ''}`.trim();
+    return { active: true, label: rem <= 0 ? 'Time to leave!' : `Leave in ${remStr}`, leaveStr, urgent };
+  }
+  return { active: false, label: `Leave by ${leaveStr}`, leaveStr, urgent: false };
+}
+function renderLeaveByEl(el, stop) {
+  const info = leaveByInfo(stop);
+  if (!info) { el.style.display = 'none'; return; }
+  const icon = info.urgent ? 'ph-bell-ringing' : 'ph-clock';
+  el.innerHTML = `<i class="ph ${icon}"></i> ${info.label}`;
+  el.className = `leave-by-pill${info.urgent ? ' urgent' : ''}${info.active ? ' active' : ''}`;
+  el.style.display = '';
+}
+let _leaveByInterval = null;
+function startLeaveByTicker() {
+  clearInterval(_leaveByInterval);
+  updateAllLeaveBy();
+  _leaveByInterval = setInterval(updateAllLeaveBy, 30000);
+}
+function updateAllLeaveBy() {
+  document.querySelectorAll('[data-leaveby]').forEach(el => {
+    const stop = findStop(el.dataset.leaveby);
+    if (stop) renderLeaveByEl(el, stop);
+  });
+  const detailEl = document.getElementById('detail-leaveby');
+  if (detailEl && _detailStop) renderLeaveByEl(detailEl, _detailStop);
+}
 function buildTags(stop) {
   const tags = [];
   if (getStopVegan(stop))              tags.push(`<span class="tl-tag vegan"><i class="ph ph-leaf"></i> Vegan-friendly</span>`);
@@ -92,46 +136,34 @@ function buildTags(stop) {
 /* ── Wikipedia article titles per stop (free API, no key needed) ───── */
 const WIKI_TITLES = {
   'd1s6':  'Saint-Valery-sur-Somme',
-  'd1s7':  'Saint-Valery-sur-Somme',
-  'd1s8':  'Saint-Valery-sur-Somme',
-  'd1s13': 'Amiens_Cathedral',
+  'd1s10': 'Amiens_Cathedral',
   'd2s2':  "Hortillonnages_d'Amiens",
-  'd2s3':  "Hortillonnages_d'Amiens",
-  'd2s6':  'Gerberoy',
-  'd2s7':  'Gerberoy',
-  'd2s10': 'Troyes',
-  'd2s11': 'Ruelle_des_Chats',
-  'd2s12': 'Troyes_Cathedral',
+  'd2s5':  'Gerberoy',
+  'd2s8':  'Troyes',
+  'd2s9':  'Ruelle_des_Chats',
+  'd2s10': 'Troyes_Cathedral',
   'd3s2':  'Flavigny-sur-Ozerain',
-  'd3s3':  'Flavigny-sur-Ozerain',
-  'd3s4':  'Fontenay_Abbey',
-  'd3s5':  'Fontenay_Abbey',
-  'd3s6':  'Semur-en-Auxois',
-  'd3s7':  'Semur-en-Auxois',
-  'd3s8':  'Clos_de_Vougeot',
-  'd3s9':  'Route_des_Grands_Crus',
-  'd3s10': 'Vosne-Romanée',
-  'd3s11': 'Saint-Romain,_Côte-d\'Or',
-  'd3s15': 'Hospices_de_Beaune',
-  'd3s16': 'Beaune',
-  'd4s3':  'Albertville',
-  'd4s7':  'Lake_Annecy',
+  'd3s3':  'Fontenay_Abbey',
+  'd3s4':  'Semur-en-Auxois',
+  'd3s5':  'Clos_de_Vougeot',
+  'd3s6':  'Route_des_Grands_Crus',
+  'd3s7':  'Vosne-Romanée',
+  'd3s8':  "Saint-Romain,_Côte-d'Or",
+  'd3s10': 'Hospices_de_Beaune',
+  'd4s4':  'Lake_Annecy',
   'fs3':   'Lake_Annecy',
   'fs4':   'Annecy',
-  'fs5':   'Château_d\'Annecy',
-  'fs6':   'Gorges_du_Fier',
-  'fs7':   'Château_de_Menthon-Saint-Bernard',
-  'fs8':   'Talloires',
+  'fs5':   "Château_d'Annecy",
+  'fs6':   'Château_de_Menthon-Saint-Bernard',
+  'fs7':   'Talloires',
+  'fs8':   'Gorges_du_Fier',
+  'fs14':  "Palais_de_l'Isle",
   'd5s2':  'Royal_Saltworks_of_Arc-et-Senans',
-  'd5s3':  'Royal_Saltworks_of_Arc-et-Senans',
-  'd5s6':  'Besançon',
-  'd5s7':  'Citadel_of_Besançon',
+  'd5s5':  'Besançon',
+  'd5s6':  'Citadel_of_Besançon',
   'd6s3':  'Giverny',
-  'd6s4':  'Giverny',
-  'd6s5':  'Rouen',
-  'd6s6':  'Rouen_Cathedral',
-  'd7s2':  'Saint-Valery-sur-Somme',
-  'd7s3':  'Saint-Valery-sur-Somme',
+  'd6s4':  'Rouen',
+  'd6s5':  'Rouen_Cathedral',
 };
 
 /* ── Wikipedia data cache ──────────────────────────────────────────── */
@@ -467,10 +499,11 @@ function setBgClass(cls) {
 function renderView(scrollToNow) {
   // Always reset scroll to top when switching views or days
   if (!scrollToNow) document.getElementById('main-content').scrollTop = 0;
-  // Stop countdown ticker when leaving that view
+  // Stop tickers when leaving that view
   if (state.currentView !== 'day' || TRIP_DATA.days.find(d => d.id === state.currentDayId)?.isCountdown === false) {
     clearInterval(_countdownInterval);
   }
+  if (state.currentView !== 'day') clearInterval(_leaveByInterval);
   updateHeader();
   const tl = document.getElementById('timeline');
   document.querySelectorAll('.nav-btn').forEach(b =>
@@ -927,6 +960,8 @@ function renderTimeline(container, scrollToNow) {
       mc.scrollTo({ top: Math.max(0, nowLineEl.offsetTop - headerH - 16), behavior: 'smooth' });
     });
   }
+
+  startLeaveByTicker();
 }
 
 /* ── Build one timeline item ───────────────────────────────────────── */
@@ -964,6 +999,7 @@ function buildTimelineItem(stop, isLast) {
         </div>
         <div class="card-reason">${getStopReason(stop)}</div>
         ${buildTags(stop)}
+        ${hasExplicitDuration(stop) ? `<div data-leaveby="${stop.id}" class="leave-by-pill" style="display:none"></div>` : ''}
         <div class="tl-actions">${buildIconActions(stop)}</div>
       </div>
     </div>`;
@@ -1406,6 +1442,8 @@ function openDetail(stop) {
   document.getElementById('detail-body').dataset.type = getStopType(stop);
   document.getElementById('detail-badge').textContent = typeLabel(getStopType(stop));
   document.getElementById('detail-time').textContent  = getStopTime(stop) + (stop.tz ? ' ' + stop.tz : '');
+  const detailLeaveBy = document.getElementById('detail-leaveby');
+  if (detailLeaveBy) renderLeaveByEl(detailLeaveBy, stop);
   document.getElementById('detail-stars').textContent = priorityStars(getStopPriority(stop));
   document.getElementById('detail-name').innerHTML = stopTypeIcon(stop) + ' ' + getStopName(stop);
   document.getElementById('detail-reason').textContent = _wikiCache[stop.id]?.extract || getStopReason(stop);
