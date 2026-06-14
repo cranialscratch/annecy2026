@@ -2140,6 +2140,37 @@ function openDetail(stop) {
   updateDetailCheckBtn();
   overlay.scrollTop = 0;
 
+  // Populate detail weather row
+  const detailWeatherEl = document.getElementById('detail-weather');
+  if (detailWeatherEl) {
+    detailWeatherEl.classList.add('hidden');
+    detailWeatherEl.innerHTML = '';
+    const _dDay = TRIP_DATA.days.find(d => d.stops?.some(s => s.id === stop.id));
+    if (_dDay) {
+      fetchWeatherForDay(_dDay).then(wMap => {
+        if (!wMap || !detailWeatherEl.isConnected) return;
+        if (_detailStop?.id !== stop.id) return;
+        const dateStr = _dDay.date || '';
+        const entry = wMap.get(dateStr);
+        if (!entry) return;
+        const night = isNightTime(getStopTime(stop));
+        const icon  = night ? entry.nightIcon : entry.icon;
+        const tempC = night ? entry.nightTempC : entry.tempC;
+        const lat   = getStopLat(stop) || _dDay.lat || '';
+        const lng   = getStopLng(stop) || _dDay.lng || '';
+        detailWeatherEl.innerHTML = `
+          <span class="weather-icon"><i class="ph ${icon}"></i></span>
+          <span class="weather-temp">${tempC}°C</span>
+          <span class="weather-desc">${entry.conditionText}</span>
+          ${lat && lng ? `<a href="weather://?lat=${lat}&lon=${lng}" class="weather-link"
+              onclick="setTimeout(()=>{ window.location='https://weather.com/weather/today/l/${lat},${lng}'; },500); return true;">
+            <i class="ph ph-cloud-sun"></i> Open Weather
+          </a>` : ''}`;
+        detailWeatherEl.classList.remove('hidden');
+      });
+    }
+  }
+
   // Fetch wiki + commons together; refresh slides + description when done
   const tasks = [];
   if (_wikiCache[stop.id] === undefined)    tasks.push(fetchWikiData(stop));
