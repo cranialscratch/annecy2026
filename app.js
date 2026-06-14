@@ -640,40 +640,26 @@ function satelliteUrl(stop) {
   return `https://maps.googleapis.com/maps/api/staticmap?center=${stop.lat},${stop.lng}&zoom=16&size=640x380&maptype=satellite&key=${GKEY}`;
 }
 
-/* ── Weather cache & fetch ─────────────────────────────────────────── */
+/* ── Weather cache & fetch (Open-Meteo — free, no key needed) ───────── */
 const _weatherCache = {}; // dayId → Map<dateString, {icon, tempC, nightIcon, nightTempC, conditionText}>
 
-const WEATHER_ICON_MAP = {
-  CLEAR: { day: 'ph-sun', night: 'ph-moon-stars' },
-  MOSTLY_CLEAR: { day: 'ph-sun', night: 'ph-moon-stars' },
-  PARTLY_CLOUDY: { day: 'ph-cloud-sun', night: 'ph-cloud-moon' },
-  MOSTLY_CLOUDY: { day: 'ph-cloud-sun', night: 'ph-cloud-moon' },
-  CLOUDY: { day: 'ph-cloud', night: 'ph-cloud' },
-  OVERCAST: { day: 'ph-cloud', night: 'ph-cloud' },
-  LIGHT_RAIN_SHOWERS: { day: 'ph-cloud-drizzle', night: 'ph-cloud-drizzle' },
-  CHANCE_OF_SHOWERS: { day: 'ph-cloud-drizzle', night: 'ph-cloud-drizzle' },
-  DRIZZLE: { day: 'ph-cloud-drizzle', night: 'ph-cloud-drizzle' },
-  RAIN: { day: 'ph-cloud-rain', night: 'ph-cloud-rain' },
-  HEAVY_RAIN: { day: 'ph-cloud-rain', night: 'ph-cloud-rain' },
-  RAIN_SHOWERS: { day: 'ph-cloud-rain', night: 'ph-cloud-rain' },
-  THUNDERSTORM: { day: 'ph-cloud-lightning', night: 'ph-cloud-lightning' },
-  HEAVY_THUNDERSTORM: { day: 'ph-cloud-lightning', night: 'ph-cloud-lightning' },
-  LIGHT_SNOW: { day: 'ph-snowflake', night: 'ph-snowflake' },
-  SNOW: { day: 'ph-snowflake', night: 'ph-snowflake' },
-  HEAVY_SNOW: { day: 'ph-snowflake', night: 'ph-snowflake' },
-  BLIZZARD: { day: 'ph-snowflake', night: 'ph-snowflake' },
-  FOG: { day: 'ph-cloud-fog', night: 'ph-cloud-fog' },
-  HAZE: { day: 'ph-cloud-fog', night: 'ph-cloud-fog' },
-  SMOKE: { day: 'ph-cloud-fog', night: 'ph-cloud-fog' },
-  WINDY: { day: 'ph-wind', night: 'ph-wind' },
-  SLEET: { day: 'ph-cloud-sleet', night: 'ph-cloud-sleet' },
-  FREEZING_RAIN: { day: 'ph-cloud-sleet', night: 'ph-cloud-sleet' },
-};
-
-function weatherIconForType(type, isNight) {
-  const entry = WEATHER_ICON_MAP[type];
-  if (!entry) return 'ph-thermometer';
-  return isNight ? entry.night : entry.day;
+// WMO weather code → Phosphor icon
+// WMO code → {icon (day), icon (night), label}
+function wmoToWeather(code, isNight) {
+  if (code === 0)              return { icon: isNight ? 'ph-moon-stars' : 'ph-sun',       label: isNight ? 'Clear night' : 'Clear sky' };
+  if (code <= 2)               return { icon: isNight ? 'ph-cloud-moon' : 'ph-cloud-sun', label: 'Partly cloudy' };
+  if (code === 3)              return { icon: 'ph-cloud',            label: 'Overcast' };
+  if (code <= 48)              return { icon: 'ph-cloud-fog',        label: 'Fog' };
+  if (code <= 55)              return { icon: 'ph-cloud-drizzle',    label: 'Drizzle' };
+  if (code <= 57)              return { icon: 'ph-cloud-sleet',      label: 'Freezing drizzle' };
+  if (code <= 65)              return { icon: 'ph-cloud-rain',       label: code >= 63 ? 'Heavy rain' : 'Rain' };
+  if (code <= 67)              return { icon: 'ph-cloud-sleet',      label: 'Freezing rain' };
+  if (code <= 77)              return { icon: 'ph-snowflake',        label: 'Snow' };
+  if (code <= 82)              return { icon: 'ph-cloud-rain',       label: 'Rain showers' };
+  if (code <= 86)              return { icon: 'ph-snowflake',        label: 'Snow showers' };
+  if (code === 95)             return { icon: 'ph-cloud-lightning',  label: 'Thunderstorm' };
+  if (code <= 99)              return { icon: 'ph-cloud-lightning',  label: 'Thunderstorm with hail' };
+  return { icon: 'ph-thermometer', label: 'Unknown' };
 }
 
 function isNightTime(timeStr) {
@@ -684,7 +670,6 @@ function isNightTime(timeStr) {
 
 async function fetchWeatherForDay(day) {
   if (_weatherCache[day.id] !== undefined) return _weatherCache[day.id];
-  // Use the first stop with coordinates, or the day's own lat/lng if available
   let lat = day.lat, lng = day.lng;
   if (lat == null || lng == null) {
     for (const s of day.stops) {
@@ -693,31 +678,32 @@ async function fetchWeatherForDay(day) {
     }
   }
   if (lat == null || lng == null) { _weatherCache[day.id] = null; return null; }
+
+  // Determine date range: single day or festival span
+  const startDate = day.date;
+  const endDate   = day.dateEnd || day.date;
+
   try {
-    const res = await fetch(`https://weather.googleapis.com/v1/forecast:lookup?key=${GKEY}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ location: { latitude: lat, longitude: lng }, days: 10, pageSize: 10 }),
-    });
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}` +
+      `&daily=weathercode,temperature_2m_max,temperature_2m_min` +
+      `&timezone=auto&start_date=${startDate}&end_date=${endDate}&forecast_days=16`;
+    const res = await fetch(url);
     if (!res.ok) { _weatherCache[day.id] = null; return null; }
     const data = await res.json();
     const map = new Map();
-    for (const fd of (data.forecastDays || [])) {
-      const dateStr = (fd.interval?.startTime || '').slice(0, 10);
-      if (!dateStr) continue;
-      const dt = fd.daytimeForecast || {};
-      const nt = fd.nighttimeForecast || {};
-      const dtType = dt.weatherCondition?.type || '';
-      const ntType = nt.weatherCondition?.type || '';
-      map.set(dateStr, {
-        icon: weatherIconForType(dtType, false),
-        tempC: Math.round(dt.temperature?.value ?? 0),
-        nightIcon: weatherIconForType(ntType, true),
-        nightTempC: Math.round(nt.temperature?.value ?? 0),
-        conditionText: dtType.replace(/_/g, ' ').toLowerCase().replace(/^\w/, c => c.toUpperCase()),
-        conditionType: dtType,
+    const dates = data.daily?.time || [];
+    dates.forEach((d, i) => {
+      const code    = data.daily.weathercode[i];
+      const tempMax = Math.round(data.daily.temperature_2m_max[i]);
+      const tempMin = Math.round(data.daily.temperature_2m_min[i]);
+      const dayW    = wmoToWeather(code, false);
+      const nightW  = wmoToWeather(code, true);
+      map.set(d, {
+        icon: dayW.icon, tempC: tempMax,
+        nightIcon: nightW.icon, nightTempC: tempMin,
+        conditionText: dayW.label,
       });
-    }
+    });
     _weatherCache[day.id] = map;
     return map;
   } catch (e) {
@@ -1554,13 +1540,13 @@ function renderTimeline(container, scrollToNow) {
     });
   }, 1500); // delay so current day fetches get priority
 
-  // Only scroll to now when explicitly requested (Today button)
+  // Scroll to now line when requested (today's view)
   if (scrollToNow && nowLineEl) {
-    requestAnimationFrame(() => {
+    setTimeout(() => {
       const mc = document.getElementById('main-content');
       const headerH = document.getElementById('app-header').offsetHeight;
-      mc.scrollTo({ top: Math.max(0, nowLineEl.offsetTop - headerH - 16), behavior: 'smooth' });
-    });
+      mc.scrollTo({ top: Math.max(0, nowLineEl.offsetTop - headerH - 60), behavior: 'smooth' });
+    }, 80);
   }
 
   startLeaveByTicker();
