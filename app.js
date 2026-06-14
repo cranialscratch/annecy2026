@@ -190,19 +190,8 @@ function fmtDist(km) {
   return `${Math.round(km * 0.621371)} mi`;
 }
 function openWeatherApp(lat, lng) {
-  // Reverse geocode to get a clean city/town name, then open BBC Weather search
-  fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&zoom=10`)
-    .then(r => r.json())
-    .then(d => {
-      const a = d.address || {};
-      const town = a.city || a.town || a.village || a.county || a.state || '';
-      const country = a.country || '';
-      const q = [town, country].filter(Boolean).join(', ');
-      window.open(`https://www.bbc.co.uk/weather/search?s=${encodeURIComponent(q)}`, '_blank');
-    })
-    .catch(() => {
-      window.open(`https://www.bbc.co.uk/weather/search?s=${lat},${lng}`, '_blank');
-    });
+  // yr.no (Norwegian Met Office) accepts lat/lng directly — no search needed, great EU coverage
+  window.open(`https://www.yr.no/en/forecast/daily-table/${lat},${lng}`, '_blank');
 }
 function openDirections(toLat, toLng) {
   // Use geo: URI — iOS opens Apple Maps, Android opens Google Maps
@@ -2730,4 +2719,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
   /* Service worker */
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+
+  /* Resume from background / screen wake: switch to today and scroll to now */
+  let _lastVisible = Date.now();
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) { _lastVisible = Date.now(); return; }
+    const away = Date.now() - _lastVisible;
+    if (away < 10000) return; // ignore very brief switches (< 10s)
+    const todayId = findTodayDayId();
+    if (todayId) {
+      state.currentDayId = todayId;
+      state.currentView  = 'day';
+      updateDayStrip();
+    }
+    renderView(true);
+    scheduleNotifs();
+  });
 });
