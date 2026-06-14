@@ -190,11 +190,9 @@ function fmtDist(km) {
   return `${Math.round(km * 0.621371)} mi`;
 }
 function openWeatherApp(lat, lng) {
-  // Try Apple Weather deeplink; fall back to weather.com after 500ms if not handled
-  const appleUrl = `weather://?lat=${lat}&lon=${lng}`;
-  const fallback  = `https://weather.com/weather/today/l/${lat},${lng}`;
-  window.location.href = appleUrl;
-  setTimeout(() => { window.open(fallback, '_blank'); }, 600);
+  // Apple Weather has no public deep link for a specific location.
+  // weather.com accepts lat,lng and shows a full forecast for that spot.
+  window.open(`https://weather.com/weather/today/l/${lat},${lng}`, '_blank');
 }
 function openDirections(toLat, toLng) {
   // Use geo: URI — iOS opens Apple Maps, Android opens Google Maps
