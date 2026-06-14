@@ -1218,18 +1218,21 @@ body.light #map-poi-wrap {
 ::-webkit-scrollbar-thumb { background: var(--bg4); border-radius: 4px; }
 
 .tl-now-line {
-  display: flex; align-items: center; margin: 2px 0; pointer-events: none;
+  pointer-events: none;
+  margin-bottom: 0 !important;
 }
-/* Now pill: same transparent background as other time buttons, just rose text */
+/* Now pill: same as other time buttons, rose-coloured */
 .tl-now-pill {
   color: var(--rose) !important;
   text-shadow: 0 1px 6px rgba(255,55,95,.5) !important;
-  pointer-events: none;
-  position: relative;
+  cursor: default !important;
 }
-/* Horizontal rule that extends right from the time column */
+#app.bg-day .tl-now-pill, #app.bg-soon .tl-now-pill {
+  color: var(--rose) !important;
+}
+/* Track fills the card column */
 .tl-now-track {
-  flex: 1; display: flex; align-items: center;
+  flex: 1; min-width: 0; display: flex; align-items: center;
   margin-left: 10px; padding-right: 8px;
 }
 .tl-now-dot {

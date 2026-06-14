@@ -1520,10 +1520,10 @@ function renderTimeline(container, scrollToNow) {
     if (isToday && !nowInserted && stopMins !== null && stopMins > now) {
       nowInserted = true;
       const nowLine = document.createElement('div');
-      nowLine.className = 'tl-now-line';
+      nowLine.className = 'tl-item tl-now-line';
       nowLine.id = 'tl-now-marker';
       nowLine.innerHTML = `
-        <div class="tl-left"><div class="tl-time-btn tl-now-pill" id="tl-now-time">${minutesToTime(now)}</div></div>
+        <div class="tl-left"><button class="tl-time-btn tl-now-pill" id="tl-now-time" disabled>${minutesToTime(now)}</button></div>
         <div class="tl-now-track"><div class="tl-now-dot"></div><div class="tl-now-bar"></div></div>`;
       (compactCard || container).appendChild(nowLine);
       nowLineEl = nowLine;
