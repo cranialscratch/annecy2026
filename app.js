@@ -937,6 +937,14 @@ function renderTimeline(container, scrollToNow) {
   let nowLineEl = null;
   let nowInserted = false;
 
+  // In compact mode wrap everything in a single glass card
+  const compactCard = state.compactMode ? (() => {
+    const c = document.createElement('div');
+    c.className = 'compact-card';
+    container.appendChild(c);
+    return c;
+  })() : null;
+
   day.stops.forEach((stop, idx) => {
     const stopMins = timeToMinutes(getStopTime(stop));
     if (isToday && !nowInserted && stopMins !== null && stopMins > now) {
@@ -945,13 +953,13 @@ function renderTimeline(container, scrollToNow) {
       nowLine.className = 'tl-now-line';
       nowLine.id = 'tl-now-marker';
       nowLine.innerHTML = `<span class="tl-now-label">▶ Now ${minutesToTime(now)}</span>`;
-      container.appendChild(nowLine);
+      (compactCard || container).appendChild(nowLine);
       nowLineEl = nowLine;
     }
     const item = state.compactMode
       ? buildCompactItem(stop, idx === day.stops.length - 1)
       : buildTimelineItem(stop, idx === day.stops.length - 1);
-    container.appendChild(item);
+    (compactCard || container).appendChild(item);
   });
 
   // Fetch Wikipedia extracts for detail page descriptions

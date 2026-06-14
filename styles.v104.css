@@ -1257,30 +1257,49 @@ body.light #detail-leaveby { background: rgba(180,100,0,.12); color: #a05c00; }
 body.light #detail-leaveby.leave-by-pill.urgent { background: rgba(200,30,0,.12); color: #990000; }
 
 /* ── Compact / concertina timeline ────────────────────────────────── */
+
+/* Single glass card wrapping all rows */
+.compact-card {
+  margin: 12px 16px;
+  background: var(--glass-bg-strong);
+  backdrop-filter: blur(20px) saturate(1.6);
+  -webkit-backdrop-filter: blur(20px) saturate(1.6);
+  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,0.10);
+  overflow: hidden;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.25);
+}
+body.light .compact-card {
+  background: rgba(255,255,255,0.70);
+  border-color: rgba(0,0,0,0.08);
+  box-shadow: 0 2px 16px rgba(0,0,0,0.10);
+}
+
 .tl-compact-item {
   display: flex; align-items: stretch;
-  padding: 0 8px 0 0; cursor: pointer;
+  padding: 0 14px 0 0; cursor: pointer;
   transition: background .12s;
 }
-.tl-compact-item:active { background: rgba(255,255,255,.05); border-radius: 10px; }
+.tl-compact-item:active { background: rgba(255,255,255,.07); }
+body.light .tl-compact-item:active { background: rgba(0,0,0,.04); }
 
 .compact-time {
-  width: 68px; flex-shrink: 0;
+  width: 72px; flex-shrink: 0;
   display: flex; flex-direction: column; align-items: flex-end; justify-content: center;
-  padding: 0 12px 0 0; font-size: 14px; font-weight: 700; color: var(--text2);
-  min-height: 48px;
+  padding: 0 12px 0 14px; font-size: 14px; font-weight: 700; color: var(--text2);
+  min-height: 50px;
 }
 .compact-time .tl-tz { font-size: 10px; font-weight: 600; opacity: .6; margin-top: 1px; }
 
 .compact-body {
   flex: 1; display: flex; align-items: center; gap: 8px;
-  padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,.06);
+  padding: 11px 0; border-bottom: 1px solid rgba(255,255,255,.07);
   min-width: 0;
 }
 body.light .compact-body { border-bottom-color: rgba(0,0,0,.07); }
 .tl-compact-item:last-child .compact-body { border-bottom: none; }
 
-.compact-body.visited .compact-name { opacity: .45; text-decoration: line-through; text-decoration-color: rgba(255,255,255,.3); }
+.compact-body.visited .compact-name { opacity: .4; text-decoration: line-through; text-decoration-color: rgba(255,255,255,.3); }
 body.light .compact-body.visited .compact-name { text-decoration-color: rgba(0,0,0,.25); }
 
 .compact-name {
@@ -1288,7 +1307,7 @@ body.light .compact-body.visited .compact-name { text-decoration-color: rgba(0,0
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   display: flex; align-items: center; gap: 5px; flex: 1; min-width: 0;
 }
-.compact-name .card-type-icon { font-size: 15px; flex-shrink: 0; opacity: .7; }
+.compact-name .card-type-icon { font-size: 15px; flex-shrink: 0; opacity: .65; }
 
 .compact-meta {
   display: flex; align-items: center; gap: 6px; flex-shrink: 0;
@@ -1306,9 +1325,12 @@ body.light .compact-body.visited .compact-name { text-decoration-color: rgba(0,0
   font-size: 11px; flex-shrink: 0;
 }
 
-/* compact toggle button */
-#compact-btn { position: relative; }
-#compact-btn.compact-on { color: var(--accent); }
+/* now-line inside the card */
+.compact-card .tl-now-line {
+  margin: 0; border-radius: 0;
+  background: rgba(255,55,95,.10);
+  padding: 4px 14px;
+}
 
-/* now-line in compact mode */
-.tl-compact-item + .tl-now-line { margin: 4px 0; }
+/* compact toggle button */
+#compact-btn.compact-on { color: var(--accent); }
