@@ -189,9 +189,20 @@ function fmtDist(km) {
   if (state.useMetric) return `${Math.round(km)} km`;
   return `${Math.round(km * 0.621371)} mi`;
 }
-function openWeatherApp(lat, lng, name) {
-  const q = name ? encodeURIComponent(name) : `${lat},${lng}`;
-  window.open(`https://www.bbc.co.uk/weather/search?s=${q}`, '_blank');
+function openWeatherApp(lat, lng) {
+  // Reverse geocode to get a clean city/town name, then open BBC Weather search
+  fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&zoom=10`)
+    .then(r => r.json())
+    .then(d => {
+      const a = d.address || {};
+      const town = a.city || a.town || a.village || a.county || a.state || '';
+      const country = a.country || '';
+      const q = [town, country].filter(Boolean).join(', ');
+      window.open(`https://www.bbc.co.uk/weather/search?s=${encodeURIComponent(q)}`, '_blank');
+    })
+    .catch(() => {
+      window.open(`https://www.bbc.co.uk/weather/search?s=${lat},${lng}`, '_blank');
+    });
 }
 function openDirections(toLat, toLng) {
   // Use geo: URI — iOS opens Apple Maps, Android opens Google Maps
@@ -1705,7 +1716,7 @@ function buildTimelineItem(stop, isLast) {
       if (lat && lng) {
         _weatherPill.addEventListener('click', e => {
           e.stopPropagation();
-          openWeatherApp(lat, lng, getStopName(stop));
+          openWeatherApp(lat, lng);
         });
       }
     });
@@ -2175,7 +2186,7 @@ function openDetail(stop) {
           <span class="weather-icon"><i class="ph ${icon}"></i></span>
           <span class="weather-temp">${tempC}°C</span>
           <span class="weather-desc">${entry.conditionText}</span>
-          ${lat && lng ? `<a href="#" class="weather-link" onclick="openWeatherApp(${lat},${lng},'${getStopName(stop).replace(/'/g,"\\'")}'); return false;">
+          ${lat && lng ? `<a href="#" class="weather-link" onclick="openWeatherApp(${lat},${lng}); return false;">
             <i class="ph ph-cloud-sun"></i> Open Weather
           </a>` : ''}`;
         detailWeatherEl.classList.remove('hidden');
