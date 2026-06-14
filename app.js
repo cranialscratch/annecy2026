@@ -5,6 +5,7 @@ const state = {
   cascadeEnabled: false,
   cardView: 'full',
   notifsEnabled: false,
+  useMetric: true,
   overrides: {},        // stopId → time string
   checked: {},          // stopId → bool
   locOverrides: {},     // stopId → { name, lat, lng }
@@ -60,7 +61,7 @@ function formatDate(dateStr) {
   return d.toLocaleDateString('en-GB', { day:'numeric', month:'short' });
 }
 function getDayLabel(day) {
-  if (day.isCountdown) return '<i class="ph ph-sun-horizon"></i>';
+  if (day.isCountdown) return '<i class="ph ph-mountains"></i>';
   if (day.isFestival) return 'Fest';
   const names = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
   return names[new Date(day.date + 'T00:00:00').getDay()];
@@ -82,6 +83,24 @@ function typeLabel(type) {
 }
 function nowMinutes() {
   const n = new Date(); return n.getHours() * 60 + n.getMinutes();
+}
+function fmtDist(km) {
+  if (state.useMetric) return `${Math.round(km)} km`;
+  return `${Math.round(km * 0.621371)} mi`;
+}
+function openDirections(toLat, toLng) {
+  // Use geo: URI — iOS opens Apple Maps, Android opens Google Maps
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      const { latitude: fLat, longitude: fLng } = pos.coords;
+      window.open(`https://maps.apple.com/?saddr=${fLat},${fLng}&daddr=${toLat},${toLng}&dirflg=d`, '_blank');
+    },
+    () => {
+      // No location permission — just open destination
+      window.open(`https://maps.apple.com/?daddr=${toLat},${toLng}&dirflg=d`, '_blank');
+    },
+    { timeout: 5000 }
+  );
 }
 
 /* ── Leave-by countdown helpers ────────────────────────────────────── */
@@ -608,6 +627,9 @@ function load() {
   try {
     if (localStorage.getItem('annecy_notifs') === '1') state.notifsEnabled = true;
   } catch {}
+  try {
+    if (localStorage.getItem('annecy_units') === 'imperial') state.useMetric = false;
+  } catch {}
 }
 
 /* ── Day strip ─────────────────────────────────────────────────────── */
@@ -1048,7 +1070,7 @@ function renderCountdownBanner(container) {
       return;
     }
     banner.innerHTML = `
-      <div class="cd-emoji"><i class="ph ph-sun-horizon"></i></div>
+      <div class="cd-emoji"><i class="ph ph-mountains"></i></div>
       <h2 class="cd-title">Holiday Countdown</h2>
       <p class="cd-sub">Annecy · 17 Jun 2026 · North Cadbury 10:30</p>
       <div class="cd-units">
@@ -1165,31 +1187,35 @@ function renderCalView(container) {
         gap.style.cssText = `top:${gapTop}px;height:${gapH}px;`;
         const gapH_h = Math.floor(gapMins/60), gapH_m = gapMins%60;
         const gapStr = gapMins >= 60 ? `${gapH_h}h${gapH_m?gapH_m+'m':''}` : `${gapMins}m`;
-        gap.innerHTML = `<span class="cal-travel-label" id="cal-travel-${stop.id}"><i class="ph ph-car"></i> ${gapStr}</span>`;
+        const toLat = getStopLat(next), toLng = getStopLng(next);
+        gap.innerHTML = `<span class="cal-travel-label" id="cal-travel-${stop.id}" role="button" tabindex="0"><i class="ph ph-car"></i> ${gapStr}</span>`;
         wrap.appendChild(gap);
+
+        // Tap → open directions to next stop
+        const lbl = gap.querySelector(`#cal-travel-${stop.id}`);
+        if (toLat && toLng) {
+          lbl.classList.add('tappable');
+          lbl.addEventListener('click', e => { e.stopPropagation(); openDirections(toLat, toLng); });
+        }
 
         // Async: fetch road distance and update label
         const fromLat = getStopLat(stop), fromLng = getStopLng(stop);
-        const toLat   = getStopLat(next), toLng   = getStopLng(next);
         if (fromLat && fromLng && toLat && toLng) {
           const straightKm = haversineKm(fromLat, fromLng, toLat, toLng);
-          // Show straight-line estimate immediately, replace with road distance
-          const lbl = gap.querySelector(`#cal-travel-${stop.id}`);
           if (straightKm > 0.5) {
-            lbl.innerHTML = `<i class="ph ph-car"></i> ${gapStr} · ~${Math.round(straightKm)} km`;
+            lbl.innerHTML = `<i class="ph ph-car"></i> ${gapStr} · ~${fmtDist(straightKm)}`;
           }
-          // Fetch road distance from OSRM (includes distance in response)
           fetch(`https://router.project-osrm.org/route/v1/driving/${fromLng},${fromLat};${toLng},${toLat}?overview=false`)
             .then(r => r.json())
             .then(d => {
               const route = d.routes?.[0];
               if (!route) return;
-              const roadKm = Math.round(route.distance / 1000);
+              const roadKm = route.distance / 1000;
               const roadMins = Math.ceil(route.duration / 60);
               const rH = Math.floor(roadMins/60), rM = roadMins%60;
               const rStr = roadMins >= 60 ? `${rH}h${rM?rM+'m':''}` : `${roadMins}m`;
               const el = document.getElementById(`cal-travel-${stop.id}`);
-              if (el) el.innerHTML = `<i class="ph ph-car"></i> ${rStr} · ${roadKm} km`;
+              if (el) el.innerHTML = `<i class="ph ph-car"></i> ${rStr} · ${fmtDist(roadKm)} <i class="ph ph-arrow-square-out" style="font-size:11px;opacity:0.6"></i>`;
             })
             .catch(() => {});
         }
@@ -2182,6 +2208,20 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       });
     }
+
+    // Units toggle (km / miles)
+    function updateUnitsBtn() {
+      const lbl = document.getElementById('units-label');
+      if (lbl) lbl.textContent = state.useMetric ? 'Distances in km' : 'Distances in miles';
+    }
+    updateUnitsBtn();
+    const unitsBtn = document.getElementById('units-btn');
+    if (unitsBtn) unitsBtn.addEventListener('click', () => {
+      state.useMetric = !state.useMetric;
+      try { localStorage.setItem('annecy_units', state.useMetric ? 'metric' : 'imperial'); } catch {}
+      updateUnitsBtn();
+      if (state.cardView === 'calendar') renderView(false); // re-render so labels update
+    });
 
     // Auto-start: Android (no permission API) — no gesture needed
     if (typeof DeviceOrientationEvent !== 'undefined' &&

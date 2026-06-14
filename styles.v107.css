@@ -1492,3 +1492,5 @@ body.light .cal-travel-label {
   box-shadow: 0 2px 8px rgba(0,0,0,0.15);
 }
 .cal-travel-label .ph { font-size: 13px; }
+.cal-travel-label.tappable { cursor: pointer; pointer-events: all; }
+.cal-travel-label.tappable:active { opacity: 0.75; }
