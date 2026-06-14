@@ -3,7 +3,7 @@ const state = {
   currentDayId: null,
   currentView: 'day',
   cascadeEnabled: false,
-  compactMode: false,
+  cardView: 'full',
   notifsEnabled: false,
   overrides: {},        // stopId → time string
   checked: {},          // stopId → bool
@@ -267,6 +267,12 @@ function updateAllLeaveBy() {
   // Keep Now pill time current
   const nowPill = document.getElementById('tl-now-time');
   if (nowPill) nowPill.textContent = minutesToTime(nowMinutes());
+  const calNow = document.getElementById('cal-now-time');
+  if (calNow) {
+    calNow.textContent = minutesToTime(nowMinutes());
+    const marker = document.getElementById('cal-now-marker');
+    // Can't reposition without knowing dayStart - just update text
+  }
 }
 function buildTags(stop) {
   const tags = [];
@@ -582,7 +588,7 @@ function load() {
     if (localStorage.getItem('annecy_theme') === 'light') document.body.classList.add('light');
   } catch {}
   try {
-    if (localStorage.getItem('annecy_compact') === '1') state.compactMode = true;
+    const cv = localStorage.getItem('annecy_cardview'); if (cv) state.cardView = cv;
   } catch {}
   try {
     if (localStorage.getItem('annecy_notifs') === '1') state.notifsEnabled = true;
@@ -672,6 +678,7 @@ function renderView(scrollToNow) {
     if (state.currentView === 'overview')      { setBgClass(null); renderOverview(tl); }
     else if (state.currentView === 'vegan')    { setBgClass(null); renderFilterList(tl, 'vegan'); }
     else if (state.currentView === 'charging') { setBgClass(null); renderFilterList(tl, 'charging'); }
+    else if (state.cardView === 'calendar') renderCalView(tl);
     else renderTimeline(tl, scrollToNow);
   }
 }
@@ -1045,6 +1052,113 @@ function renderCountdownBanner(container) {
   _countdownInterval = setInterval(tick, 1000);
 }
 
+/* ── Calendar view ─────────────────────────────────────────────────── */
+const CAL_PX_MIN = 1.5; // px per minute (90px/hour)
+
+function renderCalView(container) {
+  container.innerHTML = '';
+  const day = TRIP_DATA.days.find(d => d.id === state.currentDayId);
+  if (!day || day.isCountdown) { renderTimeline(container, false); return; }
+  setBgClass('bg-day');
+
+  const timedStops = day.stops.filter(s => timeToMinutes(getStopTime(s)) !== null);
+  if (!timedStops.length) return;
+
+  const times    = timedStops.map(s => timeToMinutes(getStopTime(s)));
+  const dayStart = Math.floor((Math.min(...times) - 10) / 5) * 5;
+  const lastT    = Math.max(...times);
+  const lastStop = timedStops.find(s => timeToMinutes(getStopTime(s)) === lastT);
+  const dayEnd   = lastT + getStopDuration(lastStop) + 15;
+  const totalH   = Math.ceil((dayEnd - dayStart) * CAL_PX_MIN);
+
+  const outer = document.createElement('div');
+  outer.className = 'cal-outer';
+
+  const wrap = document.createElement('div');
+  wrap.className = 'cal-wrap';
+  wrap.style.height = totalH + 'px';
+
+  // Hour labels + grid lines
+  const hourStart = Math.ceil(dayStart / 60) * 60;
+  for (let m = hourStart; m <= dayEnd; m += 60) {
+    const top = (m - dayStart) * CAL_PX_MIN;
+    const lbl = document.createElement('div');
+    lbl.className = 'cal-hour-lbl';
+    lbl.style.top = top + 'px';
+    lbl.textContent = minutesToTime(m);
+    wrap.appendChild(lbl);
+    const line = document.createElement('div');
+    line.className = 'cal-hour-line';
+    line.style.top = top + 'px';
+    wrap.appendChild(line);
+  }
+
+  // 5-min minor ticks
+  for (let m = Math.ceil(dayStart / 5) * 5; m <= dayEnd; m += 5) {
+    if (m % 60 === 0) continue;
+    const tick = document.createElement('div');
+    tick.className = (m % 15 === 0) ? 'cal-tick cal-tick-15' : 'cal-tick';
+    tick.style.top = (m - dayStart) * CAL_PX_MIN + 'px';
+    wrap.appendChild(tick);
+  }
+
+  // Stop cards
+  const TYPE_COL = {
+    charging:'#16a34a', hotel:'#0284c7', transport:'#7c3aed', food:'#ea580c',
+    architecture:'#d97706', village:'#0d9488', town:'#0d9488', experience:'#db2777',
+    wander:'#059669', depart:'#475569', scenic:'#16a34a', historic:'#b45309', festival:'#7c3aed',
+  };
+  timedStops.forEach(stop => {
+    const t    = timeToMinutes(getStopTime(stop));
+    const dur  = getStopDuration(stop);
+    const top  = (t - dayStart) * CAL_PX_MIN;
+    const h    = Math.max(dur * CAL_PX_MIN, 40);
+    const col  = TYPE_COL[getStopType(stop)] || '#334155';
+    const card = document.createElement('div');
+    card.className = 'cal-card';
+    card.id = `cal-${stop.id}`;
+    card.style.cssText = `top:${top}px;height:${h}px;border-left-color:${col};`;
+    const isVisited = !!state.checked[stop.id];
+    if (isVisited) card.classList.add('visited');
+    const dur_h = Math.floor(dur/60), dur_m = dur%60;
+    const durStr = dur >= 60 ? `${dur_h}h${dur_m ? dur_m+'m':''}` : `${dur}m`;
+    card.innerHTML = `
+      <div class="cal-card-name">${stopTypeIcon(stop)} ${getStopName(stop)}</div>
+      <div class="cal-card-meta">${getStopTime(stop)}${stop.tz?' '+stop.tz:''} · ${durStr}</div>`;
+    card.addEventListener('click', () => openDetail(stop));
+    wrap.appendChild(card);
+  });
+
+  // Now line
+  const today  = new Date().toISOString().slice(0,10);
+  const isToday = day.date === today || (day.isFestival && today >= day.date && today <= (day.dateEnd||day.date));
+  if (isToday) {
+    const now = nowMinutes();
+    if (now >= dayStart && now <= dayEnd) {
+      const nl = document.createElement('div');
+      nl.className = 'cal-now-line';
+      nl.id = 'cal-now-marker';
+      nl.style.top = (now - dayStart) * CAL_PX_MIN + 'px';
+      nl.innerHTML = `<div class="cal-now-pill" id="cal-now-time">${minutesToTime(now)}</div><div class="cal-now-bar"></div>`;
+      wrap.appendChild(nl);
+    }
+  }
+
+  outer.appendChild(wrap);
+  container.appendChild(outer);
+
+  if (isToday) {
+    requestAnimationFrame(() => {
+      const mc = document.getElementById('main-content');
+      const now = nowMinutes();
+      const scrollY = Math.max(0, (now - dayStart - 30) * CAL_PX_MIN - 100);
+      mc.scrollTo({ top: scrollY, behavior: 'smooth' });
+    });
+  }
+
+  startLeaveByTicker();
+}
+
 /* ── Timeline ──────────────────────────────────────────────────────── */
 function renderTimeline(container, scrollToNow) {
   container.innerHTML = '';
@@ -1072,7 +1186,7 @@ function renderTimeline(container, scrollToNow) {
   let nowInserted = false;
 
   // In compact mode wrap everything in a single glass card
-  const compactCard = state.compactMode ? (() => {
+  const compactCard = state.cardView === 'compact' ? (() => {
     const c = document.createElement('div');
     c.className = 'compact-card';
     container.appendChild(c);
@@ -1092,7 +1206,7 @@ function renderTimeline(container, scrollToNow) {
       (compactCard || container).appendChild(nowLine);
       nowLineEl = nowLine;
     }
-    const item = state.compactMode
+    const item = state.cardView === 'compact'
       ? buildCompactItem(stop, idx === day.stops.length - 1)
       : buildTimelineItem(stop, idx === day.stops.length - 1);
     (compactCard || container).appendChild(item);
@@ -2029,13 +2143,16 @@ document.addEventListener('DOMContentLoaded', () => {
   function updateCompactBtn() {
     const btn = document.getElementById('compact-btn');
     if (!btn) return;
-    btn.classList.toggle('compact-on', state.compactMode);
-    btn.title = state.compactMode ? 'Full cards' : 'Compact view';
-    btn.querySelector('i').className = state.compactMode ? 'ph ph-cards' : 'ph ph-rows';
+    const icons = { full: 'ph-rows', compact: 'ph-calendar', calendar: 'ph-cards' };
+    const titles = { full: 'Compact view', compact: 'Calendar view', calendar: 'Full cards' };
+    btn.querySelector('i').className = `ph ${icons[state.cardView]}`;
+    btn.title = titles[state.cardView];
+    btn.classList.toggle('compact-on', state.cardView !== 'full');
   }
   document.getElementById('compact-btn').addEventListener('click', () => {
-    state.compactMode = !state.compactMode;
-    try { localStorage.setItem('annecy_compact', state.compactMode ? '1' : '0'); } catch {}
+    const next = { full: 'compact', compact: 'calendar', calendar: 'full' };
+    state.cardView = next[state.cardView] || 'full';
+    try { localStorage.setItem('annecy_cardview', state.cardView); } catch {}
     updateCompactBtn();
     renderView(false);
   });

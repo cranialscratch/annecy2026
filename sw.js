@@ -1,7 +1,7 @@
-const CACHE = 'annecy2026-v106';
+const CACHE = 'annecy2026-v107';
 const CORE = [
   './index.html',
-  './styles.v106.css',
+  './styles.v107.css',
   './app.js',
   './data.js',
   './manifest.json',
