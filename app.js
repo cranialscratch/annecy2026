@@ -264,6 +264,9 @@ function updateAllLeaveBy() {
   });
   const detailEl = document.getElementById('detail-leaveby');
   if (detailEl && _detailStop) renderLeaveByEl(detailEl, _detailStop);
+  // Keep Now pill time current
+  const nowPill = document.getElementById('tl-now-time');
+  if (nowPill) nowPill.textContent = minutesToTime(nowMinutes());
 }
 function buildTags(stop) {
   const tags = [];
@@ -1083,7 +1086,9 @@ function renderTimeline(container, scrollToNow) {
       const nowLine = document.createElement('div');
       nowLine.className = 'tl-now-line';
       nowLine.id = 'tl-now-marker';
-      nowLine.innerHTML = `<span class="tl-now-label">▶ Now ${minutesToTime(now)}</span>`;
+      nowLine.innerHTML = `
+        <div class="tl-now-left"><div class="tl-now-pill" id="tl-now-time">${minutesToTime(now)}</div></div>
+        <div class="tl-now-track"><div class="tl-now-dot"></div><div class="tl-now-bar"></div></div>`;
       (compactCard || container).appendChild(nowLine);
       nowLineEl = nowLine;
     }
