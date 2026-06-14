@@ -686,7 +686,7 @@ async function fetchWeatherForDay(day) {
   try {
     const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}` +
       `&daily=weathercode,temperature_2m_max,temperature_2m_min` +
-      `&timezone=auto&start_date=${startDate}&end_date=${endDate}&forecast_days=16`;
+      `&timezone=auto&forecast_days=16`;
     const res = await fetch(url);
     if (!res.ok) { _weatherCache[day.id] = null; return null; }
     const data = await res.json();
@@ -1525,11 +1525,21 @@ function renderTimeline(container, scrollToNow) {
     (compactCard || container).appendChild(item);
   });
 
+  // If now is after all stops, append now-line at the end
+  if (isToday && !nowInserted) {
+    const nowLine = document.createElement('div');
+    nowLine.className = 'tl-now-line';
+    nowLine.id = 'tl-now-marker';
+    nowLine.innerHTML = `
+      <div class="tl-now-left"><div class="tl-now-pill" id="tl-now-time">${minutesToTime(now)}</div></div>
+      <div class="tl-now-track"><div class="tl-now-dot"></div><div class="tl-now-bar"></div></div>`;
+    (compactCard || container).appendChild(nowLine);
+    nowLineEl = nowLine;
+  }
+
   // Fetch Wikipedia extracts for detail page descriptions
   lazyLoadWikiImages(day.stops);
 
-  // Pre-fetch images for all other days in the background so they're
-  // ready before the user navigates to them
   setTimeout(() => {
     TRIP_DATA.days.forEach(d => {
       if (d.id === state.currentDayId || !d.stops?.length) return;
@@ -1538,15 +1548,18 @@ function renderTimeline(container, scrollToNow) {
         if (_commonsCache[stop.id] === undefined) fetchCommonsPhotos(stop);
       });
     });
-  }, 1500); // delay so current day fetches get priority
+  }, 1500);
 
-  // Scroll to now line when requested (today's view)
-  if (scrollToNow && nowLineEl) {
+  // Scroll to now on today's view — wait for layout then measure
+  if (scrollToNow && isToday) {
     setTimeout(() => {
       const mc = document.getElementById('main-content');
       const headerH = document.getElementById('app-header').offsetHeight;
-      mc.scrollTo({ top: Math.max(0, nowLineEl.offsetTop - headerH - 60), behavior: 'smooth' });
-    }, 80);
+      const target = document.getElementById('tl-now-marker');
+      if (target) {
+        mc.scrollTo({ top: Math.max(0, target.offsetTop - headerH - 60), behavior: 'smooth' });
+      }
+    }, 120);
   }
 
   startLeaveByTicker();
