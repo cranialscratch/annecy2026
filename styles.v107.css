@@ -1221,16 +1221,18 @@ body.light #map-poi-wrap {
   display: flex; align-items: center; margin: 2px 0; pointer-events: none;
 }
 .tl-now-left {
-  flex-shrink: 0;
-  display: flex; align-items: center; padding-right: 8px;
+  width: 46px; flex-shrink: 0;
+  display: flex; justify-content: center; align-items: center;
 }
 .tl-now-pill {
   background: var(--rose); color: #fff;
-  font-size: 13px; font-weight: 800; letter-spacing: -0.2px;
-  padding: 4px 9px; border-radius: 20px; white-space: nowrap;
+  font-size: 17px; font-weight: 700; letter-spacing: -0.3px;
+  padding: 3px 6px; border-radius: 8px; white-space: nowrap;
   box-shadow: 0 2px 8px rgba(255,55,95,.4);
+  min-width: 50px; text-align: center;
 }
-.compact-card .tl-now-left { padding: 0 6px 0 14px; }
+.compact-card .tl-now-left { width: auto; padding: 0 6px 0 14px; }
+.compact-card .tl-now-pill { font-size: 13px; min-width: auto; }
 .tl-now-track {
   flex: 1; display: flex; align-items: center; gap: 4px;
   padding-right: 8px;
