@@ -397,6 +397,24 @@ function updateAllLeaveBy() {
   });
   const detailEl = document.getElementById('detail-leaveby');
   if (detailEl && _detailStop) renderLeaveByEl(detailEl, _detailStop);
+
+  // Update tl-card--past classes on today's timeline cards
+  const _todayStr2 = new Date().toISOString().slice(0, 10);
+  const _curDay2 = TRIP_DATA.days.find(d => d.id === state.currentDayId);
+  const _isToday2 = _curDay2 && (_curDay2.date === _todayStr2 ||
+    (_curDay2.isFestival && _todayStr2 >= _curDay2.date && _todayStr2 <= (_curDay2.dateEnd || _curDay2.date)));
+  if (_isToday2) {
+    const nowM = nowMinutes();
+    document.querySelectorAll('.tl-card[data-stop-id]').forEach(cardEl => {
+      const stop = findStop(cardEl.dataset.stopId);
+      if (!stop) return;
+      if (cardEl.classList.contains('visited')) { cardEl.classList.remove('tl-card--past'); return; }
+      const stopMins = timeToMinutes(getStopTime(stop));
+      const depMins = stopMins !== null ? stopMins + getStopDuration(stop) : null;
+      const isPast = depMins !== null && depMins < nowM;
+      cardEl.classList.toggle('tl-card--past', isPast);
+    });
+  }
   // Keep Now pill time current
   const nowPill = document.getElementById('tl-now-time');
   if (nowPill) nowPill.textContent = minutesToTime(nowMinutes());
@@ -620,6 +638,108 @@ const GKEY = 'AIzaSyBDIpPyqjOtvh1y-1nwyJgIj9TVjQFD_Jo';
 // Satellite aerial as a fallback — much more interesting than Street View
 function satelliteUrl(stop) {
   return `https://maps.googleapis.com/maps/api/staticmap?center=${stop.lat},${stop.lng}&zoom=16&size=640x380&maptype=satellite&key=${GKEY}`;
+}
+
+/* ── Weather cache & fetch ─────────────────────────────────────────── */
+const _weatherCache = {}; // dayId → Map<dateString, {icon, tempC, nightIcon, nightTempC, conditionText}>
+
+const WEATHER_ICON_MAP = {
+  CLEAR: { day: 'ph-sun', night: 'ph-moon-stars' },
+  MOSTLY_CLEAR: { day: 'ph-sun', night: 'ph-moon-stars' },
+  PARTLY_CLOUDY: { day: 'ph-cloud-sun', night: 'ph-cloud-moon' },
+  MOSTLY_CLOUDY: { day: 'ph-cloud-sun', night: 'ph-cloud-moon' },
+  CLOUDY: { day: 'ph-cloud', night: 'ph-cloud' },
+  OVERCAST: { day: 'ph-cloud', night: 'ph-cloud' },
+  LIGHT_RAIN_SHOWERS: { day: 'ph-cloud-drizzle', night: 'ph-cloud-drizzle' },
+  CHANCE_OF_SHOWERS: { day: 'ph-cloud-drizzle', night: 'ph-cloud-drizzle' },
+  DRIZZLE: { day: 'ph-cloud-drizzle', night: 'ph-cloud-drizzle' },
+  RAIN: { day: 'ph-cloud-rain', night: 'ph-cloud-rain' },
+  HEAVY_RAIN: { day: 'ph-cloud-rain', night: 'ph-cloud-rain' },
+  RAIN_SHOWERS: { day: 'ph-cloud-rain', night: 'ph-cloud-rain' },
+  THUNDERSTORM: { day: 'ph-cloud-lightning', night: 'ph-cloud-lightning' },
+  HEAVY_THUNDERSTORM: { day: 'ph-cloud-lightning', night: 'ph-cloud-lightning' },
+  LIGHT_SNOW: { day: 'ph-snowflake', night: 'ph-snowflake' },
+  SNOW: { day: 'ph-snowflake', night: 'ph-snowflake' },
+  HEAVY_SNOW: { day: 'ph-snowflake', night: 'ph-snowflake' },
+  BLIZZARD: { day: 'ph-snowflake', night: 'ph-snowflake' },
+  FOG: { day: 'ph-cloud-fog', night: 'ph-cloud-fog' },
+  HAZE: { day: 'ph-cloud-fog', night: 'ph-cloud-fog' },
+  SMOKE: { day: 'ph-cloud-fog', night: 'ph-cloud-fog' },
+  WINDY: { day: 'ph-wind', night: 'ph-wind' },
+  SLEET: { day: 'ph-cloud-sleet', night: 'ph-cloud-sleet' },
+  FREEZING_RAIN: { day: 'ph-cloud-sleet', night: 'ph-cloud-sleet' },
+};
+
+function weatherIconForType(type, isNight) {
+  const entry = WEATHER_ICON_MAP[type];
+  if (!entry) return 'ph-thermometer';
+  return isNight ? entry.night : entry.day;
+}
+
+function isNightTime(timeStr) {
+  const mins = timeToMinutes(timeStr);
+  if (mins === null) return false;
+  return mins >= 18 * 60 || mins < 6 * 60;
+}
+
+async function fetchWeatherForDay(day) {
+  if (_weatherCache[day.id] !== undefined) return _weatherCache[day.id];
+  // Use the first stop with coordinates, or the day's own lat/lng if available
+  let lat = day.lat, lng = day.lng;
+  if (lat == null || lng == null) {
+    for (const s of day.stops) {
+      const sLat = getStopLat(s), sLng = getStopLng(s);
+      if (sLat && sLng) { lat = sLat; lng = sLng; break; }
+    }
+  }
+  if (lat == null || lng == null) { _weatherCache[day.id] = null; return null; }
+  try {
+    const res = await fetch(`https://weather.googleapis.com/v1/forecast:lookup?key=${GKEY}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ location: { latitude: lat, longitude: lng }, days: 10, pageSize: 10 }),
+    });
+    if (!res.ok) { _weatherCache[day.id] = null; return null; }
+    const data = await res.json();
+    const map = new Map();
+    for (const fd of (data.forecastDays || [])) {
+      const dateStr = (fd.interval?.startTime || '').slice(0, 10);
+      if (!dateStr) continue;
+      const dt = fd.daytimeForecast || {};
+      const nt = fd.nighttimeForecast || {};
+      const dtType = dt.weatherCondition?.type || '';
+      const ntType = nt.weatherCondition?.type || '';
+      map.set(dateStr, {
+        icon: weatherIconForType(dtType, false),
+        tempC: Math.round(dt.temperature?.value ?? 0),
+        nightIcon: weatherIconForType(ntType, true),
+        nightTempC: Math.round(nt.temperature?.value ?? 0),
+        conditionText: dtType.replace(/_/g, ' ').toLowerCase().replace(/^\w/, c => c.toUpperCase()),
+        conditionType: dtType,
+      });
+    }
+    _weatherCache[day.id] = map;
+    return map;
+  } catch (e) {
+    _weatherCache[day.id] = null;
+    return null;
+  }
+}
+
+function getWeatherForStop(weatherMap, stop) {
+  if (!weatherMap) return null;
+  // Find the day this stop belongs to
+  const day = TRIP_DATA.days.find(d => d.id === state.currentDayId || d.stops?.some(s => s.id === stop.id));
+  const dateStr = day?.date || '';
+  const entry = weatherMap.get(dateStr);
+  if (!entry) return null;
+  const night = isNightTime(getStopTime(stop));
+  return {
+    icon: night ? entry.nightIcon : entry.icon,
+    tempC: night ? entry.nightTempC : entry.tempC,
+    conditionText: entry.conditionText,
+    conditionType: entry.conditionType,
+  };
 }
 
 const _commonsCache = {}; // stopId → [url, ...]
@@ -1267,9 +1387,24 @@ function renderCalView(container) {
     const durStr = dur >= 60 ? `${dur_h}h${dur_m ? dur_m+'m':''}` : `${dur}m`;
     card.innerHTML = `
       <div class="cal-card-name">${stopTypeIcon(stop)} ${getStopName(stop)}</div>
-      <div class="cal-card-meta">${getStopTime(stop)}${stop.tz?' '+stop.tz:''} · ${durStr}</div>`;
+      <div class="cal-card-meta">${getStopTime(stop)}${stop.tz?' '+stop.tz:''} · ${durStr} <span class="cal-weather-pill" data-stop-id="${stop.id}"></span></div>`;
     card.addEventListener('click', () => openDetail(stop));
     wrap.appendChild(card);
+
+    // Lazily populate cal weather pill
+    const calWPill = card.querySelector('.cal-weather-pill');
+    if (calWPill) {
+      fetchWeatherForDay(day).then(wMap => {
+        if (!wMap || !calWPill.isConnected) return;
+        const dateStr = day.date || '';
+        const entry = wMap.get(dateStr);
+        if (!entry) return;
+        const night = isNightTime(getStopTime(stop));
+        const icon = night ? entry.nightIcon : entry.icon;
+        const tempC = night ? entry.nightTempC : entry.tempC;
+        calWPill.innerHTML = `<i class="ph ${icon}"></i> ${tempC}°`;
+      });
+    }
 
     // Travel gap to next stop
     const next = timedStops[idx + 1];
@@ -1480,6 +1615,15 @@ function buildTimelineItem(stop, isLast) {
   const isEditable = timeToMinutes(time) !== null;
   const isVisited = !!state.checked[stop.id];
 
+  // Past-time: only on today's view; departure time has already passed
+  const _todayStr = new Date().toISOString().slice(0, 10);
+  const _currentDay = TRIP_DATA.days.find(d => d.id === state.currentDayId);
+  const _isToday = _currentDay && (_currentDay.date === _todayStr ||
+    (_currentDay.isFestival && _todayStr >= _currentDay.date && _todayStr <= (_currentDay.dateEnd || _currentDay.date)));
+  const _stopMins = timeToMinutes(time);
+  const _depMins = _stopMins !== null ? _stopMins + getStopDuration(stop) : null;
+  const isPast = _isToday && _depMins !== null && _depMins < nowMinutes();
+
   item.innerHTML = `
     <div class="tl-left">
       <button class="tl-time-btn" data-stop-id="${stop.id}">
@@ -1490,7 +1634,7 @@ function buildTimelineItem(stop, isLast) {
       <div class="tl-dot"></div>
       ${isLast ? '' : '<div class="tl-line"></div>'}
     </div>
-    <div class="tl-card${isVisited ? ' visited' : ''}" data-stop-id="${stop.id}">
+    <div class="tl-card${isVisited ? ' visited' : ''}${isPast && !isVisited ? ' tl-card--past' : ''}" data-stop-id="${stop.id}">
       <div class="card-visited-badge">✓</div>
       ${buildSlider(stop, 'card')}
       <div class="card-body">
@@ -1501,6 +1645,7 @@ function buildTimelineItem(stop, isLast) {
         <div class="card-meta-row">
           <span class="tl-card-badge">${typeLabel(getStopType(stop))}</span>
           ${getStopPriority(stop) > 0 ? `<span class="priority-stars">${priorityStars(getStopPriority(stop))}</span>` : ''}
+          <span class="weather-pill" data-stop-id="${stop.id}"></span>
         </div>
         <div class="card-reason">${getStopReason(stop)}</div>
         ${buildTags(stop)}
@@ -1535,6 +1680,24 @@ function buildTimelineItem(stop, isLast) {
   }
 
   initSlider(item.querySelector('.card-slider'), stop, 'card');
+
+  // Lazily fetch weather and update pill
+  const _weatherPill = item.querySelector('.weather-pill');
+  if (_weatherPill && _currentDay) {
+    fetchWeatherForDay(_currentDay).then(wMap => {
+      if (!wMap || !_weatherPill.isConnected) return;
+      const day = _currentDay;
+      const dateStr = day.date || '';
+      const entry = wMap.get(dateStr);
+      if (!entry) return;
+      const night = isNightTime(getStopTime(stop));
+      const icon = night ? entry.nightIcon : entry.icon;
+      const tempC = night ? entry.nightTempC : entry.tempC;
+      _weatherPill.innerHTML = `<i class="ph ${icon}"></i> ${tempC}°C`;
+      _weatherPill.title = entry.conditionText;
+    });
+  }
+
   return item;
 }
 
