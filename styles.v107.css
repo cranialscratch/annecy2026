@@ -1220,29 +1220,27 @@ body.light #map-poi-wrap {
 .tl-now-line {
   display: flex; align-items: center; margin: 2px 0; pointer-events: none;
 }
-/* Now pill reuses .tl-time-btn sizing; just add rose colour */
+/* Now pill: same transparent background as other time buttons, just rose text */
 .tl-now-pill {
-  background: var(--rose); color: #fff !important;
-  border-radius: 6px;
-  box-shadow: 0 2px 8px rgba(255,55,95,.4);
+  color: var(--rose) !important;
+  text-shadow: 0 1px 6px rgba(255,55,95,.5) !important;
   pointer-events: none;
+  position: relative;
 }
-.tl-now-track { margin-left: 10px; }
-.compact-card .tl-now-pill { font-size: 13px; min-width: auto; }
+/* Horizontal rule that extends right from the time column */
 .tl-now-track {
-  flex: 1; display: flex; align-items: center; gap: 4px;
-  padding-right: 8px;
+  flex: 1; display: flex; align-items: center;
+  margin-left: 10px; padding-right: 8px;
 }
 .tl-now-dot {
-  width: 9px; height: 9px; border-radius: 50%;
-  background: var(--rose); flex-shrink: 0;
-  box-shadow: 0 0 8px rgba(255,55,95,.7);
+  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+  background: var(--rose);
+  box-shadow: 0 0 6px rgba(255,55,95,.7);
 }
 .tl-now-bar {
   flex: 1; height: 2px; border-radius: 2px;
   background: linear-gradient(90deg, var(--rose), transparent);
 }
-/* keep compact-card override */
 .compact-card .tl-now-line { pointer-events: none; }
 
 /* ── Leave-by countdown pill ──────────────────────────────────────── */
