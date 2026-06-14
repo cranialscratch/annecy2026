@@ -1220,23 +1220,14 @@ body.light #map-poi-wrap {
 .tl-now-line {
   display: flex; align-items: center; margin: 2px 0; pointer-events: none;
 }
-/* Exact same column as .tl-left */
-.tl-now-left {
-  width: 46px; flex-shrink: 0;
-  display: flex; flex-direction: column; align-items: center;
-}
-/* Exact same look as .tl-time-btn but rose-coloured */
+/* Now pill reuses .tl-time-btn sizing; just add rose colour */
 .tl-now-pill {
-  font-size: 17px; font-weight: 700; line-height: 1.2;
-  text-align: center; padding: 4px 0; min-width: 50px;
-  white-space: nowrap; letter-spacing: -0.3px;
-  background: var(--rose); color: #fff;
+  background: var(--rose); color: #fff !important;
   border-radius: 6px;
   box-shadow: 0 2px 8px rgba(255,55,95,.4);
+  pointer-events: none;
 }
-/* Track starts where .tl-card starts (margin-left:10px on cards) */
 .tl-now-track { margin-left: 10px; }
-.compact-card .tl-now-left { width: auto; padding: 0 6px 0 14px; }
 .compact-card .tl-now-pill { font-size: 13px; min-width: auto; }
 .tl-now-track {
   flex: 1; display: flex; align-items: center; gap: 4px;
