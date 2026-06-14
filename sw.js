@@ -1,4 +1,4 @@
-const CACHE = 'annecy2026-v104';
+const CACHE = 'annecy2026-v105';
 const CORE = [
   './index.html',
   './styles.v104.css',
@@ -50,5 +50,33 @@ self.addEventListener('fetch', e => {
       }
       return res;
     }).catch(() => caches.match(e.request))
+  );
+});
+
+/* ── Show notification on behalf of the page (works when backgrounded) */
+self.addEventListener('message', e => {
+  if (e.data?.type !== 'SHOW_NOTIF') return;
+  const { title, body, tag } = e.data;
+  e.waitUntil(
+    self.registration.showNotification(title, {
+      body,
+      tag,
+      icon:  './icons/icon-180.png',
+      badge: './icons/icon-72.png',
+      vibrate: [200, 100, 200],
+      renotify: false,
+    })
+  );
+});
+
+/* Tap notification → focus the app */
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  e.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+      .then(clients => {
+        const c = clients.find(c => c.url.includes(self.location.origin));
+        return c ? c.focus() : self.clients.openWindow('./');
+      })
   );
 });

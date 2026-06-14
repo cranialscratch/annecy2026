@@ -4,6 +4,7 @@ const state = {
   currentView: 'day',
   cascadeEnabled: false,
   compactMode: false,
+  notifsEnabled: false,
   overrides: {},        // stopId → time string
   checked: {},          // stopId → bool
   locOverrides: {},     // stopId → { name, lat, lng }
@@ -112,11 +113,138 @@ function renderLeaveByEl(el, stop) {
   el.className = `leave-by-pill${info.urgent ? ' urgent' : ''}${info.active ? ' active' : ''}`;
   el.style.display = '';
 }
+/* ── Departure notifications ────────────────────────────────────────
+   Fires a local notification 15 min before every leave-by time or
+   depart stop on today's day. Uses setTimeout scheduled from the
+   current time; also re-checked by the leave-by ticker so rescheduling
+   after the page wakes from background still works.
+──────────────────────────────────────────────────────────────────── */
+const _firedNotifs  = new Set(); // stopId → fired today, reset at midnight
+let   _notifTimers  = [];
+let   _notifMidnightTimer = null;
+
+function notifSupported() {
+  return 'Notification' in window;
+}
+function notifGranted() {
+  return notifSupported() && Notification.permission === 'granted';
+}
+
+function updateNotifBtn() {
+  const btn = document.getElementById('notif-btn');
+  const lbl = document.getElementById('notif-label');
+  if (!btn || !lbl) return;
+  if (!notifSupported()) {
+    btn.style.opacity = '0.4';
+    lbl.textContent = 'Alerts not supported';
+    return;
+  }
+  const on = state.notifsEnabled && notifGranted();
+  lbl.textContent = on ? 'Departure alerts on' : 'Departure alerts off';
+  btn.querySelector('.ph').className = on
+    ? 'ph ph-bell-ringing drawer-icon'
+    : 'ph ph-bell drawer-icon';
+}
+
+async function enableNotifs() {
+  if (!notifSupported()) return;
+  const perm = await Notification.requestPermission();
+  if (perm === 'granted') {
+    state.notifsEnabled = true;
+    try { localStorage.setItem('annecy_notifs', '1'); } catch {}
+    scheduleNotifs();
+  } else {
+    state.notifsEnabled = false;
+    try { localStorage.setItem('annecy_notifs', '0'); } catch {}
+  }
+  updateNotifBtn();
+}
+
+function disableNotifs() {
+  state.notifsEnabled = false;
+  try { localStorage.setItem('annecy_notifs', '0'); } catch {}
+  _notifTimers.forEach(clearTimeout);
+  _notifTimers = [];
+  updateNotifBtn();
+}
+
+function collectTodayLeaveEvents() {
+  const today = new Date().toISOString().slice(0, 10);
+  const events = [];
+  for (const day of TRIP_DATA.days) {
+    const covers = day.date === today ||
+      (day.isFestival && today >= day.date && today <= (day.dateEnd || day.date));
+    if (!covers) continue;
+    for (const stop of day.stops) {
+      const type = getStopType(stop);
+      // depart stops: notify at stop time - 15
+      if (type === 'depart') {
+        const m = timeToMinutes(getStopTime(stop));
+        if (m !== null) events.push({ stop, notifMins: m - 15, label: `Departing from ${getStopName(stop)}` });
+      }
+      // stops with explicit duration: notify at leaveBy - 15
+      if (hasExplicitDuration(stop) && type !== 'depart') {
+        const arr = timeToMinutes(getStopTime(stop));
+        if (arr !== null) {
+          const leaveBy = arr + getStopDuration(stop);
+          events.push({ stop, notifMins: leaveBy - 15, label: `Leave ${getStopName(stop)} in 15 min` });
+        }
+      }
+    }
+  }
+  return events;
+}
+
+function scheduleNotifs() {
+  _notifTimers.forEach(clearTimeout);
+  _notifTimers = [];
+  if (!notifGranted() || !state.notifsEnabled) return;
+
+  const now    = new Date();
+  const nowMs  = now.getTime();
+  const todayStartMs = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+
+  collectTodayLeaveEvents().forEach(({ stop, notifMins, label }) => {
+    if (notifMins < 0) return;
+    const fireMs = todayStartMs + notifMins * 60000;
+    const delay  = fireMs - nowMs;
+    if (delay < 0) return; // already past
+
+    const t = setTimeout(() => {
+      if (!state.notifsEnabled || !notifGranted()) return;
+      if (_firedNotifs.has(stop.id + ':' + notifMins)) return;
+      _firedNotifs.add(stop.id + ':' + notifMins);
+      try {
+        // Prefer SW notification (works when backgrounded on Android/iOS PWA)
+        if (navigator.serviceWorker?.controller) {
+          navigator.serviceWorker.controller.postMessage({
+            type: 'SHOW_NOTIF',
+            title: '🕐 Departure reminder',
+            body: label,
+            tag: `depart-${stop.id}`,
+          });
+        } else {
+          new Notification('🕐 Departure reminder', { body: label, tag: `depart-${stop.id}`, icon: './icons/icon-180.png' });
+        }
+      } catch {}
+    }, delay);
+    _notifTimers.push(t);
+  });
+
+  // Reset fired set at midnight
+  clearTimeout(_notifMidnightTimer);
+  const msToMidnight = todayStartMs + 86400000 - nowMs;
+  _notifMidnightTimer = setTimeout(() => {
+    _firedNotifs.clear();
+    scheduleNotifs();
+  }, msToMidnight);
+}
+
 let _leaveByInterval = null;
 function startLeaveByTicker() {
   clearInterval(_leaveByInterval);
   updateAllLeaveBy();
-  _leaveByInterval = setInterval(updateAllLeaveBy, 30000);
+  _leaveByInterval = setInterval(() => { updateAllLeaveBy(); scheduleNotifs(); }, 30000);
 }
 function updateAllLeaveBy() {
   document.querySelectorAll('[data-leaveby]').forEach(el => {
@@ -452,6 +580,9 @@ function load() {
   } catch {}
   try {
     if (localStorage.getItem('annecy_compact') === '1') state.compactMode = true;
+  } catch {}
+  try {
+    if (localStorage.getItem('annecy_notifs') === '1') state.notifsEnabled = true;
   } catch {}
 }
 
@@ -1795,6 +1926,7 @@ document.addEventListener('DOMContentLoaded', () => {
   buildDayStrip();
   renderView(true); // scroll to now only on first load
   if (typeof syncInit === 'function') syncInit();
+  scheduleNotifs(); // schedule any pending departure alerts for today
 
   /* Gyroscope parallax */
   (function() {
@@ -1850,6 +1982,19 @@ document.addEventListener('DOMContentLoaded', () => {
     // Show enable button; hook up click
     const btn = document.getElementById('gyro-btn');
     if (btn) btn.addEventListener('click', startGyro);
+
+    // Notification toggle
+    const notifBtn = document.getElementById('notif-btn');
+    if (notifBtn) {
+      updateNotifBtn();
+      notifBtn.addEventListener('click', () => {
+        if (state.notifsEnabled) {
+          disableNotifs();
+        } else {
+          enableNotifs();
+        }
+      });
+    }
 
     // Auto-start: Android (no permission API) — no gesture needed
     if (typeof DeviceOrientationEvent !== 'undefined' &&
