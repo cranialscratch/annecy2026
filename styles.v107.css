@@ -1494,3 +1494,45 @@ body.light .cal-travel-label {
 .cal-travel-label .ph { font-size: 13px; }
 .cal-travel-label.tappable { cursor: pointer; pointer-events: all; }
 .cal-travel-label.tappable:active { opacity: 0.75; }
+
+/* Weather pill on timeline/calendar cards */
+.weather-pill, .cal-weather-pill {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 12px; font-weight: 600;
+  color: rgba(255,255,255,0.80);
+  background: rgba(255,255,255,0.10);
+  padding: 2px 8px; border-radius: 12px;
+  vertical-align: middle;
+}
+body.light .weather-pill, body.light .cal-weather-pill {
+  color: rgba(0,0,0,0.65);
+  background: rgba(0,0,0,0.07);
+}
+.weather-pill:empty, .cal-weather-pill:empty { display: none; }
+
+/* Weather row on detail page */
+.detail-weather-row {
+  display: flex; align-items: center; gap: 10px;
+  margin: 2px 0 12px;
+  font-size: 15px; font-weight: 600;
+  color: var(--text-primary);
+}
+.detail-weather-row .weather-icon { font-size: 22px; }
+.detail-weather-row .weather-temp { font-size: 20px; font-weight: 700; }
+.detail-weather-row .weather-desc { font-size: 14px; opacity: 0.65; flex: 1; }
+.detail-weather-row a.weather-link {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 13px; font-weight: 600;
+  color: var(--accent);
+  text-decoration: none; padding: 4px 10px;
+  background: rgba(99,102,241,0.12); border-radius: 20px;
+  white-space: nowrap;
+}
+.detail-weather-row.hidden { display: none; }
+
+/* Past-time cards — muted, distinct from visited */
+.tl-card.tl-card--past {
+  opacity: 0.45;
+  filter: grayscale(30%);
+}
+.tl-card.tl-card--past .card-visited-badge { display: none; }
