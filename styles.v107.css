@@ -1465,3 +1465,26 @@ body.light .cal-card-meta { color: rgba(0,0,0,0.50); }
   border-radius: 2px;
   box-shadow: 0 0 6px rgba(255,55,95,.4);
 }
+
+/* Travel gap between stops */
+.cal-travel-gap {
+  position: absolute;
+  left: 54px; right: 12px;
+  display: flex; align-items: center; justify-content: center;
+  pointer-events: none; z-index: 2;
+  border-left: 2px dashed rgba(255,255,255,0.15);
+}
+body.light .cal-travel-gap { border-left-color: rgba(0,0,0,0.12); }
+.cal-travel-label {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 12px; font-weight: 600;
+  color: rgba(255,255,255,0.45);
+  background: rgba(255,255,255,0.07);
+  padding: 3px 10px; border-radius: 20px;
+  white-space: nowrap;
+}
+body.light .cal-travel-label {
+  color: rgba(0,0,0,0.40);
+  background: rgba(0,0,0,0.05);
+}
+.cal-travel-label .ph { font-size: 13px; opacity: 0.8; }

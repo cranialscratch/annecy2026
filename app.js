@@ -208,7 +208,19 @@ function scheduleNotifs() {
     if (notifMins < 0) return;
     const fireMs = todayStartMs + notifMins * 60000;
     const delay  = fireMs - nowMs;
-    if (delay < 0) return; // already past
+    // Fire immediately if we just missed it (within last 3 min) and not already fired
+    if (delay < 0 && delay > -180000 && !_firedNotifs.has(stop.id + ':' + notifMins)) {
+      _firedNotifs.add(stop.id + ':' + notifMins);
+      try {
+        if (navigator.serviceWorker?.controller) {
+          navigator.serviceWorker.controller.postMessage({ type: 'SHOW_NOTIF', title: '🕐 Departure reminder', body: label, tag: `depart-${stop.id}` });
+        } else {
+          new Notification('🕐 Departure reminder', { body: label, tag: `depart-${stop.id}`, icon: './icons/icon-180.png' });
+        }
+      } catch {}
+      return;
+    }
+    if (delay < 0) return; // already past and more than 3 min ago
 
     const t = setTimeout(() => {
       if (!state.notifsEnabled || !notifGranted()) return;
@@ -1102,13 +1114,20 @@ function renderCalView(container) {
     wrap.appendChild(tick);
   }
 
-  // Stop cards
+  // Stop cards + travel gaps
   const TYPE_COL = {
     charging:'#16a34a', hotel:'#0284c7', transport:'#7c3aed', food:'#ea580c',
     architecture:'#d97706', village:'#0d9488', town:'#0d9488', experience:'#db2777',
     wander:'#059669', depart:'#475569', scenic:'#16a34a', historic:'#b45309', festival:'#7c3aed',
   };
-  timedStops.forEach(stop => {
+
+  function haversineKm(lat1, lng1, lat2, lng2) {
+    const R = 6371, dLat = (lat2-lat1)*Math.PI/180, dLng = (lng2-lng1)*Math.PI/180;
+    const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  }
+
+  timedStops.forEach((stop, idx) => {
     const t    = timeToMinutes(getStopTime(stop));
     const dur  = getStopDuration(stop);
     const top  = (t - dayStart) * CAL_PX_MIN;
@@ -1127,6 +1146,52 @@ function renderCalView(container) {
       <div class="cal-card-meta">${getStopTime(stop)}${stop.tz?' '+stop.tz:''} · ${durStr}</div>`;
     card.addEventListener('click', () => openDetail(stop));
     wrap.appendChild(card);
+
+    // Travel gap to next stop
+    const next = timedStops[idx + 1];
+    if (next) {
+      const depMins  = t + dur;
+      const arrMins  = timeToMinutes(getStopTime(next));
+      const gapMins  = arrMins - depMins;
+      if (gapMins > 0) {
+        const gapTop = (depMins - dayStart) * CAL_PX_MIN;
+        const gapH   = gapMins * CAL_PX_MIN;
+        const gap    = document.createElement('div');
+        gap.className = 'cal-travel-gap';
+        gap.id = `cal-gap-${stop.id}`;
+        gap.style.cssText = `top:${gapTop}px;height:${gapH}px;`;
+        const gapH_h = Math.floor(gapMins/60), gapH_m = gapMins%60;
+        const gapStr = gapMins >= 60 ? `${gapH_h}h${gapH_m?gapH_m+'m':''}` : `${gapMins}m`;
+        gap.innerHTML = `<span class="cal-travel-label" id="cal-travel-${stop.id}"><i class="ph ph-car"></i> ${gapStr}</span>`;
+        wrap.appendChild(gap);
+
+        // Async: fetch road distance and update label
+        const fromLat = getStopLat(stop), fromLng = getStopLng(stop);
+        const toLat   = getStopLat(next), toLng   = getStopLng(next);
+        if (fromLat && fromLng && toLat && toLng) {
+          const straightKm = haversineKm(fromLat, fromLng, toLat, toLng);
+          // Show straight-line estimate immediately, replace with road distance
+          const lbl = gap.querySelector(`#cal-travel-${stop.id}`);
+          if (straightKm > 0.5) {
+            lbl.innerHTML = `<i class="ph ph-car"></i> ${gapStr} · ~${Math.round(straightKm)} km`;
+          }
+          // Fetch road distance from OSRM (includes distance in response)
+          fetch(`https://router.project-osrm.org/route/v1/driving/${fromLng},${fromLat};${toLng},${toLat}?overview=false`)
+            .then(r => r.json())
+            .then(d => {
+              const route = d.routes?.[0];
+              if (!route) return;
+              const roadKm = Math.round(route.distance / 1000);
+              const roadMins = Math.ceil(route.duration / 60);
+              const rH = Math.floor(roadMins/60), rM = roadMins%60;
+              const rStr = roadMins >= 60 ? `${rH}h${rM?rM+'m':''}` : `${roadMins}m`;
+              const el = document.getElementById(`cal-travel-${stop.id}`);
+              if (el) el.innerHTML = `<i class="ph ph-car"></i> ${rStr} · ${roadKm} km`;
+            })
+            .catch(() => {});
+        }
+      }
+    }
   });
 
   // Now line
