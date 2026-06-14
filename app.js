@@ -382,6 +382,7 @@ function scheduleNotifs() {
 }
 
 let _leaveByInterval = null;
+let _renderCount = 0;
 function startLeaveByTicker() {
   clearInterval(_leaveByInterval);
   updateAllLeaveBy();
@@ -1559,8 +1560,11 @@ function renderTimeline(container, scrollToNow) {
   }, 1500);
 
   // Scroll to now on today's view — wait for layout then measure
+  // Use a render token so a subsequent renderView() cancels any pending scroll
+  const _myRender = ++_renderCount;
   if (scrollToNow && isToday) {
     setTimeout(() => {
+      if (_renderCount !== _myRender) return; // superseded by a later render
       const mc = document.getElementById('main-content');
       const headerH = document.getElementById('app-header').offsetHeight;
       const target = document.getElementById('tl-now-marker');
@@ -2720,12 +2724,15 @@ document.addEventListener('DOMContentLoaded', () => {
   /* Service worker */
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 
-  /* Resume from background / screen wake: switch to today and scroll to now */
+  /* Resume from background / screen wake: return to today after 15+ min away */
+  const RESUME_THRESHOLD = 15 * 60 * 1000; // 15 minutes
   let _lastVisible = Date.now();
-  document.addEventListener('visibilitychange', () => {
+
+  function handleResume() {
     if (document.hidden) { _lastVisible = Date.now(); return; }
     const away = Date.now() - _lastVisible;
-    if (away < 10000) return; // ignore very brief switches (< 10s)
+    if (away < RESUME_THRESHOLD) return;
+    _lastVisible = Date.now();
     const todayId = findTodayDayId();
     if (todayId) {
       state.currentDayId = todayId;
@@ -2734,5 +2741,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     renderView(true);
     scheduleNotifs();
-  });
+  }
+
+  // visibilitychange covers most cases; pageshow catches iOS PWA cold-resume
+  document.addEventListener('visibilitychange', handleResume);
+  window.addEventListener('pageshow', handleResume);
 });
