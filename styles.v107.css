@@ -1220,17 +1220,22 @@ body.light #map-poi-wrap {
 .tl-now-line {
   display: flex; align-items: center; margin: 2px 0; pointer-events: none;
 }
+/* Exact same column as .tl-left */
 .tl-now-left {
   width: 46px; flex-shrink: 0;
-  display: flex; justify-content: center; align-items: center;
+  display: flex; flex-direction: column; align-items: center;
 }
+/* Exact same look as .tl-time-btn but rose-coloured */
 .tl-now-pill {
+  font-size: 17px; font-weight: 700; line-height: 1.2;
+  text-align: center; padding: 4px 0; min-width: 50px;
+  white-space: nowrap; letter-spacing: -0.3px;
   background: var(--rose); color: #fff;
-  font-size: 17px; font-weight: 700; letter-spacing: -0.3px;
-  padding: 3px 6px; border-radius: 8px; white-space: nowrap;
+  border-radius: 6px;
   box-shadow: 0 2px 8px rgba(255,55,95,.4);
-  min-width: 50px; text-align: center;
 }
+/* Track starts where .tl-card starts (margin-left:10px on cards) */
+.tl-now-track { margin-left: 10px; }
 .compact-card .tl-now-left { width: auto; padding: 0 6px 0 14px; }
 .compact-card .tl-now-pill { font-size: 13px; min-width: auto; }
 .tl-now-track {
