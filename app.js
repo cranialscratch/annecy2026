@@ -84,6 +84,103 @@ function typeLabel(type) {
 function nowMinutes() {
   const n = new Date(); return n.getHours() * 60 + n.getMinutes();
 }
+/* ── Traffic polling ────────────────────────────────────────────────── */
+let _trafficPollTimer    = null;
+let _trafficBaseline     = {};   // stopId → baseline travel seconds
+let _trafficLastFired    = {};   // stopId → timestamp of last alert
+
+function findNextDrivingLeg() {
+  // Returns { from: {lat,lng}, to: stop } for the next stop we're driving to,
+  // based on current time vs today's itinerary. Returns null if not a driving day.
+  const today = new Date().toISOString().slice(0, 10);
+  const day = TRIP_DATA.days.find(d =>
+    d.date === today || (d.isFestival && today >= d.date && today <= (d.dateEnd || d.date))
+  );
+  if (!day || day.isCountdown) return null;
+  const now = nowMinutes();
+  const timedStops = day.stops.filter(s => timeToMinutes(getStopTime(s)) !== null);
+  for (let i = 0; i < timedStops.length - 1; i++) {
+    const cur  = timedStops[i];
+    const next = timedStops[i + 1];
+    const depMins = timeToMinutes(getStopTime(cur)) + getStopDuration(cur);
+    const arrMins = timeToMinutes(getStopTime(next));
+    // We're in the travel window between cur and next
+    if (now >= depMins - 10 && now < arrMins + 15) {
+      const toLat = getStopLat(next), toLng = getStopLng(next);
+      if (!toLat || !toLng) continue;
+      return { fromStop: cur, toStop: next, scheduledMins: arrMins - depMins };
+    }
+  }
+  return null;
+}
+
+async function pollTraffic() {
+  if (!state.notifsEnabled || !notifGranted()) return;
+  if (_userLat === null || _userLng === null) return;
+  const leg = findNextDrivingLeg();
+  if (!leg) return;
+
+  try {
+    const body = {
+      origin:      { location: { latLng: { latitude: _userLat, longitude: _userLng } } },
+      destination: { location: { latLng: { latitude: getStopLat(leg.toStop), longitude: getStopLng(leg.toStop) } } },
+      travelMode:  'DRIVE',
+      routingPreference: 'TRAFFIC_AWARE',
+      departureTime: new Date().toISOString(),
+    };
+    const r = await fetch(`https://routes.googleapis.com/directions/v2:computeRoutes?key=${GKEY}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Goog-FieldMask': 'routes.duration,routes.staticDuration' },
+      body: JSON.stringify(body),
+    });
+    const d = await r.json();
+    const route = d.routes?.[0];
+    if (!route) return;
+
+    const trafficSecs = parseInt(route.duration);           // with traffic
+    const staticSecs  = parseInt(route.staticDuration);     // without traffic
+    const delaySecs   = trafficSecs - staticSecs;
+    const id = leg.toStop.id;
+
+    // Establish baseline on first poll for this leg
+    if (!_trafficBaseline[id]) {
+      _trafficBaseline[id] = staticSecs;
+      return;
+    }
+
+    const delayMins = Math.round(delaySecs / 60);
+    if (delayMins >= 5) {
+      // Only re-alert if last alert for this leg was >20 min ago
+      const now = Date.now();
+      if (_trafficLastFired[id] && now - _trafficLastFired[id] < 20 * 60 * 1000) return;
+      _trafficLastFired[id] = now;
+
+      const trafficMins = Math.round(trafficSecs / 60);
+      const tH = Math.floor(trafficMins/60), tM = trafficMins%60;
+      const tStr = trafficMins >= 60 ? `${tH}h ${tM}m` : `${trafficMins}m`;
+      const title = '🚦 Traffic delay ahead';
+      const msg   = `${delayMins} min delay to ${getStopName(leg.toStop)}. Journey now ~${tStr}. Consider leaving earlier.`;
+      try {
+        if (navigator.serviceWorker?.controller) {
+          navigator.serviceWorker.controller.postMessage({ type: 'SHOW_NOTIF', title, body: msg, tag: `traffic-${id}` });
+        } else {
+          new Notification(title, { body: msg, icon: './icons/icon-180.png', tag: `traffic-${id}` });
+        }
+      } catch {}
+    }
+  } catch {}
+}
+
+function startTrafficPolling() {
+  stopTrafficPolling();
+  pollTraffic();
+  _trafficPollTimer = setInterval(pollTraffic, 5 * 60 * 1000);
+}
+function stopTrafficPolling() {
+  clearInterval(_trafficPollTimer);
+  _trafficPollTimer = null;
+}
+
 function fmtDist(km) {
   if (state.useMetric) return `${Math.round(km)} km`;
   return `${Math.round(km * 0.621371)} mi`;
@@ -175,6 +272,7 @@ async function enableNotifs() {
     state.notifsEnabled = true;
     try { localStorage.setItem('annecy_notifs', '1'); } catch {}
     scheduleNotifs();
+    startTrafficPolling();
   } else {
     state.notifsEnabled = false;
     try { localStorage.setItem('annecy_notifs', '0'); } catch {}
@@ -187,6 +285,7 @@ function disableNotifs() {
   try { localStorage.setItem('annecy_notifs', '0'); } catch {}
   _notifTimers.forEach(clearTimeout);
   _notifTimers = [];
+  stopTrafficPolling();
   updateNotifBtn();
 }
 
@@ -2140,6 +2239,7 @@ document.addEventListener('DOMContentLoaded', () => {
   renderView(true); // scroll to now only on first load
   if (typeof syncInit === 'function') syncInit();
   scheduleNotifs(); // schedule any pending departure alerts for today
+  if (state.notifsEnabled && notifGranted()) startTrafficPolling();
 
   /* Gyroscope parallax */
   (function() {
