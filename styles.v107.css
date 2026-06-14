@@ -1472,19 +1472,23 @@ body.light .cal-card-meta { color: rgba(0,0,0,0.50); }
   left: 54px; right: 12px;
   display: flex; align-items: center; justify-content: center;
   pointer-events: none; z-index: 2;
-  border-left: 2px dashed rgba(255,255,255,0.15);
+  border-left: 2px dashed rgba(255,255,255,0.30);
 }
-body.light .cal-travel-gap { border-left-color: rgba(0,0,0,0.12); }
+body.light .cal-travel-gap { border-left-color: rgba(0,0,0,0.22); }
 .cal-travel-label {
   display: inline-flex; align-items: center; gap: 5px;
-  font-size: 12px; font-weight: 600;
-  color: rgba(255,255,255,0.45);
-  background: rgba(255,255,255,0.07);
-  padding: 3px 10px; border-radius: 20px;
+  font-size: 12px; font-weight: 700;
+  color: rgba(255,255,255,0.92);
+  background: rgba(10, 10, 26, 0.82);
+  border: 1px solid rgba(255,255,255,0.12);
+  padding: 4px 12px; border-radius: 20px;
   white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.4);
 }
 body.light .cal-travel-label {
-  color: rgba(0,0,0,0.40);
-  background: rgba(0,0,0,0.05);
+  color: rgba(0,0,0,0.80);
+  background: rgba(255,255,255,0.90);
+  border-color: rgba(0,0,0,0.10);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
 }
-.cal-travel-label .ph { font-size: 13px; opacity: 0.8; }
+.cal-travel-label .ph { font-size: 13px; }
