@@ -190,8 +190,8 @@ function fmtDist(km) {
   return `${Math.round(km * 0.621371)} mi`;
 }
 function openWeatherApp(lat, lng, name) {
-  const q = name ? encodeURIComponent('weather ' + name) : encodeURIComponent(`weather ${lat},${lng}`);
-  window.open(`https://www.google.com/search?q=${q}`, '_blank');
+  const q = name ? encodeURIComponent(name) : `${lat},${lng}`;
+  window.open(`https://www.bbc.co.uk/weather/search?s=${q}`, '_blank');
 }
 function openDirections(toLat, toLng) {
   // Use geo: URI — iOS opens Apple Maps, Android opens Google Maps
