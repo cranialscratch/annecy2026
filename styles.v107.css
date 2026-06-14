@@ -1219,7 +1219,8 @@ body.light #map-poi-wrap {
 
 .tl-now-line {
   pointer-events: none;
-  margin-bottom: 0 !important;
+  /* tl-item gives margin-bottom:12px — reduce so the now-line feels flush */
+  margin-bottom: 4px !important;
 }
 /* Now pill: same as other time buttons, rose-coloured */
 .tl-now-pill {
