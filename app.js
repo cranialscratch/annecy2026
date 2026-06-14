@@ -324,6 +324,25 @@ function collectTodayLeaveEvents() {
   return events;
 }
 
+async function sendNotif(title, body, tag) {
+  try {
+    // Wait up to 3s for SW controller to be available (may be null on cold resume)
+    let ctrl = navigator.serviceWorker?.controller;
+    if (!ctrl) {
+      await Promise.race([
+        navigator.serviceWorker.ready,
+        new Promise(r => setTimeout(r, 3000)),
+      ]);
+      ctrl = navigator.serviceWorker?.controller;
+    }
+    if (ctrl) {
+      ctrl.postMessage({ type: 'SHOW_NOTIF', title, body, tag });
+    } else {
+      new Notification(title, { body, tag, icon: './icons/icon-180.png' });
+    }
+  } catch {}
+}
+
 function scheduleNotifs() {
   _notifTimers.forEach(clearTimeout);
   _notifTimers = [];
@@ -337,37 +356,21 @@ function scheduleNotifs() {
     if (notifMins < 0) return;
     const fireMs = todayStartMs + notifMins * 60000;
     const delay  = fireMs - nowMs;
-    // Fire immediately if we just missed it (within last 3 min) and not already fired
-    if (delay < 0 && delay > -180000 && !_firedNotifs.has(stop.id + ':' + notifMins)) {
-      _firedNotifs.add(stop.id + ':' + notifMins);
-      try {
-        if (navigator.serviceWorker?.controller) {
-          navigator.serviceWorker.controller.postMessage({ type: 'SHOW_NOTIF', title: '🕐 Departure reminder', body: label, tag: `depart-${stop.id}` });
-        } else {
-          new Notification('🕐 Departure reminder', { body: label, tag: `depart-${stop.id}`, icon: './icons/icon-180.png' });
-        }
-      } catch {}
+    const key    = stop.id + ':' + notifMins;
+
+    // Catch-up: fire immediately if missed within last 30 min
+    if (delay < 0 && delay > -1800000 && !_firedNotifs.has(key)) {
+      _firedNotifs.add(key);
+      sendNotif('🕐 Departure reminder', label, `depart-${stop.id}`);
       return;
     }
-    if (delay < 0) return; // already past and more than 3 min ago
+    if (delay < 0) return;
 
     const t = setTimeout(() => {
       if (!state.notifsEnabled || !notifGranted()) return;
-      if (_firedNotifs.has(stop.id + ':' + notifMins)) return;
-      _firedNotifs.add(stop.id + ':' + notifMins);
-      try {
-        // Prefer SW notification (works when backgrounded on Android/iOS PWA)
-        if (navigator.serviceWorker?.controller) {
-          navigator.serviceWorker.controller.postMessage({
-            type: 'SHOW_NOTIF',
-            title: '🕐 Departure reminder',
-            body: label,
-            tag: `depart-${stop.id}`,
-          });
-        } else {
-          new Notification('🕐 Departure reminder', { body: label, tag: `depart-${stop.id}`, icon: './icons/icon-180.png' });
-        }
-      } catch {}
+      if (_firedNotifs.has(key)) return;
+      _firedNotifs.add(key);
+      sendNotif('🕐 Departure reminder', label, `depart-${stop.id}`);
     }, delay);
     _notifTimers.push(t);
   });
