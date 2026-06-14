@@ -189,10 +189,9 @@ function fmtDist(km) {
   if (state.useMetric) return `${Math.round(km)} km`;
   return `${Math.round(km * 0.621371)} mi`;
 }
-function openWeatherApp(lat, lng) {
-  // Apple Weather has no public deep link for a specific location.
-  // weather.com accepts lat,lng and shows a full forecast for that spot.
-  window.open(`https://weather.com/weather/today/l/${lat},${lng}`, '_blank');
+function openWeatherApp(lat, lng, name) {
+  const q = name ? encodeURIComponent('weather ' + name) : encodeURIComponent(`weather ${lat},${lng}`);
+  window.open(`https://www.google.com/search?q=${q}`, '_blank');
 }
 function openDirections(toLat, toLng) {
   // Use geo: URI — iOS opens Apple Maps, Android opens Google Maps
@@ -1706,7 +1705,7 @@ function buildTimelineItem(stop, isLast) {
       if (lat && lng) {
         _weatherPill.addEventListener('click', e => {
           e.stopPropagation();
-          openWeatherApp(lat, lng);
+          openWeatherApp(lat, lng, getStopName(stop));
         });
       }
     });
@@ -2176,7 +2175,7 @@ function openDetail(stop) {
           <span class="weather-icon"><i class="ph ${icon}"></i></span>
           <span class="weather-temp">${tempC}°C</span>
           <span class="weather-desc">${entry.conditionText}</span>
-          ${lat && lng ? `<a href="#" class="weather-link" onclick="openWeatherApp(${lat},${lng}); return false;">
+          ${lat && lng ? `<a href="#" class="weather-link" onclick="openWeatherApp(${lat},${lng},'${getStopName(stop).replace(/'/g,"\\'")}'); return false;">
             <i class="ph ph-cloud-sun"></i> Open Weather
           </a>` : ''}`;
         detailWeatherEl.classList.remove('hidden');
