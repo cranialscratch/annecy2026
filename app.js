@@ -3,6 +3,7 @@ const state = {
   currentDayId: null,
   currentView: 'day',
   cascadeEnabled: false,
+  compactMode: false,
   overrides: {},        // stopId → time string
   checked: {},          // stopId → bool
   locOverrides: {},     // stopId → { name, lat, lng }
@@ -120,7 +121,18 @@ function startLeaveByTicker() {
 function updateAllLeaveBy() {
   document.querySelectorAll('[data-leaveby]').forEach(el => {
     const stop = findStop(el.dataset.leaveby);
-    if (stop) renderLeaveByEl(el, stop);
+    if (!stop) return;
+    if (el.classList.contains('compact-leaveby')) {
+      // compact span: update text+class in place
+      const info = leaveByInfo(stop);
+      if (info) {
+        const icon = info.urgent ? 'ph-bell-ringing' : 'ph-clock';
+        el.innerHTML = `<i class="ph ${icon}"></i> ${info.label}`;
+        el.className = `compact-leaveby${info.urgent ? ' urgent' : ''}`;
+      }
+    } else {
+      renderLeaveByEl(el, stop);
+    }
   });
   const detailEl = document.getElementById('detail-leaveby');
   if (detailEl && _detailStop) renderLeaveByEl(detailEl, _detailStop);
@@ -437,6 +449,9 @@ function load() {
   } catch {}
   try {
     if (localStorage.getItem('annecy_theme') === 'light') document.body.classList.add('light');
+  } catch {}
+  try {
+    if (localStorage.getItem('annecy_compact') === '1') state.compactMode = true;
   } catch {}
 }
 
@@ -933,7 +948,9 @@ function renderTimeline(container, scrollToNow) {
       container.appendChild(nowLine);
       nowLineEl = nowLine;
     }
-    const item = buildTimelineItem(stop, idx === day.stops.length - 1);
+    const item = state.compactMode
+      ? buildCompactItem(stop, idx === day.stops.length - 1)
+      : buildTimelineItem(stop, idx === day.stops.length - 1);
     container.appendChild(item);
   });
 
@@ -962,6 +979,43 @@ function renderTimeline(container, scrollToNow) {
   }
 
   startLeaveByTicker();
+}
+
+/* ── Compact concertina item ───────────────────────────────────────── */
+function buildCompactItem(stop, isLast) {
+  const item = document.createElement('div');
+  item.className = 'tl-compact-item';
+  item.id = `stop-${stop.id}`;
+  item.dataset.type = getStopType(stop);
+
+  const time      = getStopTime(stop);
+  const isVisited = !!state.checked[stop.id];
+  const info      = leaveByInfo(stop);
+
+  let metaHtml = '';
+  if (info) {
+    const icon = info.urgent ? 'ph-bell-ringing' : 'ph-clock';
+    metaHtml = `<span class="compact-leaveby${info.urgent ? ' urgent' : ''}" data-leaveby="${stop.id}"><i class="ph ${icon}"></i> ${info.label}</span>`;
+  }
+
+  item.innerHTML = `
+    <div class="compact-time">
+      <span>${time}</span>${stop.tz ? `<div class="tl-tz">${stop.tz}</div>` : ''}
+    </div>
+    <div class="tl-line-wrap">
+      <div class="tl-dot"></div>
+      ${isLast ? '' : '<div class="tl-line"></div>'}
+    </div>
+    <div class="compact-body${isVisited ? ' visited' : ''}">
+      <div class="compact-name">${stopTypeIcon(stop)} ${getStopName(stop)}</div>
+      <div class="compact-meta">
+        ${metaHtml}
+        ${isVisited ? '<div class="compact-visited-dot"><i class="ph ph-check"></i></div>' : ''}
+      </div>
+    </div>`;
+
+  item.addEventListener('click', () => openDetail(stop));
+  return item;
 }
 
 /* ── Build one timeline item ───────────────────────────────────────── */
@@ -1812,6 +1866,22 @@ document.addEventListener('DOMContentLoaded', () => {
       state.currentView = btn.dataset.view;
       renderView(false);
     }));
+
+  /* Compact toggle */
+  function updateCompactBtn() {
+    const btn = document.getElementById('compact-btn');
+    if (!btn) return;
+    btn.classList.toggle('compact-on', state.compactMode);
+    btn.title = state.compactMode ? 'Full cards' : 'Compact view';
+    btn.querySelector('i').className = state.compactMode ? 'ph ph-cards' : 'ph ph-rows';
+  }
+  document.getElementById('compact-btn').addEventListener('click', () => {
+    state.compactMode = !state.compactMode;
+    try { localStorage.setItem('annecy_compact', state.compactMode ? '1' : '0'); } catch {}
+    updateCompactBtn();
+    renderView(false);
+  });
+  updateCompactBtn();
 
   /* Cascade toggle */
   document.getElementById('cascade-btn').addEventListener('click', () => {
