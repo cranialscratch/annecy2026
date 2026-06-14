@@ -1497,36 +1497,48 @@ body.light .cal-travel-label {
 
 /* Weather pill on timeline/calendar cards */
 .weather-pill, .cal-weather-pill {
-  display: inline-flex; align-items: center; gap: 4px;
-  font-size: 12px; font-weight: 600;
-  color: rgba(255,255,255,0.80);
-  background: rgba(255,255,255,0.10);
-  padding: 2px 8px; border-radius: 12px;
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 15px; font-weight: 600;
+  color: #fff;
+  background: rgba(30, 60, 120, 0.82);
+  border: 1px solid rgba(255,255,255,0.15);
+  padding: 4px 10px; border-radius: 20px;
   vertical-align: middle;
+  white-space: nowrap;
+  cursor: pointer;
+  text-decoration: none;
 }
 body.light .weather-pill, body.light .cal-weather-pill {
-  color: rgba(0,0,0,0.65);
-  background: rgba(0,0,0,0.07);
+  color: #1e3c78;
+  background: rgba(200,220,255,0.90);
+  border-color: rgba(30,60,120,0.20);
 }
 .weather-pill:empty, .cal-weather-pill:empty { display: none; }
 
 /* Weather row on detail page */
 .detail-weather-row {
-  display: flex; align-items: center; gap: 10px;
-  margin: 2px 0 12px;
-  font-size: 15px; font-weight: 600;
+  display: flex; align-items: center; gap: 12px;
+  margin: 2px 0 14px;
+  font-size: 17px; font-weight: 600;
   color: var(--text-primary);
 }
-.detail-weather-row .weather-icon { font-size: 22px; }
-.detail-weather-row .weather-temp { font-size: 20px; font-weight: 700; }
-.detail-weather-row .weather-desc { font-size: 14px; opacity: 0.65; flex: 1; }
+.detail-weather-row .weather-icon { font-size: 26px; }
+.detail-weather-row .weather-temp { font-size: 22px; font-weight: 700; }
+.detail-weather-row .weather-desc { font-size: 16px; opacity: 0.75; flex: 1; }
 .detail-weather-row a.weather-link {
-  display: inline-flex; align-items: center; gap: 4px;
-  font-size: 13px; font-weight: 600;
-  color: var(--accent);
-  text-decoration: none; padding: 4px 10px;
-  background: rgba(99,102,241,0.12); border-radius: 20px;
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 15px; font-weight: 600;
+  color: #fff;
+  text-decoration: none; padding: 6px 14px;
+  background: rgba(30,60,120,0.82);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 20px;
   white-space: nowrap;
+}
+body.light .detail-weather-row a.weather-link {
+  color: #1e3c78;
+  background: rgba(200,220,255,0.90);
+  border-color: rgba(30,60,120,0.20);
 }
 .detail-weather-row.hidden { display: none; }
 

@@ -68,10 +68,14 @@ function getDayLabel(day) {
 }
 function findTodayDayId() {
   const today = new Date().toISOString().slice(0,10);
+  // Exact date match first (test days, travel days) — before countdown catch-all
   for (const day of TRIP_DATA.days) {
-    if (day.isCountdown && today <= day.dateEnd) return day.id;
     if (day.date === today) return day.id;
     if (day.isFestival && today >= day.date && today <= day.dateEnd) return day.id;
+  }
+  // Fallback: countdown period
+  for (const day of TRIP_DATA.days) {
+    if (day.isCountdown && today <= day.dateEnd) return day.id;
   }
   return null;
 }
@@ -184,6 +188,13 @@ function stopTrafficPolling() {
 function fmtDist(km) {
   if (state.useMetric) return `${Math.round(km)} km`;
   return `${Math.round(km * 0.621371)} mi`;
+}
+function openWeatherApp(lat, lng) {
+  // Try Apple Weather deeplink; fall back to weather.com after 500ms if not handled
+  const appleUrl = `weather://?lat=${lat}&lon=${lng}`;
+  const fallback  = `https://weather.com/weather/today/l/${lat},${lng}`;
+  window.location.href = appleUrl;
+  setTimeout(() => { window.open(fallback, '_blank'); }, 600);
 }
 function openDirections(toLat, toLng) {
   // Use geo: URI — iOS opens Apple Maps, Android opens Google Maps
@@ -1643,7 +1654,7 @@ function buildTimelineItem(stop, isLast) {
         <div class="card-meta-row">
           <span class="tl-card-badge">${typeLabel(getStopType(stop))}</span>
           ${getStopPriority(stop) > 0 ? `<span class="priority-stars">${priorityStars(getStopPriority(stop))}</span>` : ''}
-          <span class="weather-pill" data-stop-id="${stop.id}"></span>
+          <a class="weather-pill" data-stop-id="${stop.id}" data-lat="${getStopLat(stop)||''}" data-lng="${getStopLng(stop)||''}" href="#" onclick="return false;"></a>
         </div>
         <div class="card-reason">${getStopReason(stop)}</div>
         ${buildTags(stop)}
@@ -1684,15 +1695,22 @@ function buildTimelineItem(stop, isLast) {
   if (_weatherPill && _currentDay) {
     fetchWeatherForDay(_currentDay).then(wMap => {
       if (!wMap || !_weatherPill.isConnected) return;
-      const day = _currentDay;
-      const dateStr = day.date || '';
+      const dateStr = _currentDay.date || '';
       const entry = wMap.get(dateStr);
       if (!entry) return;
       const night = isNightTime(getStopTime(stop));
-      const icon = night ? entry.nightIcon : entry.icon;
+      const icon  = night ? entry.nightIcon : entry.icon;
       const tempC = night ? entry.nightTempC : entry.tempC;
+      const lat   = _weatherPill.dataset.lat;
+      const lng   = _weatherPill.dataset.lng;
       _weatherPill.innerHTML = `<i class="ph ${icon}"></i> ${tempC}°C`;
       _weatherPill.title = entry.conditionText;
+      if (lat && lng) {
+        _weatherPill.addEventListener('click', e => {
+          e.stopPropagation();
+          openWeatherApp(lat, lng);
+        });
+      }
     });
   }
 
@@ -2160,8 +2178,7 @@ function openDetail(stop) {
           <span class="weather-icon"><i class="ph ${icon}"></i></span>
           <span class="weather-temp">${tempC}°C</span>
           <span class="weather-desc">${entry.conditionText}</span>
-          ${lat && lng ? `<a href="weather://?lat=${lat}&lon=${lng}" class="weather-link"
-              onclick="setTimeout(()=>{ window.location='https://weather.com/weather/today/l/${lat},${lng}'; },500); return true;">
+          ${lat && lng ? `<a href="#" class="weather-link" onclick="openWeatherApp(${lat},${lng}); return false;">
             <i class="ph ph-cloud-sun"></i> Open Weather
           </a>` : ''}`;
         detailWeatherEl.classList.remove('hidden');
