@@ -133,10 +133,12 @@ function notifGranted() {
 function updateNotifBtn() {
   const btn = document.getElementById('notif-btn');
   const lbl = document.getElementById('notif-label');
+  const testBtn = document.getElementById('notif-test-btn');
   if (!btn || !lbl) return;
   if (!notifSupported()) {
     btn.style.opacity = '0.4';
     lbl.textContent = 'Alerts not supported';
+    if (testBtn) testBtn.style.display = 'none';
     return;
   }
   const on = state.notifsEnabled && notifGranted();
@@ -144,6 +146,21 @@ function updateNotifBtn() {
   btn.querySelector('.ph').className = on
     ? 'ph ph-bell-ringing drawer-icon'
     : 'ph ph-bell drawer-icon';
+  if (testBtn) testBtn.style.display = on ? '' : 'none';
+}
+
+function sendTestNotif() {
+  if (!notifGranted()) return;
+  const body = 'Notifications are working! You\'ll get alerts 15 min before departures.';
+  try {
+    if (navigator.serviceWorker?.controller) {
+      navigator.serviceWorker.controller.postMessage({
+        type: 'SHOW_NOTIF', title: '🔔 Test notification', body, tag: 'notif-test',
+      });
+    } else {
+      new Notification('🔔 Test notification', { body, tag: 'notif-test', icon: './icons/icon-180.png' });
+    }
+  } catch {}
 }
 
 async function enableNotifs() {
@@ -2179,6 +2196,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       });
     }
+    const notifTestBtn = document.getElementById('notif-test-btn');
+    if (notifTestBtn) notifTestBtn.addEventListener('click', sendTestNotif);
 
     // Auto-start: Android (no permission API) — no gesture needed
     if (typeof DeviceOrientationEvent !== 'undefined' &&
