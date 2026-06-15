@@ -507,15 +507,13 @@ function updateAllLeaveBy() {
     (_curDay2.isFestival && _todayStr2 >= _curDay2.date && _todayStr2 <= (_curDay2.dateEnd || _curDay2.date)));
   {
     const nowM = nowMinutes();
-    const _isPastDay2 = _curDay2 && _curDay2.date && _curDay2.date < _todayStr2;
     document.querySelectorAll('.tl-card[data-stop-id]').forEach(cardEl => {
       const stop = findStop(cardEl.dataset.stopId);
       if (!stop) return;
       if (cardEl.classList.contains('visited')) { cardEl.classList.remove('tl-card--past'); return; }
       const stopMins = timeToMinutes(getStopTime(stop));
       const depMins = stopMins !== null ? stopMins + getStopDuration(stop) : null;
-      const isPast = _isPastDay2 || (_isToday2 && depMins !== null && depMins < nowM);
-      cardEl.classList.toggle('tl-card--past', isPast);
+      cardEl.classList.toggle('tl-card--past', _isToday2 && depMins !== null && depMins < nowM);
     });
     document.querySelectorAll('.cal-card[id^="cal-"]').forEach(cardEl => {
       const stopId = cardEl.id.replace('cal-', '');
@@ -524,7 +522,7 @@ function updateAllLeaveBy() {
       if (cardEl.classList.contains('visited')) { cardEl.classList.remove('cal-card--past'); return; }
       const stopMins = timeToMinutes(getStopTime(stop));
       const depMins = stopMins !== null ? stopMins + getStopDuration(stop) : null;
-      cardEl.classList.toggle('cal-card--past', _isPastDay2 || (_isToday2 && depMins !== null && depMins < nowM));
+      cardEl.classList.toggle('cal-card--past', _isToday2 && depMins !== null && depMins < nowM);
     });
   }
   // Keep Now pill time current
@@ -1508,7 +1506,7 @@ function renderCalView(container) {
     if (isVisited) card.classList.add('visited');
     if (!isVisited) {
       const depMins = t !== null ? t + dur : null;
-      if (isPastDay || (isToday && depMins !== null && depMins < nowMinutes()))
+      if (isToday && depMins !== null && depMins < nowMinutes())
         card.classList.add('cal-card--past');
     }
     const dur_h = Math.floor(dur/60), dur_m = dur%60;
@@ -1731,7 +1729,7 @@ function buildCompactItem(stop, isLast, day) {
   const _cIsPastDay = _cDay?.date && _cDay.date < _cTodayStr;
   const _cStopMins = timeToMinutes(time);
   const _cDepMins = _cStopMins !== null ? _cStopMins + getStopDuration(stop) : null;
-  const cIsPast = !isVisited && (_cIsPastDay || (_cIsToday && _cDepMins !== null && _cDepMins < nowMinutes()));
+  const cIsPast = !isVisited && _cIsToday && _cDepMins !== null && _cDepMins < nowMinutes();
 
   let metaHtml = '';
   if (info) {
@@ -1777,7 +1775,7 @@ function buildTimelineItem(stop, isLast, day) {
   const _isPastDay = _currentDay?.date && _currentDay.date < _todayStr;
   const _stopMins = timeToMinutes(time);
   const _depMins = _stopMins !== null ? _stopMins + getStopDuration(stop) : null;
-  const isPast = !isVisited && (_isPastDay || (_isToday && _depMins !== null && _depMins < nowMinutes()));
+  const isPast = !isVisited && _isToday && _depMins !== null && _depMins < nowMinutes();
 
   item.innerHTML = `
     <div class="tl-left">
