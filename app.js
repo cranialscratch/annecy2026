@@ -426,6 +426,15 @@ function updateAllLeaveBy() {
       const isPast = depMins !== null && depMins < nowM;
       cardEl.classList.toggle('tl-card--past', isPast);
     });
+    document.querySelectorAll('.cal-card[id^="cal-"]').forEach(cardEl => {
+      const stopId = cardEl.id.replace('cal-', '');
+      const stop = findStop(stopId);
+      if (!stop) return;
+      if (cardEl.classList.contains('visited')) { cardEl.classList.remove('cal-card--past'); return; }
+      const stopMins = timeToMinutes(getStopTime(stop));
+      const depMins = stopMins !== null ? stopMins + getStopDuration(stop) : null;
+      cardEl.classList.toggle('cal-card--past', depMins !== null && depMins < nowM);
+    });
   }
   // Keep Now pill time current
   const nowPill = document.getElementById('tl-now-time');
@@ -1317,6 +1326,9 @@ function renderCalView(container) {
   const timedStops = day.stops.filter(s => timeToMinutes(getStopTime(s)) !== null);
   if (!timedStops.length) return;
 
+  const _calToday = new Date().toISOString().slice(0, 10);
+  const isToday = day.date === _calToday || (day.isFestival && _calToday >= day.date && _calToday <= (day.dateEnd || day.date));
+
   const times    = timedStops.map(s => timeToMinutes(getStopTime(s)));
   const dayStart = Math.floor((Math.min(...times) - 10) / 5) * 5;
   const lastT    = Math.max(...times);
@@ -1380,6 +1392,10 @@ function renderCalView(container) {
     card.style.cssText = `top:${top}px;height:${h}px;border-left-color:${col};`;
     const isVisited = !!state.checked[stop.id];
     if (isVisited) card.classList.add('visited');
+    if (!isVisited && isToday) {
+      const depMins = t !== null ? t + dur : null;
+      if (depMins !== null && depMins < nowMinutes()) card.classList.add('cal-card--past');
+    }
     const dur_h = Math.floor(dur/60), dur_m = dur%60;
     const durStr = dur >= 60 ? `${dur_h}h${dur_m ? dur_m+'m':''}` : `${dur}m`;
     card.innerHTML = `
@@ -1455,8 +1471,6 @@ function renderCalView(container) {
   });
 
   // Now line
-  const today  = new Date().toISOString().slice(0,10);
-  const isToday = day.date === today || (day.isFestival && today >= day.date && today <= (day.dateEnd||day.date));
   if (isToday) {
     const now = nowMinutes();
     const nl = document.createElement('div');
