@@ -500,31 +500,6 @@ function updateAllLeaveBy() {
   const detailEl = document.getElementById('detail-leaveby');
   if (detailEl && _detailStop) renderLeaveByEl(detailEl, _detailStop);
 
-  // Update tl-card--past classes on today's timeline cards
-  const _todayStr2 = new Date().toISOString().slice(0, 10);
-  const _curDay2 = TRIP_DATA.days.find(d => d.id === state.currentDayId);
-  const _isToday2 = _curDay2 && (_curDay2.date === _todayStr2 ||
-    (_curDay2.isFestival && _todayStr2 >= _curDay2.date && _todayStr2 <= (_curDay2.dateEnd || _curDay2.date)));
-  {
-    const nowM = nowMinutes();
-    document.querySelectorAll('.tl-card[data-stop-id]').forEach(cardEl => {
-      const stop = findStop(cardEl.dataset.stopId);
-      if (!stop) return;
-      if (cardEl.classList.contains('visited')) { cardEl.classList.remove('tl-card--past'); return; }
-      const stopMins = timeToMinutes(getStopTime(stop));
-      const depMins = stopMins !== null ? stopMins + getStopDuration(stop) : null;
-      cardEl.classList.toggle('tl-card--past', _isToday2 && depMins !== null && depMins < nowM);
-    });
-    document.querySelectorAll('.cal-card[id^="cal-"]').forEach(cardEl => {
-      const stopId = cardEl.id.replace('cal-', '');
-      const stop = findStop(stopId);
-      if (!stop) return;
-      if (cardEl.classList.contains('visited')) { cardEl.classList.remove('cal-card--past'); return; }
-      const stopMins = timeToMinutes(getStopTime(stop));
-      const depMins = stopMins !== null ? stopMins + getStopDuration(stop) : null;
-      cardEl.classList.toggle('cal-card--past', _isToday2 && depMins !== null && depMins < nowM);
-    });
-  }
   // Keep Now pill time current
   const nowPill = document.getElementById('tl-now-time');
   if (nowPill) nowPill.textContent = minutesToTime(nowMinutes());
@@ -1745,7 +1720,7 @@ function buildCompactItem(stop, isLast, day) {
       <div class="tl-dot"></div>
       ${isLast ? '' : '<div class="tl-line"></div>'}
     </div>
-    <div class="compact-body${isVisited ? ' visited' : cIsPast ? ' past' : ''}">
+    <div class="compact-body${isVisited ? ' visited' : ''}">
       <div class="compact-name">${stopTypeIcon(stop)} ${getStopName(stop)}</div>
       <div class="compact-meta">
         ${metaHtml}
@@ -1787,7 +1762,7 @@ function buildTimelineItem(stop, isLast, day) {
       <div class="tl-dot"></div>
       ${isLast ? '' : '<div class="tl-line"></div>'}
     </div>
-    <div class="tl-card${isVisited ? ' visited' : ''}${isPast && !isVisited ? ' tl-card--past' : ''}" data-stop-id="${stop.id}">
+    <div class="tl-card${isVisited ? ' visited' : ''}" data-stop-id="${stop.id}">
       <div class="card-visited-badge">✓</div>
       ${buildSlider(stop, 'card')}
       <div class="card-body">
