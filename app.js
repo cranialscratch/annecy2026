@@ -992,6 +992,7 @@ function buildDayStrip() {
     strip.appendChild(chip);
   });
   updateDayStrip();
+  if (typeof updateHeaderHeight === 'function') updateHeaderHeight();
 }
 function updateDayStrip() {
   document.querySelectorAll('.day-chip').forEach(c =>
@@ -1662,8 +1663,8 @@ function renderTimeline(container, scrollToNow) {
       nowLineEl = nowLine;
     }
     const item = state.cardView === 'compact'
-      ? buildCompactItem(stop, idx === _tlStops.length - 1)
-      : buildTimelineItem(stop, idx === _tlStops.length - 1);
+      ? buildCompactItem(stop, idx === _tlStops.length - 1, day)
+      : buildTimelineItem(stop, idx === _tlStops.length - 1, day);
     (compactCard || container).appendChild(item);
   });
 
@@ -1713,7 +1714,7 @@ function renderTimeline(container, scrollToNow) {
 }
 
 /* ── Compact concertina item ───────────────────────────────────────── */
-function buildCompactItem(stop, isLast) {
+function buildCompactItem(stop, isLast, day) {
   const item = document.createElement('div');
   item.className = 'tl-compact-item';
   item.id = `stop-${stop.id}`;
@@ -1723,7 +1724,7 @@ function buildCompactItem(stop, isLast) {
   const isVisited = !!state.checked[stop.id];
   const info      = leaveByInfo(stop);
   const _cTodayStr = new Date().toISOString().slice(0, 10);
-  const _cDay = TRIP_DATA.days.find(d => d.stops.some(s => s.id === stop.id));
+  const _cDay = day || TRIP_DATA.days.find(d => d.stops.some(s => s.id === stop.id));
   const _cIsToday = _cDay && (_cDay.date === _cTodayStr ||
     (_cDay.isFestival && _cTodayStr >= _cDay.date && _cTodayStr <= (_cDay.dateEnd || _cDay.date)));
   const _cIsPastDay = _cDay?.date && _cDay.date < _cTodayStr;
@@ -1758,7 +1759,7 @@ function buildCompactItem(stop, isLast) {
 }
 
 /* ── Build one timeline item ───────────────────────────────────────── */
-function buildTimelineItem(stop, isLast) {
+function buildTimelineItem(stop, isLast, day) {
   const item = document.createElement('div');
   item.className = 'tl-item';
   item.dataset.type = getStopType(stop);
@@ -1769,7 +1770,7 @@ function buildTimelineItem(stop, isLast) {
   const isVisited = !!state.checked[stop.id];
 
   const _todayStr = new Date().toISOString().slice(0, 10);
-  const _currentDay = TRIP_DATA.days.find(d => d.id === state.currentDayId);
+  const _currentDay = day || TRIP_DATA.days.find(d => d.id === state.currentDayId);
   const _isToday = _currentDay && (_currentDay.date === _todayStr ||
     (_currentDay.isFestival && _todayStr >= _currentDay.date && _todayStr <= (_currentDay.dateEnd || _currentDay.date)));
   const _isPastDay = _currentDay?.date && _currentDay.date < _todayStr;

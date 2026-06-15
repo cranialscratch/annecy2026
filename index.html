@@ -240,20 +240,15 @@
   <script>
     // window.innerHeight is the true physical screen height in standalone
     // PWA mode — more reliable than any CSS unit on iOS WebKit
-    (function() {
-      // Measure header height so #main-content padding-top clears it.
-      // Called after fonts/icons load and on resize.
-      function updateHeaderHeight() {
-        var hdr = document.getElementById('app-header');
-        if (hdr) document.documentElement.style.setProperty('--header-h', hdr.offsetHeight + 'px');
-      }
-      // Run once DOM is ready, again after a short delay for icon fonts
-      document.addEventListener('DOMContentLoaded', function() {
-        updateHeaderHeight();
-        setTimeout(updateHeaderHeight, 300);
-      });
-      window.addEventListener('resize', updateHeaderHeight);
-    })();
+    window.updateHeaderHeight = function() {
+      var hdr = document.getElementById('app-header');
+      if (hdr) document.documentElement.style.setProperty('--header-h', hdr.offsetHeight + 'px');
+    };
+    document.addEventListener('DOMContentLoaded', function() {
+      updateHeaderHeight();
+      setTimeout(updateHeaderHeight, 300);
+    });
+    window.addEventListener('resize', updateHeaderHeight);
   </script>
   <script>
     if ('serviceWorker' in navigator) {
