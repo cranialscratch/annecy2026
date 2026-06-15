@@ -2,8 +2,11 @@ name: Send push notifications
 
 on:
   schedule:
-    - cron: '*/5 * * * *'   # every 5 minutes
-  workflow_dispatch:          # allow manual trigger from Actions tab
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   send:
@@ -15,8 +18,8 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Install web-push
-        run: npm install --no-save web-push
+      - name: Install dependencies
+        run: npm ci
         working-directory: scripts
 
       - name: Send due notifications
