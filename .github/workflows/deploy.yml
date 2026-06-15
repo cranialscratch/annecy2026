@@ -2,7 +2,7 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: [main, "claude/zen-albattani-A5I8k"]
+    branches: [main]
 
 permissions:
   contents: read
@@ -21,6 +21,8 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main
       - uses: actions/configure-pages@v4
       - uses: actions/upload-pages-artifact@v3
         with:
