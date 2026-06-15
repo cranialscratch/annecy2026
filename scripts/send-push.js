@@ -23,7 +23,9 @@ async function main() {
   const WINDOW = 60 * 60 * 1000; // 1-hour window so manual test runs always catch queued entries
 
   const [queue, subs] = await Promise.all([fbGet('pushQueue'), fbGet('pushSubs')]);
-  if (!queue || !subs) { console.log('Nothing in queue'); return; }
+  console.log('pushQueue devices:', queue ? Object.keys(queue).length : 0,
+              '| pushSubs devices:', subs ? Object.keys(subs).length : 0);
+  if (!queue) { console.log('Nothing in queue'); return; }
 
   let sent = 0, expired = 0;
   const ops = [];
@@ -31,9 +33,11 @@ async function main() {
   for (const [deviceId, entries] of Object.entries(queue)) {
     const sub = subs[deviceId];
 
+    console.log(`Device ${deviceId.slice(0,8)}: ${Object.keys(entries||{}).length} queued, sub: ${!!sub}`);
     for (const [key, notif] of Object.entries(entries || {})) {
       const age = now - notif.fireAt;
-      if (age < 0 || age > WINDOW) continue; // not yet due, or too old
+      console.log(`  Entry ${key}: age=${Math.round(age/1000)}s, title="${notif.title}"`);
+      if (age < 0 || age > WINDOW) { console.log('  -> skipped (out of window)'); continue; }
 
       // Always remove from queue once we've processed it
       ops.push(fbDelete(`pushQueue/${deviceId}/${key}`));
