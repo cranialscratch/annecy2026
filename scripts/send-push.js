@@ -20,7 +20,7 @@ async function fbDelete(path)     { return fetch(`${DB_URL}/${path}.json?auth=${
 
 async function main() {
   const now    = Date.now();
-  const WINDOW = 6 * 60 * 1000; // 6-min window covers 5-min cron gaps + buffer
+  const WINDOW = 60 * 60 * 1000; // 1-hour window so manual test runs always catch queued entries
 
   const [queue, subs] = await Promise.all([fbGet('pushQueue'), fbGet('pushSubs')]);
   if (!queue || !subs) { console.log('Nothing in queue'); return; }
