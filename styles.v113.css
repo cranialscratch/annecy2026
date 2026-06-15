@@ -218,10 +218,10 @@ body.light #app-header {
 
 /* ── Cards: solid dark glass on image backgrounds ───────────────────── */
 #app.bg-day .tl-card {
-  background: rgba(10, 10, 20, 0.84) !important;
-  backdrop-filter: blur(20px) saturate(140%);
-  -webkit-backdrop-filter: blur(20px) saturate(140%);
-  border-color: rgba(255,255,255,0.18) !important;
+  background: rgba(10, 14, 30, 0.72) !important;
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border-color: rgba(255,255,255,0.20) !important;
 }
 body.light #app.bg-day .tl-card {
   background: rgba(255,255,255,0.90) !important;
