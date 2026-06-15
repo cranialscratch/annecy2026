@@ -520,13 +520,25 @@ function buildTags(stop) {
 
 /* ── Wikipedia article titles per stop (free API, no key needed) ───── */
 const WIKI_TITLES = {
+  // Day 1
+  'd1s4':  'Folkestone',
+  'd1s5':  'English_Channel_Tunnel',
   'd1s6':  'Saint-Valery-sur-Somme',
+  'd1s7':  'Baie_de_Somme',
+  'd1s9':  'Amiens',
   'd1s10': 'Amiens_Cathedral',
+  // Day 2
   'd2s2':  "Hortillonnages_d'Amiens",
+  'd2s3':  'Amiens_Cathedral',
+  'd2s4':  'Gerberoy',
   'd2s5':  'Gerberoy',
+  'd2s6':  'Troyes',
+  'd2s7':  'Troyes',
   'd2s8':  'Troyes',
   'd2s9':  'Ruelle_des_Chats',
   'd2s10': 'Troyes_Cathedral',
+  'd2s11': 'Troyes',
+  // Day 3
   'd3s2':  'Flavigny-sur-Ozerain',
   'd3s3':  'Fontenay_Abbey',
   'd3s4':  'Semur-en-Auxois',
@@ -534,8 +546,13 @@ const WIKI_TITLES = {
   'd3s6':  'Route_des_Grands_Crus',
   'd3s7':  'Vosne-Romanée',
   'd3s8':  "Saint-Romain,_Côte-d'Or",
+  'd3s9':  'Beaune',
   'd3s10': 'Hospices_de_Beaune',
+  'd3s11': 'Beaune',
+  // Day 4
+  'd4s2':  'Annecy',
   'd4s4':  'Lake_Annecy',
+  // Festival days
   'fs3':   'Lake_Annecy',
   'fs4':   'Annecy',
   'fs5':   "Château_d'Annecy",
@@ -543,12 +560,22 @@ const WIKI_TITLES = {
   'fs7':   'Talloires',
   'fs8':   'Gorges_du_Fier',
   'fs14':  "Palais_de_l'Isle",
+  // Day 5
   'd5s2':  'Royal_Saltworks_of_Arc-et-Senans',
+  'd5s3':  'Saline_royale_d\'Arc-et-Senans',
   'd5s5':  'Besançon',
   'd5s6':  'Citadel_of_Besançon',
-  'd6s3':  'Giverny',
-  'd6s4':  'Rouen',
-  'd6s5':  'Rouen_Cathedral',
+  'd5s7':  'Besançon',
+  // Day 6
+  'd6s3':  'Chartres_Cathedral',
+  'd6s4':  'Giverny',
+  'd6s5':  'Monet\'s_garden_at_Giverny',
+  'd6s6':  'Rouen',
+  'd6s7':  'Rouen_Cathedral',
+  // Day 7
+  'd7s3':  'Calais',
+  'd7s4':  'English_Channel_Tunnel',
+  'd7s5':  'Folkestone',
 };
 
 /* ── Wikipedia data cache ──────────────────────────────────────────── */
@@ -861,6 +888,10 @@ async function fetchCommonsPhotos(stop) {
 }
 
 function getPhotos(stop) {
+  const type = getStopType(stop);
+  // Charging stops: satellite shows the actual supercharger location — more useful than a city landmark
+  if (type === 'charging') return [satelliteUrl(stop)];
+
   const wiki    = _wikiCache[stop.id]?.img;
   const commons = _commonsCache[stop.id] || [];
   // Best photo first (Wikipedia thumbnail), then Wikimedia Commons extras,
@@ -1636,9 +1667,10 @@ function renderTimeline(container, scrollToNow) {
       (compactCard || container).appendChild(nowLine);
       nowLineEl = nowLine;
     }
+    const nextStop = _tlStops[idx + 1] || null;
     const item = state.cardView === 'compact'
       ? buildCompactItem(stop, idx === _tlStops.length - 1, day)
-      : buildTimelineItem(stop, idx === _tlStops.length - 1, day);
+      : buildTimelineItem(stop, idx === _tlStops.length - 1, day, nextStop);
     (compactCard || container).appendChild(item);
   });
 
@@ -1733,7 +1765,7 @@ function buildCompactItem(stop, isLast, day) {
 }
 
 /* ── Build one timeline item ───────────────────────────────────────── */
-function buildTimelineItem(stop, isLast, day) {
+function buildTimelineItem(stop, isLast, day, nextStop) {
   const item = document.createElement('div');
   item.className = 'tl-item';
   item.dataset.type = getStopType(stop);
@@ -1751,6 +1783,32 @@ function buildTimelineItem(stop, isLast, day) {
   const _stopMins = timeToMinutes(time);
   const _depMins = _stopMins !== null ? _stopMins + getStopDuration(stop) : null;
   const isPast = !isVisited && _isToday && _depMins !== null && _depMins < nowMinutes();
+
+  // Departure stops: slim row showing where you're heading next, no photo
+  if (getStopType(stop) === 'depart') {
+    const nextName = nextStop ? getStopName(nextStop) : null;
+    const nextIcon = nextStop ? stopTypeIcon(nextStop) : '';
+    item.innerHTML = `
+      <div class="tl-left">
+        <button class="tl-time-btn" data-stop-id="${stop.id}">
+          <span>${time}</span>${stop.tz ? `<div class="tl-tz">${stop.tz}</div>` : ''}
+        </button>
+      </div>
+      <div class="tl-line-wrap">
+        <div class="tl-dot tl-dot--depart"></div>
+        ${isLast ? '' : '<div class="tl-line"></div>'}
+      </div>
+      <div class="tl-depart-row" data-stop-id="${stop.id}">
+        <div class="tl-depart-from">${getStopName(stop)}</div>
+        ${nextName ? `<div class="tl-depart-arrow"><i class="ph ph-arrow-right"></i></div><div class="tl-depart-to">${nextIcon} ${nextName}</div>` : ''}
+        <div class="tl-depart-note">${getStopReason(stop)}</div>
+      </div>`;
+    if (isEditable) {
+      const _d = TRIP_DATA.days.find(d => d.id === state.currentDayId);
+      item.querySelector('.tl-time-btn').addEventListener('click', () => openTimeModal(stop, _d));
+    }
+    return item;
+  }
 
   item.innerHTML = `
     <div class="tl-left">
