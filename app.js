@@ -592,6 +592,63 @@ function saveWikiCache() {
   try { localStorage.setItem('annecy_wiki_v5', JSON.stringify(_wikiCache)); } catch {}
 }
 
+/* ── Google Places photos ──────────────────────────────────────────── */
+const _googlePhotos = {}; // stopId → [url, ...] | null
+
+function loadGooglePhotos() {
+  try {
+    const saved = localStorage.getItem('annecy_gplaces_v1');
+    if (saved) Object.assign(_googlePhotos, JSON.parse(saved));
+  } catch {}
+}
+function saveGooglePhotos() {
+  try { localStorage.setItem('annecy_gplaces_v1', JSON.stringify(_googlePhotos)); } catch {}
+}
+
+function googleSearchQuery(stop) {
+  const type = getStopType(stop);
+  if (type === 'charging') return null; // satellite used instead
+  if (type === 'depart')   return null; // no photo on depart rows
+  // Use the location name as-is — it's specific enough for Places search
+  return stop.location;
+}
+
+async function fetchGooglePlacesPhotos(stop) {
+  if (_googlePhotos[stop.id] !== undefined) return _googlePhotos[stop.id];
+  const query = googleSearchQuery(stop);
+  if (!query) { _googlePhotos[stop.id] = []; return []; }
+  try {
+    // Text search for the place
+    const searchRes = await fetch(`https://places.googleapis.com/v1/places:searchText`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': GKEY,
+        'X-Goog-FieldMask': 'places.photos,places.id',
+      },
+      body: JSON.stringify({
+        textQuery: query,
+        locationBias: { circle: { center: { latitude: stop.lat, longitude: stop.lng }, radius: 5000 } },
+        maxResultCount: 1,
+      }),
+    });
+    if (!searchRes.ok) { _googlePhotos[stop.id] = []; saveGooglePhotos(); return []; }
+    const searchData = await searchRes.json();
+    const place = searchData.places?.[0];
+    if (!place?.photos?.length) { _googlePhotos[stop.id] = []; saveGooglePhotos(); return []; }
+    // Take up to 5 photos, build display URLs
+    const urls = place.photos.slice(0, 5).map(photo =>
+      `https://places.googleapis.com/v1/${photo.name}/media?maxWidthPx=800&key=${GKEY}`
+    );
+    _googlePhotos[stop.id] = urls;
+    saveGooglePhotos();
+    return urls;
+  } catch {
+    _googlePhotos[stop.id] = [];
+    return [];
+  }
+}
+
 function wikiSearchName(stop) {
   // Explicit override always wins
   if (WIKI_TITLES[stop.id]) return WIKI_TITLES[stop.id];
@@ -707,14 +764,14 @@ function getDayStops(day) {
   });
 }
 
-function injectWikiPhoto(stopId) {
-  const data = _wikiCache[stopId];
-  const commons = _commonsCache[stopId] || [];
-  if (!data?.img && !commons.length) return;
+function injectStopPhotos(stopId) {
   const item = document.getElementById(`stop-${stopId}`);
   if (!item) return;
   const stop = findStop(stopId);
   if (!stop) return;
+  const photos = getPhotos(stop);
+  // Only inject if we have real photos (not just satellite fallback placeholder)
+  if (!photos.length) return;
   const oldSlider = item.querySelector('.card-slider');
   if (!oldSlider) return;
   const tmp = document.createElement('div');
@@ -724,20 +781,26 @@ function injectWikiPhoto(stopId) {
   initSlider(newSlider, stop, 'card');
 }
 
+// Keep old name as alias for detail page calls
+const injectWikiPhoto = injectStopPhotos;
+
 function lazyLoadWikiImages(stops) {
   stops.forEach(stop => {
-    const wikiDone = _wikiCache[stop.id] !== undefined;
+    const googleDone  = _googlePhotos[stop.id] !== undefined;
+    const wikiDone    = _wikiCache[stop.id] !== undefined;
     const commonsDone = _commonsCache[stop.id] !== undefined;
 
-    if (wikiDone && commonsDone) {
-      if (_wikiCache[stop.id]?.img || _commonsCache[stop.id]?.length) injectWikiPhoto(stop.id);
+    // If Google photos already cached and present, inject immediately
+    if (googleDone && _googlePhotos[stop.id]?.length) {
+      injectStopPhotos(stop.id);
       return;
     }
 
     const tasks = [];
+    if (!googleDone)  tasks.push(fetchGooglePlacesPhotos(stop));
     if (!wikiDone)    tasks.push(fetchWikiData(stop));
     if (!commonsDone) tasks.push(fetchCommonsPhotos(stop));
-    Promise.all(tasks).then(() => injectWikiPhoto(stop.id));
+    Promise.all(tasks).then(() => injectStopPhotos(stop.id));
   });
 }
 
@@ -889,13 +952,15 @@ async function fetchCommonsPhotos(stop) {
 
 function getPhotos(stop) {
   const type = getStopType(stop);
-  // Charging stops: satellite shows the actual supercharger location — more useful than a city landmark
   if (type === 'charging') return [satelliteUrl(stop)];
 
+  // Google Places photos first — real visitor photos of the specific venue
+  const google = _googlePhotos[stop.id];
+  if (google?.length) return google;
+
+  // Fall back to Wikipedia + Wikimedia Commons
   const wiki    = _wikiCache[stop.id]?.img;
   const commons = _commonsCache[stop.id] || [];
-  // Best photo first (Wikipedia thumbnail), then Wikimedia Commons extras,
-  // then satellite aerial as final fallback — no Street View
   const photos = [];
   if (wiki) photos.push(wiki);
   for (const u of commons) { if (u !== wiki) photos.push(u); }
@@ -2415,10 +2480,11 @@ function openDetail(stop) {
     }
   }
 
-  // Fetch wiki + commons together; refresh slides + description when done
+  // Fetch Google Places + wiki + commons; refresh slides when done
   const tasks = [];
-  if (_wikiCache[stop.id] === undefined)    tasks.push(fetchWikiData(stop));
-  if (_commonsCache[stop.id] === undefined) tasks.push(fetchCommonsPhotos(stop));
+  if (_googlePhotos[stop.id] === undefined)  tasks.push(fetchGooglePlacesPhotos(stop));
+  if (_wikiCache[stop.id] === undefined)     tasks.push(fetchWikiData(stop));
+  if (_commonsCache[stop.id] === undefined)  tasks.push(fetchCommonsPhotos(stop));
 
   if (tasks.length) {
     Promise.all(tasks).then(() => {
@@ -2673,6 +2739,7 @@ function initDaySwipe() {
 document.addEventListener('DOMContentLoaded', () => {
   load();
   loadWikiCache();
+  loadGooglePhotos();
   state.currentDayId = findTodayDayId() || TRIP_DATA.days[0].id;
   buildDayStrip();
   renderView(true); // scroll to now only on first load
