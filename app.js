@@ -1704,7 +1704,7 @@ function buildCompactItem(stop, isLast) {
   const isVisited = !!state.checked[stop.id];
   const info      = leaveByInfo(stop);
   const _cTodayStr = new Date().toISOString().slice(0, 10);
-  const _cDay = TRIP_DATA.days.find(d => d.id === state.currentDayId);
+  const _cDay = TRIP_DATA.days.find(d => d.stops.some(s => s.id === stop.id));
   const _cIsToday = _cDay && (_cDay.date === _cTodayStr ||
     (_cDay.isFestival && _cTodayStr >= _cDay.date && _cTodayStr <= (_cDay.dateEnd || _cDay.date)));
   const _cIsPastDay = _cDay?.date && _cDay.date < _cTodayStr;
