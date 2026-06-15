@@ -1,0 +1,7 @@
+{
+  "rules": {
+    "shared": { ".read": true, ".write": true },
+    "pushSubs": { ".read": false, ".write": true },
+    "pushQueue": { ".read": false, ".write": true }
+  }
+}

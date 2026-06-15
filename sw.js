@@ -1,7 +1,7 @@
-const CACHE = 'annecy2026-v136';
+const CACHE = 'annecy2026-v138';
 const CORE = [
   './index.html',
-  './styles.v110.css',
+  './styles.v111.css',
   './app.js',
   './data.js',
   './manifest.json',
@@ -50,6 +50,21 @@ self.addEventListener('fetch', e => {
       }
       return res;
     }).catch(() => caches.match(e.request))
+  );
+});
+
+/* ── Server push → show notification (fires even when app is closed) */
+self.addEventListener('push', e => {
+  const data = e.data?.json() || {};
+  e.waitUntil(
+    self.registration.showNotification(data.title || 'Annecy 2026', {
+      body:     data.body  || '',
+      tag:      data.tag   || 'push',
+      icon:     './icons/icon-180.png',
+      badge:    './icons/icon-72.png',
+      vibrate:  [200, 100, 200],
+      renotify: false,
+    })
   );
 });
 

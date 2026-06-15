@@ -254,6 +254,59 @@ function notifGranted() {
   return notifSupported() && Notification.permission === 'granted';
 }
 
+/* ── Web Push (server-side delivery so notifications fire when backgrounded) */
+const VAPID_PUBLIC_KEY = 'BAWWgB9Fd6E6bRrhjgYfbDIwi1uHpKWVeBW9QyZLOz6WtYw4FvIJRUXGsaWYXKbspGfzCCg8-QMF_ONzsAdYhtI';
+
+function getDeviceId() {
+  let id = localStorage.getItem('annecy_device_id');
+  if (!id) {
+    id = ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g,c=>(c^crypto.getRandomValues(new Uint8Array(1))[0]&15>>c/4).toString(16));
+    try { localStorage.setItem('annecy_device_id', id); } catch {}
+  }
+  return id;
+}
+
+function urlB64ToUint8(b64) {
+  const p = '='.repeat((4 - b64.length % 4) % 4);
+  const s = atob((b64 + p).replace(/-/g, '+').replace(/_/g, '/'));
+  return Uint8Array.from([...s].map(c => c.charCodeAt(0)));
+}
+
+async function subscribePush() {
+  if (!('PushManager' in window) || !_db) return;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) {
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlB64ToUint8(VAPID_PUBLIC_KEY),
+      });
+    }
+    await _db.ref(`pushSubs/${getDeviceId()}`).set(JSON.parse(JSON.stringify(sub)));
+  } catch (e) { console.warn('Push subscribe failed', e); }
+}
+
+async function writePushQueue() {
+  if (!_db || !state.notifsEnabled || !notifGranted()) return;
+  const now = new Date();
+  const nowMs = now.getTime();
+  const todayStartMs = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const queue = {};
+  collectTodayLeaveEvents().forEach(({ stop, notifMins, label }) => {
+    if (notifMins < 0) return;
+    const fireMs = todayStartMs + notifMins * 60000;
+    if (fireMs < nowMs - 60000) return; // already well past
+    queue[stop.id + '_' + notifMins] = {
+      fireAt: fireMs,
+      title: '🕐 Departure reminder',
+      body: label,
+      tag: `depart-${stop.id}`,
+    };
+  });
+  await _db.ref(`pushQueue/${getDeviceId()}`).set(Object.keys(queue).length ? queue : null);
+}
+
 function updateNotifBtn() {
   const btn = document.getElementById('notif-btn');
   const lbl = document.getElementById('notif-label');
@@ -279,6 +332,7 @@ async function enableNotifs() {
   if (perm === 'granted') {
     state.notifsEnabled = true;
     try { localStorage.setItem('annecy_notifs', '1'); } catch {}
+    subscribePush();
     scheduleNotifs();
     startTrafficPolling();
   } else {
@@ -374,6 +428,9 @@ function scheduleNotifs() {
     }, delay);
     _notifTimers.push(t);
   });
+
+  // Write queue to Firebase for server-side delivery while backgrounded
+  writePushQueue();
 
   // Reset fired set at midnight
   clearTimeout(_notifMidnightTimer);
@@ -852,7 +909,11 @@ function load() {
     const cv = localStorage.getItem('annecy_cardview'); if (cv) state.cardView = cv;
   } catch {}
   try {
-    if (localStorage.getItem('annecy_notifs') === '1') state.notifsEnabled = true;
+    if (localStorage.getItem('annecy_notifs') === '1') {
+      state.notifsEnabled = true;
+      // Re-register push subscription in case it lapsed
+      subscribePush();
+    }
   } catch {}
   try {
     if (localStorage.getItem('annecy_units') === 'imperial') state.useMetric = false;
