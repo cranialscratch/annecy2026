@@ -1,7 +1,7 @@
 {
   "rules": {
-    "shared": { ".read": true, ".write": true },
-    "pushSubs": { ".read": false, ".write": true },
-    "pushQueue": { ".read": false, ".write": true }
+    "shared":    { ".read": true,  ".write": true },
+    "pushSubs":  { ".read": true,  ".write": true },
+    "pushQueue": { ".read": true,  ".write": true }
   }
 }
