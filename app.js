@@ -1525,9 +1525,11 @@ function renderTimeline(container, scrollToNow) {
       const nowLine = document.createElement('div');
       nowLine.className = 'tl-item tl-now-line';
       nowLine.id = 'tl-now-marker';
-      nowLine.innerHTML = `
-        <div class="tl-left"><button class="tl-time-btn tl-now-pill" id="tl-now-time" disabled>${minutesToTime(now)}</button></div>
-        <div class="tl-now-track"><div class="tl-now-dot"></div><div class="tl-now-bar"></div></div>`;
+      const _nowTimeCol = state.cardView === 'compact'
+        ? `<div class="compact-time"><button class="tl-time-btn tl-now-pill" id="tl-now-time" disabled>${minutesToTime(now)}</button></div>`
+        : `<div class="tl-left"><button class="tl-time-btn tl-now-pill" id="tl-now-time" disabled>${minutesToTime(now)}</button></div>`;
+      nowLine.innerHTML = _nowTimeCol +
+        `<div class="tl-now-track"><div class="tl-now-dot"></div><div class="tl-now-bar"></div></div>`;
       (compactCard || container).appendChild(nowLine);
       nowLineEl = nowLine;
     }
@@ -1542,9 +1544,11 @@ function renderTimeline(container, scrollToNow) {
     const nowLine = document.createElement('div');
     nowLine.className = 'tl-now-line';
     nowLine.id = 'tl-now-marker';
-    nowLine.innerHTML = `
-      <div class="tl-now-left"><div class="tl-now-pill" id="tl-now-time">${minutesToTime(now)}</div></div>
-      <div class="tl-now-track"><div class="tl-now-dot"></div><div class="tl-now-bar"></div></div>`;
+    const _nowTimeColEnd = state.cardView === 'compact'
+      ? `<div class="compact-time"><button class="tl-time-btn tl-now-pill" id="tl-now-time" disabled>${minutesToTime(now)}</button></div>`
+      : `<div class="tl-left"><button class="tl-time-btn tl-now-pill" id="tl-now-time" disabled>${minutesToTime(now)}</button></div>`;
+    nowLine.innerHTML = _nowTimeColEnd +
+      `<div class="tl-now-track"><div class="tl-now-dot"></div><div class="tl-now-bar"></div></div>`;
     (compactCard || container).appendChild(nowLine);
     nowLineEl = nowLine;
   }
