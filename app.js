@@ -1459,14 +1459,14 @@ function renderCalView(container) {
   const isToday = day.date === today || (day.isFestival && today >= day.date && today <= (day.dateEnd||day.date));
   if (isToday) {
     const now = nowMinutes();
-    if (now >= dayStart && now <= dayEnd) {
-      const nl = document.createElement('div');
-      nl.className = 'cal-now-line';
-      nl.id = 'cal-now-marker';
-      nl.style.top = (now - dayStart) * CAL_PX_MIN + 'px';
-      nl.innerHTML = `<div class="cal-now-pill" id="cal-now-time">${minutesToTime(now)}</div><div class="cal-now-bar"></div>`;
-      wrap.appendChild(nl);
-    }
+    const nl = document.createElement('div');
+    nl.className = 'cal-now-line';
+    nl.id = 'cal-now-marker';
+    // Clamp to visible range so the line always shows on today
+    const clampedNow = Math.max(dayStart, Math.min(dayEnd, now));
+    nl.style.top = (clampedNow - dayStart) * CAL_PX_MIN + 'px';
+    nl.innerHTML = `<div class="cal-now-pill" id="cal-now-time">${minutesToTime(now)}</div><div class="cal-now-bar"></div>`;
+    wrap.appendChild(nl);
   }
 
   outer.appendChild(wrap);
