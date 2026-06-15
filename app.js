@@ -326,6 +326,19 @@ function updateNotifBtn() {
 }
 
 
+function showToast(msg, durationMs = 2800) {
+  let el = document.getElementById('app-toast');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'app-toast';
+    document.getElementById('app').appendChild(el);
+  }
+  el.textContent = msg;
+  el.classList.add('visible');
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove('visible'), durationMs);
+}
+
 async function enableNotifs() {
   if (!notifSupported()) return;
   const perm = await Notification.requestPermission();
@@ -335,9 +348,11 @@ async function enableNotifs() {
     subscribePush();
     scheduleNotifs();
     startTrafficPolling();
+    showToast('🔔 Departure alerts on');
   } else {
     state.notifsEnabled = false;
     try { localStorage.setItem('annecy_notifs', '0'); } catch {}
+    showToast('Notifications blocked — check iOS Settings');
   }
   updateNotifBtn();
 }
@@ -349,6 +364,7 @@ function disableNotifs() {
   _notifTimers = [];
   stopTrafficPolling();
   updateNotifBtn();
+  showToast('🔕 Departure alerts off');
 }
 
 function collectTodayLeaveEvents() {
