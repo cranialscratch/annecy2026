@@ -1417,7 +1417,18 @@ body.light .cal-tick-15 { background: rgba(0,0,0,0.10); }
   box-shadow: 0 2px 8px rgba(0,0,0,0.35);
 }
 .cal-card:active { background: rgba(22, 22, 46, 0.92); }
-.cal-card.visited { opacity: 0.40; }
+/* Visited: muted with a green tint so it reads as "done" */
+.cal-card.visited {
+  opacity: 0.42;
+  border-left-color: #16a34a !important;
+}
+/* Past (time elapsed, not explicitly visited): greyed out */
+.cal-card.cal-card--past {
+  opacity: 0.35;
+  filter: grayscale(40%);
+}
+/* Visited takes priority over past */
+.cal-card.visited.cal-card--past { filter: none; }
 body.light .cal-card {
   background: rgba(255,255,255,0.93);
   box-shadow: 0 1px 6px rgba(0,0,0,0.14);
