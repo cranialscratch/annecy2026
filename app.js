@@ -326,6 +326,19 @@ function updateNotifBtn() {
 }
 
 
+async function testServerPush() {
+  if (!_db) { showToast('Firebase not connected'); return; }
+  await subscribePush();
+  const key = 'test_' + Date.now();
+  await _db.ref(`pushQueue/${getDeviceId()}/${key}`).set({
+    fireAt: Date.now(),
+    title: '🔔 Test notification',
+    body: 'Server push is working!',
+    tag: 'push-test',
+  });
+  showToast('Test queued — trigger in GitHub Actions now');
+}
+
 function showToast(msg, durationMs = 2800) {
   let el = document.getElementById('app-toast');
   if (!el) {
@@ -2617,15 +2630,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Notification toggle
     const notifBtn = document.getElementById('notif-btn');
+    const notifTestBtn = document.getElementById('notif-test-btn');
     if (notifBtn) {
       updateNotifBtn();
+      // Show test button only when alerts are on
+      if (notifTestBtn) notifTestBtn.style.display = state.notifsEnabled && notifGranted() ? '' : 'none';
       notifBtn.addEventListener('click', () => {
         if (state.notifsEnabled) {
           disableNotifs();
+          if (notifTestBtn) notifTestBtn.style.display = 'none';
         } else {
-          enableNotifs();
+          enableNotifs().then(() => {
+            if (notifTestBtn) notifTestBtn.style.display = state.notifsEnabled ? '' : 'none';
+          });
         }
       });
+    }
+    if (notifTestBtn) {
+      notifTestBtn.addEventListener('click', () => testServerPush());
     }
 
     // Units toggle (km / miles)
