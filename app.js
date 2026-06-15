@@ -47,6 +47,7 @@ const TYPE_ICON = {
   experience:   'ph-star',
   scenic:       'ph-mountains',
   historic:     'ph-castle-turret',
+  work:         'ph-laptop',
   festival:     'ph-film-slate',
 };
 function stopTypeIcon(stop) {
