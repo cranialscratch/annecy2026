@@ -2793,21 +2793,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!btn) return;
     document.querySelectorAll('#time-type-seg .seg-btn').forEach(b => b.classList.toggle('active', b === btn));
   });
-  // Duration value button: toggle drum picker
-  document.getElementById('dur-value-btn').addEventListener('click', () => {
-    const wrap = document.getElementById('dur-picker-wrap');
-    wrap.classList.toggle('hidden');
-    if (!wrap.classList.contains('hidden')) {
-      const update = () => {
-        const m = getDurPickerMins();
-        const h = Math.floor(m/60), min = m%60;
-        document.getElementById('dur-value-btn').textContent = `${h}h ${String(min).padStart(2,'0')}m`;
-      };
-      document.getElementById('dur-hours').addEventListener('scroll', update, { passive: true });
-      document.getElementById('dur-mins').addEventListener('scroll', update, { passive: true });
-    }
-  });
-  document.getElementById('edit-sheet-overlay').addEventListener('click', e => {
+    document.getElementById('edit-sheet-overlay').addEventListener('click', e => {
     if (e.target.id === 'edit-sheet-overlay') closeEditSheet();
   });
   document.getElementById('edit-save-btn').addEventListener('click', saveEditSheet);
