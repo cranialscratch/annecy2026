@@ -3,7 +3,9 @@ const state = {
   currentDayId: null,
   currentView: 'day',
   cascadeEnabled: false,
-  compactMode: false,
+  cardView: 'full',
+  notifsEnabled: false,
+  useMetric: true,
   overrides: {},        // stopId → time string
   checked: {},          // stopId → bool
   locOverrides: {},     // stopId → { name, lat, lng }
@@ -12,6 +14,7 @@ const state = {
   priorityOverrides: {}, // stopId → 0-3
   reasonOverrides: {},  // stopId → string
   veganOverrides: {},   // stopId → bool
+  addedStops: {},       // dayId → [stop, ...]
 };
 
 /* ── Helpers ───────────────────────────────────────────────────────── */
@@ -59,17 +62,21 @@ function formatDate(dateStr) {
   return d.toLocaleDateString('en-GB', { day:'numeric', month:'short' });
 }
 function getDayLabel(day) {
-  if (day.isCountdown) return '<i class="ph ph-sun-horizon"></i>';
+  if (day.isCountdown) return '<i class="ph ph-mountains"></i>';
   if (day.isFestival) return 'Fest';
   const names = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
   return names[new Date(day.date + 'T00:00:00').getDay()];
 }
 function findTodayDayId() {
   const today = new Date().toISOString().slice(0,10);
+  // Exact date match first (test days, travel days) — before countdown catch-all
   for (const day of TRIP_DATA.days) {
-    if (day.isCountdown && today <= day.dateEnd) return day.id;
     if (day.date === today) return day.id;
     if (day.isFestival && today >= day.date && today <= day.dateEnd) return day.id;
+  }
+  // Fallback: countdown period
+  for (const day of TRIP_DATA.days) {
+    if (day.isCountdown && today <= day.dateEnd) return day.id;
   }
   return null;
 }
@@ -81,6 +88,125 @@ function typeLabel(type) {
 }
 function nowMinutes() {
   const n = new Date(); return n.getHours() * 60 + n.getMinutes();
+}
+/* ── Traffic polling ────────────────────────────────────────────────── */
+let _trafficPollTimer    = null;
+let _trafficBaseline     = {};   // stopId → baseline travel seconds
+let _trafficLastFired    = {};   // stopId → timestamp of last alert
+
+function findNextDrivingLeg() {
+  // Returns { from: {lat,lng}, to: stop } for the next stop we're driving to,
+  // based on current time vs today's itinerary. Returns null if not a driving day.
+  const today = new Date().toISOString().slice(0, 10);
+  const day = TRIP_DATA.days.find(d =>
+    d.date === today || (d.isFestival && today >= d.date && today <= (d.dateEnd || d.date))
+  );
+  if (!day || day.isCountdown) return null;
+  const now = nowMinutes();
+  const timedStops = day.stops.filter(s => timeToMinutes(getStopTime(s)) !== null);
+  for (let i = 0; i < timedStops.length - 1; i++) {
+    const cur  = timedStops[i];
+    const next = timedStops[i + 1];
+    const depMins = timeToMinutes(getStopTime(cur)) + getStopDuration(cur);
+    const arrMins = timeToMinutes(getStopTime(next));
+    // We're in the travel window between cur and next
+    if (now >= depMins - 10 && now < arrMins + 15) {
+      const toLat = getStopLat(next), toLng = getStopLng(next);
+      if (!toLat || !toLng) continue;
+      return { fromStop: cur, toStop: next, scheduledMins: arrMins - depMins };
+    }
+  }
+  return null;
+}
+
+async function pollTraffic() {
+  if (!state.notifsEnabled || !notifGranted()) return;
+  if (_userLat === null || _userLng === null) return;
+  const leg = findNextDrivingLeg();
+  if (!leg) return;
+
+  try {
+    const body = {
+      origin:      { location: { latLng: { latitude: _userLat, longitude: _userLng } } },
+      destination: { location: { latLng: { latitude: getStopLat(leg.toStop), longitude: getStopLng(leg.toStop) } } },
+      travelMode:  'DRIVE',
+      routingPreference: 'TRAFFIC_AWARE',
+      departureTime: new Date().toISOString(),
+    };
+    const r = await fetch(`https://routes.googleapis.com/directions/v2:computeRoutes?key=${GKEY}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Goog-FieldMask': 'routes.duration,routes.staticDuration' },
+      body: JSON.stringify(body),
+    });
+    const d = await r.json();
+    const route = d.routes?.[0];
+    if (!route) return;
+
+    const trafficSecs = parseInt(route.duration);           // with traffic
+    const staticSecs  = parseInt(route.staticDuration);     // without traffic
+    const delaySecs   = trafficSecs - staticSecs;
+    const id = leg.toStop.id;
+
+    // Establish baseline on first poll for this leg
+    if (!_trafficBaseline[id]) {
+      _trafficBaseline[id] = staticSecs;
+      return;
+    }
+
+    const delayMins = Math.round(delaySecs / 60);
+    if (delayMins >= 5) {
+      // Only re-alert if last alert for this leg was >20 min ago
+      const now = Date.now();
+      if (_trafficLastFired[id] && now - _trafficLastFired[id] < 20 * 60 * 1000) return;
+      _trafficLastFired[id] = now;
+
+      const trafficMins = Math.round(trafficSecs / 60);
+      const tH = Math.floor(trafficMins/60), tM = trafficMins%60;
+      const tStr = trafficMins >= 60 ? `${tH}h ${tM}m` : `${trafficMins}m`;
+      const title = '🚦 Traffic delay ahead';
+      const msg   = `${delayMins} min delay to ${getStopName(leg.toStop)}. Journey now ~${tStr}. Consider leaving earlier.`;
+      try {
+        if (navigator.serviceWorker?.controller) {
+          navigator.serviceWorker.controller.postMessage({ type: 'SHOW_NOTIF', title, body: msg, tag: `traffic-${id}` });
+        } else {
+          new Notification(title, { body: msg, icon: './icons/icon-180.png', tag: `traffic-${id}` });
+        }
+      } catch {}
+    }
+  } catch {}
+}
+
+function startTrafficPolling() {
+  stopTrafficPolling();
+  pollTraffic();
+  _trafficPollTimer = setInterval(pollTraffic, 5 * 60 * 1000);
+}
+function stopTrafficPolling() {
+  clearInterval(_trafficPollTimer);
+  _trafficPollTimer = null;
+}
+
+function fmtDist(km) {
+  if (state.useMetric) return `${Math.round(km)} km`;
+  return `${Math.round(km * 0.621371)} mi`;
+}
+function openWeatherApp(lat, lng) {
+  // yr.no (Norwegian Met Office) accepts lat/lng directly — no search needed, great EU coverage
+  window.open(`https://www.yr.no/en/forecast/daily-table/${lat},${lng}`, '_blank');
+}
+function openDirections(toLat, toLng) {
+  // Use geo: URI — iOS opens Apple Maps, Android opens Google Maps
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      const { latitude: fLat, longitude: fLng } = pos.coords;
+      window.open(`https://maps.apple.com/?saddr=${fLat},${fLng}&daddr=${toLat},${toLng}&dirflg=d`, '_blank');
+    },
+    () => {
+      // No location permission — just open destination
+      window.open(`https://maps.apple.com/?daddr=${toLat},${toLng}&dirflg=d`, '_blank');
+    },
+    { timeout: 5000 }
+  );
 }
 
 /* ── Leave-by countdown helpers ────────────────────────────────────── */
@@ -112,11 +238,247 @@ function renderLeaveByEl(el, stop) {
   el.className = `leave-by-pill${info.urgent ? ' urgent' : ''}${info.active ? ' active' : ''}`;
   el.style.display = '';
 }
+/* ── Departure notifications ────────────────────────────────────────
+   Fires a local notification 15 min before every leave-by time or
+   depart stop on today's day. Uses setTimeout scheduled from the
+   current time; also re-checked by the leave-by ticker so rescheduling
+   after the page wakes from background still works.
+──────────────────────────────────────────────────────────────────── */
+const _firedNotifs  = new Set(); // stopId → fired today, reset at midnight
+let   _notifTimers  = [];
+let   _notifMidnightTimer = null;
+
+function notifSupported() {
+  return 'Notification' in window;
+}
+function notifGranted() {
+  return notifSupported() && Notification.permission === 'granted';
+}
+
+/* ── Web Push (server-side delivery so notifications fire when backgrounded) */
+const VAPID_PUBLIC_KEY = 'BAWWgB9Fd6E6bRrhjgYfbDIwi1uHpKWVeBW9QyZLOz6WtYw4FvIJRUXGsaWYXKbspGfzCCg8-QMF_ONzsAdYhtI';
+
+function getDeviceId() {
+  let id = localStorage.getItem('annecy_device_id');
+  if (!id) {
+    id = ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g,c=>(c^crypto.getRandomValues(new Uint8Array(1))[0]&15>>c/4).toString(16));
+    try { localStorage.setItem('annecy_device_id', id); } catch {}
+  }
+  return id;
+}
+
+function urlB64ToUint8(b64) {
+  const p = '='.repeat((4 - b64.length % 4) % 4);
+  const s = atob((b64 + p).replace(/-/g, '+').replace(/_/g, '/'));
+  return Uint8Array.from([...s].map(c => c.charCodeAt(0)));
+}
+
+async function subscribePush() {
+  if (!('PushManager' in window) || !_db) return;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) {
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlB64ToUint8(VAPID_PUBLIC_KEY),
+      });
+    }
+    await _db.ref(`pushSubs/${getDeviceId()}`).set(JSON.parse(JSON.stringify(sub)));
+  } catch (e) { console.warn('Push subscribe failed', e); }
+}
+
+async function writePushQueue() {
+  if (!_db || !state.notifsEnabled || !notifGranted()) return;
+  const now = new Date();
+  const nowMs = now.getTime();
+  const todayStartMs = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const queue = {};
+  collectTodayLeaveEvents().forEach(({ stop, notifMins, label }) => {
+    if (notifMins < 0) return;
+    const fireMs = todayStartMs + notifMins * 60000;
+    if (fireMs < nowMs - 60000) return; // already well past
+    queue[stop.id + '_' + notifMins] = {
+      fireAt: fireMs,
+      title: '🕐 Departure reminder',
+      body: label,
+      tag: `depart-${stop.id}`,
+    };
+  });
+  await _db.ref(`pushQueue/${getDeviceId()}`).set(Object.keys(queue).length ? queue : null);
+}
+
+function updateNotifBtn() {
+  const btn = document.getElementById('notif-btn');
+  const lbl = document.getElementById('notif-label');
+  const testBtn = document.getElementById('notif-test-btn');
+  if (!btn || !lbl) return;
+  if (!notifSupported()) {
+    btn.style.opacity = '0.4';
+    lbl.textContent = 'Alerts not supported';
+    if (testBtn) testBtn.style.display = 'none';
+    return;
+  }
+  const on = state.notifsEnabled && notifGranted();
+  lbl.textContent = on ? 'Departure alerts on' : 'Departure alerts off';
+  btn.querySelector('.ph').className = on
+    ? 'ph ph-bell-ringing drawer-icon'
+    : 'ph ph-bell drawer-icon';
+}
+
+
+async function testServerPush() {
+  if (!_db) { showToast('Firebase not connected'); return; }
+  await subscribePush();
+  const key = 'test_' + Date.now();
+  await _db.ref(`pushQueue/${getDeviceId()}/${key}`).set({
+    fireAt: Date.now(),
+    title: '🔔 Test notification',
+    body: 'Server push is working!',
+    tag: 'push-test',
+  });
+  // Also fire immediately via SW so there's instant feedback
+  sendNotif('🔔 Test notification', 'Server push queued — will also arrive via server within 5 min', 'push-test-local');
+  showToast('Test sent + queued for server delivery');
+}
+
+function showToast(msg, durationMs = 2800) {
+  let el = document.getElementById('app-toast');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'app-toast';
+    document.getElementById('app').appendChild(el);
+  }
+  el.textContent = msg;
+  el.classList.add('visible');
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove('visible'), durationMs);
+}
+
+async function enableNotifs() {
+  if (!notifSupported()) return;
+  const perm = await Notification.requestPermission();
+  if (perm === 'granted') {
+    state.notifsEnabled = true;
+    try { localStorage.setItem('annecy_notifs', '1'); } catch {}
+    subscribePush();
+    scheduleNotifs();
+    startTrafficPolling();
+    showToast('🔔 Departure alerts on');
+  } else {
+    state.notifsEnabled = false;
+    try { localStorage.setItem('annecy_notifs', '0'); } catch {}
+    showToast('Notifications blocked — check iOS Settings');
+  }
+  updateNotifBtn();
+}
+
+function disableNotifs() {
+  state.notifsEnabled = false;
+  try { localStorage.setItem('annecy_notifs', '0'); } catch {}
+  _notifTimers.forEach(clearTimeout);
+  _notifTimers = [];
+  stopTrafficPolling();
+  updateNotifBtn();
+  showToast('🔕 Departure alerts off');
+}
+
+function collectTodayLeaveEvents() {
+  const today = new Date().toISOString().slice(0, 10);
+  const events = [];
+  for (const day of TRIP_DATA.days) {
+    const covers = day.date === today ||
+      (day.isFestival && today >= day.date && today <= (day.dateEnd || day.date));
+    if (!covers) continue;
+    for (const stop of getDayStops(day)) {
+      const type = getStopType(stop);
+      // depart stops: notify at stop time - 15
+      if (type === 'depart') {
+        const m = timeToMinutes(getStopTime(stop));
+        if (m !== null) events.push({ stop, notifMins: m - 15, label: `Departing from ${getStopName(stop)}` });
+      }
+      // stops with explicit duration: notify at leaveBy - 15
+      if (hasExplicitDuration(stop) && type !== 'depart') {
+        const arr = timeToMinutes(getStopTime(stop));
+        if (arr !== null) {
+          const leaveBy = arr + getStopDuration(stop);
+          events.push({ stop, notifMins: leaveBy - 15, label: `Leave ${getStopName(stop)} in 15 min` });
+        }
+      }
+    }
+  }
+  return events;
+}
+
+async function sendNotif(title, body, tag) {
+  try {
+    // Wait up to 3s for SW controller to be available (may be null on cold resume)
+    let ctrl = navigator.serviceWorker?.controller;
+    if (!ctrl) {
+      await Promise.race([
+        navigator.serviceWorker.ready,
+        new Promise(r => setTimeout(r, 3000)),
+      ]);
+      ctrl = navigator.serviceWorker?.controller;
+    }
+    if (ctrl) {
+      ctrl.postMessage({ type: 'SHOW_NOTIF', title, body, tag });
+    } else {
+      new Notification(title, { body, tag, icon: './icons/icon-180.png' });
+    }
+  } catch {}
+}
+
+function scheduleNotifs() {
+  _notifTimers.forEach(clearTimeout);
+  _notifTimers = [];
+  if (!notifGranted() || !state.notifsEnabled) return;
+
+  const now    = new Date();
+  const nowMs  = now.getTime();
+  const todayStartMs = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+
+  collectTodayLeaveEvents().forEach(({ stop, notifMins, label }) => {
+    if (notifMins < 0) return;
+    const fireMs = todayStartMs + notifMins * 60000;
+    const delay  = fireMs - nowMs;
+    const key    = stop.id + ':' + notifMins;
+
+    // Catch-up: fire immediately if missed within last 30 min
+    if (delay < 0 && delay > -1800000 && !_firedNotifs.has(key)) {
+      _firedNotifs.add(key);
+      sendNotif('🕐 Departure reminder', label, `depart-${stop.id}`);
+      return;
+    }
+    if (delay < 0) return;
+
+    const t = setTimeout(() => {
+      if (!state.notifsEnabled || !notifGranted()) return;
+      if (_firedNotifs.has(key)) return;
+      _firedNotifs.add(key);
+      sendNotif('🕐 Departure reminder', label, `depart-${stop.id}`);
+    }, delay);
+    _notifTimers.push(t);
+  });
+
+  // Write queue to Firebase for server-side delivery while backgrounded
+  writePushQueue();
+
+  // Reset fired set at midnight
+  clearTimeout(_notifMidnightTimer);
+  const msToMidnight = todayStartMs + 86400000 - nowMs;
+  _notifMidnightTimer = setTimeout(() => {
+    _firedNotifs.clear();
+    scheduleNotifs();
+  }, msToMidnight);
+}
+
 let _leaveByInterval = null;
+let _renderCount = 0;
 function startLeaveByTicker() {
   clearInterval(_leaveByInterval);
   updateAllLeaveBy();
-  _leaveByInterval = setInterval(updateAllLeaveBy, 30000);
+  _leaveByInterval = setInterval(() => { updateAllLeaveBy(); scheduleNotifs(); }, 30000);
 }
 function updateAllLeaveBy() {
   document.querySelectorAll('[data-leaveby]').forEach(el => {
@@ -136,6 +498,43 @@ function updateAllLeaveBy() {
   });
   const detailEl = document.getElementById('detail-leaveby');
   if (detailEl && _detailStop) renderLeaveByEl(detailEl, _detailStop);
+
+  // Update tl-card--past classes on today's timeline cards
+  const _todayStr2 = new Date().toISOString().slice(0, 10);
+  const _curDay2 = TRIP_DATA.days.find(d => d.id === state.currentDayId);
+  const _isToday2 = _curDay2 && (_curDay2.date === _todayStr2 ||
+    (_curDay2.isFestival && _todayStr2 >= _curDay2.date && _todayStr2 <= (_curDay2.dateEnd || _curDay2.date)));
+  {
+    const nowM = nowMinutes();
+    const _isPastDay2 = _curDay2 && _curDay2.date && _curDay2.date < _todayStr2;
+    document.querySelectorAll('.tl-card[data-stop-id]').forEach(cardEl => {
+      const stop = findStop(cardEl.dataset.stopId);
+      if (!stop) return;
+      if (cardEl.classList.contains('visited')) { cardEl.classList.remove('tl-card--past'); return; }
+      const stopMins = timeToMinutes(getStopTime(stop));
+      const depMins = stopMins !== null ? stopMins + getStopDuration(stop) : null;
+      const isPast = _isPastDay2 || (_isToday2 && depMins !== null && depMins < nowM);
+      cardEl.classList.toggle('tl-card--past', isPast);
+    });
+    document.querySelectorAll('.cal-card[id^="cal-"]').forEach(cardEl => {
+      const stopId = cardEl.id.replace('cal-', '');
+      const stop = findStop(stopId);
+      if (!stop) return;
+      if (cardEl.classList.contains('visited')) { cardEl.classList.remove('cal-card--past'); return; }
+      const stopMins = timeToMinutes(getStopTime(stop));
+      const depMins = stopMins !== null ? stopMins + getStopDuration(stop) : null;
+      cardEl.classList.toggle('cal-card--past', _isPastDay2 || (_isToday2 && depMins !== null && depMins < nowM));
+    });
+  }
+  // Keep Now pill time current
+  const nowPill = document.getElementById('tl-now-time');
+  if (nowPill) nowPill.textContent = minutesToTime(nowMinutes());
+  const calNow = document.getElementById('cal-now-time');
+  if (calNow) {
+    calNow.textContent = minutesToTime(nowMinutes());
+    const marker = document.getElementById('cal-now-marker');
+    // Can't reposition without knowing dayStart - just update text
+  }
 }
 function buildTags(stop) {
   const tags = [];
@@ -290,7 +689,21 @@ async function fetchNearbyPOI(stop) {
 function findStop(stopId) {
   for (const day of TRIP_DATA.days)
     for (const s of day.stops) if (s.id === stopId) return s;
+  for (const arr of Object.values(state.addedStops || {}))
+    for (const s of arr) if (s.id === stopId) return s;
   return null;
+}
+
+function getDayStops(day) {
+  const added = (state.addedStops || {})[day.id] || [];
+  const all = [...day.stops, ...added];
+  return all.sort((a, b) => {
+    const ta = timeToMinutes(getStopTime(a)), tb = timeToMinutes(getStopTime(b));
+    if (ta === null && tb === null) return 0;
+    if (ta === null) return 1;
+    if (tb === null) return -1;
+    return ta - tb;
+  });
 }
 
 function injectWikiPhoto(stopId) {
@@ -350,6 +763,94 @@ const GKEY = 'AIzaSyBDIpPyqjOtvh1y-1nwyJgIj9TVjQFD_Jo';
 // Satellite aerial as a fallback — much more interesting than Street View
 function satelliteUrl(stop) {
   return `https://maps.googleapis.com/maps/api/staticmap?center=${stop.lat},${stop.lng}&zoom=16&size=640x380&maptype=satellite&key=${GKEY}`;
+}
+
+/* ── Weather cache & fetch (Open-Meteo — free, no key needed) ───────── */
+const _weatherCache = {}; // dayId → Map<dateString, {icon, tempC, nightIcon, nightTempC, conditionText}>
+
+// WMO weather code → Phosphor icon
+// WMO code → {icon (day), icon (night), label}
+function wmoToWeather(code, isNight) {
+  if (code === 0)              return { icon: isNight ? 'ph-moon-stars' : 'ph-sun',       label: isNight ? 'Clear night' : 'Clear sky' };
+  if (code <= 2)               return { icon: isNight ? 'ph-cloud-moon' : 'ph-cloud-sun', label: 'Partly cloudy' };
+  if (code === 3)              return { icon: 'ph-cloud',            label: 'Overcast' };
+  if (code <= 48)              return { icon: 'ph-cloud-fog',        label: 'Fog' };
+  if (code <= 55)              return { icon: 'ph-cloud-drizzle',    label: 'Drizzle' };
+  if (code <= 57)              return { icon: 'ph-cloud-sleet',      label: 'Freezing drizzle' };
+  if (code <= 65)              return { icon: 'ph-cloud-rain',       label: code >= 63 ? 'Heavy rain' : 'Rain' };
+  if (code <= 67)              return { icon: 'ph-cloud-sleet',      label: 'Freezing rain' };
+  if (code <= 77)              return { icon: 'ph-snowflake',        label: 'Snow' };
+  if (code <= 82)              return { icon: 'ph-cloud-rain',       label: 'Rain showers' };
+  if (code <= 86)              return { icon: 'ph-snowflake',        label: 'Snow showers' };
+  if (code === 95)             return { icon: 'ph-cloud-lightning',  label: 'Thunderstorm' };
+  if (code <= 99)              return { icon: 'ph-cloud-lightning',  label: 'Thunderstorm with hail' };
+  return { icon: 'ph-thermometer', label: 'Unknown' };
+}
+
+function isNightTime(timeStr) {
+  const mins = timeToMinutes(timeStr);
+  if (mins === null) return false;
+  return mins >= 18 * 60 || mins < 6 * 60;
+}
+
+async function fetchWeatherForDay(day) {
+  if (_weatherCache[day.id] !== undefined) return _weatherCache[day.id];
+  let lat = day.lat, lng = day.lng;
+  if (lat == null || lng == null) {
+    for (const s of day.stops) {
+      const sLat = getStopLat(s), sLng = getStopLng(s);
+      if (sLat && sLng) { lat = sLat; lng = sLng; break; }
+    }
+  }
+  if (lat == null || lng == null) { _weatherCache[day.id] = null; return null; }
+
+  // Determine date range: single day or festival span
+  const startDate = day.date;
+  const endDate   = day.dateEnd || day.date;
+
+  try {
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}` +
+      `&daily=weathercode,temperature_2m_max,temperature_2m_min` +
+      `&timezone=auto&forecast_days=16`;
+    const res = await fetch(url);
+    if (!res.ok) { _weatherCache[day.id] = null; return null; }
+    const data = await res.json();
+    const map = new Map();
+    const dates = data.daily?.time || [];
+    dates.forEach((d, i) => {
+      const code    = data.daily.weathercode[i];
+      const tempMax = Math.round(data.daily.temperature_2m_max[i]);
+      const tempMin = Math.round(data.daily.temperature_2m_min[i]);
+      const dayW    = wmoToWeather(code, false);
+      const nightW  = wmoToWeather(code, true);
+      map.set(d, {
+        icon: dayW.icon, tempC: tempMax,
+        nightIcon: nightW.icon, nightTempC: tempMin,
+        conditionText: dayW.label,
+      });
+    });
+    _weatherCache[day.id] = map;
+    return map;
+  } catch (e) {
+    _weatherCache[day.id] = null;
+    return null;
+  }
+}
+
+function getWeatherForStop(weatherMap, stop) {
+  if (!weatherMap) return null;
+  // Find the day this stop belongs to
+  const day = TRIP_DATA.days.find(d => d.id === state.currentDayId || d.stops?.some(s => s.id === stop.id));
+  const dateStr = day?.date || '';
+  const entry = weatherMap.get(dateStr);
+  if (!entry) return null;
+  const night = isNightTime(getStopTime(stop));
+  return {
+    icon: night ? entry.nightIcon : entry.icon,
+    tempC: night ? entry.nightTempC : entry.tempC,
+    conditionText: entry.conditionText,
+    conditionType: entry.conditionType,
+  };
 }
 
 const _commonsCache = {}; // stopId → [url, ...]
@@ -422,6 +923,7 @@ function localSave() {
     localStorage.setItem('annecy_priority_overrides', JSON.stringify(state.priorityOverrides));
     localStorage.setItem('annecy_reason_overrides',   JSON.stringify(state.reasonOverrides));
     localStorage.setItem('annecy_vegan_overrides',    JSON.stringify(state.veganOverrides));
+    localStorage.setItem('annecy_added_stops',        JSON.stringify(state.addedStops));
   } catch {}
 }
 function save() {
@@ -438,6 +940,7 @@ function load() {
     const pr = localStorage.getItem('annecy_priority_overrides');
     const re = localStorage.getItem('annecy_reason_overrides');
     const ve = localStorage.getItem('annecy_vegan_overrides');
+    const as = localStorage.getItem('annecy_added_stops');
     if (o)  state.overrides         = JSON.parse(o);
     if (c)  state.checked           = JSON.parse(c);
     if (lo) state.locOverrides      = JSON.parse(lo);
@@ -446,12 +949,23 @@ function load() {
     if (pr) state.priorityOverrides = JSON.parse(pr);
     if (re) state.reasonOverrides   = JSON.parse(re);
     if (ve) state.veganOverrides    = JSON.parse(ve);
+    if (as) state.addedStops        = JSON.parse(as);
   } catch {}
   try {
     if (localStorage.getItem('annecy_theme') === 'light') document.body.classList.add('light');
   } catch {}
   try {
-    if (localStorage.getItem('annecy_compact') === '1') state.compactMode = true;
+    const cv = localStorage.getItem('annecy_cardview'); if (cv) state.cardView = cv;
+  } catch {}
+  try {
+    if (localStorage.getItem('annecy_notifs') === '1') {
+      state.notifsEnabled = true;
+      // Re-register push subscription in case it lapsed
+      subscribePush();
+    }
+  } catch {}
+  try {
+    if (localStorage.getItem('annecy_units') === 'imperial') state.useMetric = false;
   } catch {}
 }
 
@@ -487,11 +1001,10 @@ function updateDayStrip() {
 }
 function selectDay(dayId) {
   state.currentDayId = dayId;
-  // Stay on whichever view is active (map, day, etc.) — only switch to day
-  // if currently on a non-day-sensitive view like overview/vegan/charging
   if (!['day','map'].includes(state.currentView)) state.currentView = 'day';
   updateDayStrip();
-  renderView(false);
+  const isToday = dayId === findTodayDayId();
+  renderView(isToday);
 }
 
 /* ── Header ────────────────────────────────────────────────────────── */
@@ -538,6 +1051,7 @@ function renderView(scrollToNow) {
     if (state.currentView === 'overview')      { setBgClass(null); renderOverview(tl); }
     else if (state.currentView === 'vegan')    { setBgClass(null); renderFilterList(tl, 'vegan'); }
     else if (state.currentView === 'charging') { setBgClass(null); renderFilterList(tl, 'charging'); }
+    else if (state.cardView === 'calendar') renderCalView(tl);
     else renderTimeline(tl, scrollToNow);
   }
 }
@@ -892,7 +1406,7 @@ function renderCountdownBanner(container) {
       return;
     }
     banner.innerHTML = `
-      <div class="cd-emoji"><i class="ph ph-sun-horizon"></i></div>
+      <div class="cd-emoji"><i class="ph ph-mountains"></i></div>
       <h2 class="cd-title">Holiday Countdown</h2>
       <p class="cd-sub">Annecy · 17 Jun 2026 · North Cadbury 10:30</p>
       <div class="cd-units">
@@ -909,6 +1423,192 @@ function renderCountdownBanner(container) {
   clearInterval(_countdownInterval);
   tick();
   _countdownInterval = setInterval(tick, 1000);
+}
+
+/* ── Calendar view ─────────────────────────────────────────────────── */
+const CAL_PX_MIN = 1.5; // px per minute (90px/hour)
+
+function renderCalView(container) {
+  container.innerHTML = '';
+  const day = TRIP_DATA.days.find(d => d.id === state.currentDayId);
+  if (!day || day.isCountdown) { renderTimeline(container, false); return; }
+  setBgClass('bg-day');
+
+  const timedStops = getDayStops(day).filter(s => timeToMinutes(getStopTime(s)) !== null);
+  if (!timedStops.length) return;
+
+  const _calToday = new Date().toISOString().slice(0, 10);
+  const isToday = day.date === _calToday || (day.isFestival && _calToday >= day.date && _calToday <= (day.dateEnd || day.date));
+  const isPastDay = day.date && day.date < _calToday;
+
+  const times    = timedStops.map(s => timeToMinutes(getStopTime(s)));
+  const dayStart = Math.floor((Math.min(...times) - 10) / 5) * 5;
+  const lastT    = Math.max(...times);
+  const lastStop = timedStops.find(s => timeToMinutes(getStopTime(s)) === lastT);
+  const dayEnd   = lastT + getStopDuration(lastStop) + 15;
+  const totalH   = Math.ceil((dayEnd - dayStart) * CAL_PX_MIN);
+
+  const outer = document.createElement('div');
+  outer.className = 'cal-outer';
+
+  const wrap = document.createElement('div');
+  wrap.className = 'cal-wrap';
+  wrap.style.height = totalH + 'px';
+
+  // Hour labels + grid lines
+  const hourStart = Math.ceil(dayStart / 60) * 60;
+  for (let m = hourStart; m <= dayEnd; m += 60) {
+    const top = (m - dayStart) * CAL_PX_MIN;
+    const lbl = document.createElement('div');
+    lbl.className = 'cal-hour-lbl';
+    lbl.style.top = top + 'px';
+    lbl.textContent = minutesToTime(m);
+    wrap.appendChild(lbl);
+    const line = document.createElement('div');
+    line.className = 'cal-hour-line';
+    line.style.top = top + 'px';
+    wrap.appendChild(line);
+  }
+
+  // 5-min minor ticks
+  for (let m = Math.ceil(dayStart / 5) * 5; m <= dayEnd; m += 5) {
+    if (m % 60 === 0) continue;
+    const tick = document.createElement('div');
+    tick.className = (m % 15 === 0) ? 'cal-tick cal-tick-15' : 'cal-tick';
+    tick.style.top = (m - dayStart) * CAL_PX_MIN + 'px';
+    wrap.appendChild(tick);
+  }
+
+  // Stop cards + travel gaps
+  const TYPE_COL = {
+    charging:'#16a34a', hotel:'#0284c7', transport:'#7c3aed', food:'#ea580c',
+    architecture:'#d97706', village:'#0d9488', town:'#0d9488', experience:'#db2777',
+    wander:'#059669', depart:'#475569', scenic:'#16a34a', historic:'#b45309', festival:'#7c3aed',
+  };
+
+  function haversineKm(lat1, lng1, lat2, lng2) {
+    const R = 6371, dLat = (lat2-lat1)*Math.PI/180, dLng = (lng2-lng1)*Math.PI/180;
+    const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  }
+
+  timedStops.forEach((stop, idx) => {
+    const t    = timeToMinutes(getStopTime(stop));
+    const dur  = getStopDuration(stop);
+    const top  = (t - dayStart) * CAL_PX_MIN;
+    const h    = Math.max(dur * CAL_PX_MIN, 40);
+    const col  = TYPE_COL[getStopType(stop)] || '#334155';
+    const card = document.createElement('div');
+    card.className = 'cal-card';
+    card.id = `cal-${stop.id}`;
+    card.style.cssText = `top:${top}px;height:${h}px;border-left-color:${col};`;
+    const isVisited = !!state.checked[stop.id];
+    if (isVisited) card.classList.add('visited');
+    if (!isVisited) {
+      const depMins = t !== null ? t + dur : null;
+      if (isPastDay || (isToday && depMins !== null && depMins < nowMinutes()))
+        card.classList.add('cal-card--past');
+    }
+    const dur_h = Math.floor(dur/60), dur_m = dur%60;
+    const durStr = dur >= 60 ? `${dur_h}h${dur_m ? dur_m+'m':''}` : `${dur}m`;
+    card.innerHTML = `
+      <div class="cal-card-name">${stopTypeIcon(stop)} ${getStopName(stop)}</div>
+      <div class="cal-card-meta">${getStopTime(stop)}${stop.tz?' '+stop.tz:''} · ${durStr} <span class="cal-weather-pill" data-stop-id="${stop.id}"></span></div>`;
+    card.addEventListener('click', () => openDetail(stop));
+    wrap.appendChild(card);
+
+    // Lazily populate cal weather pill
+    const calWPill = card.querySelector('.cal-weather-pill');
+    if (calWPill) {
+      fetchWeatherForDay(day).then(wMap => {
+        if (!wMap || !calWPill.isConnected) return;
+        const dateStr = day.date || '';
+        const entry = wMap.get(dateStr);
+        if (!entry) return;
+        const night = isNightTime(getStopTime(stop));
+        const icon = night ? entry.nightIcon : entry.icon;
+        const tempC = night ? entry.nightTempC : entry.tempC;
+        calWPill.innerHTML = `<i class="ph ${icon}"></i> ${tempC}°`;
+      });
+    }
+
+    // Travel gap to next stop
+    const next = timedStops[idx + 1];
+    if (next) {
+      const depMins  = t + dur;
+      const arrMins  = timeToMinutes(getStopTime(next));
+      const gapMins  = arrMins - depMins;
+      if (gapMins > 0) {
+        const gapTop = (depMins - dayStart) * CAL_PX_MIN;
+        const gapH   = gapMins * CAL_PX_MIN;
+        const gap    = document.createElement('div');
+        gap.className = 'cal-travel-gap';
+        gap.id = `cal-gap-${stop.id}`;
+        gap.style.cssText = `top:${gapTop}px;height:${gapH}px;`;
+        const gapH_h = Math.floor(gapMins/60), gapH_m = gapMins%60;
+        const gapStr = gapMins >= 60 ? `${gapH_h}h${gapH_m?gapH_m+'m':''}` : `${gapMins}m`;
+        const toLat = getStopLat(next), toLng = getStopLng(next);
+        gap.innerHTML = `<span class="cal-travel-label" id="cal-travel-${stop.id}" role="button" tabindex="0"><i class="ph ph-car"></i> ${gapStr}</span>`;
+        wrap.appendChild(gap);
+
+        // Tap → open directions to next stop
+        const lbl = gap.querySelector(`#cal-travel-${stop.id}`);
+        if (toLat && toLng) {
+          lbl.classList.add('tappable');
+          lbl.addEventListener('click', e => { e.stopPropagation(); openDirections(toLat, toLng); });
+        }
+
+        // Async: fetch road distance and update label
+        const fromLat = getStopLat(stop), fromLng = getStopLng(stop);
+        if (fromLat && fromLng && toLat && toLng) {
+          const straightKm = haversineKm(fromLat, fromLng, toLat, toLng);
+          if (straightKm > 0.5) {
+            lbl.innerHTML = `<i class="ph ph-car"></i> ${gapStr} · ~${fmtDist(straightKm)}`;
+          }
+          fetch(`https://router.project-osrm.org/route/v1/driving/${fromLng},${fromLat};${toLng},${toLat}?overview=false`)
+            .then(r => r.json())
+            .then(d => {
+              const route = d.routes?.[0];
+              if (!route) return;
+              const roadKm = route.distance / 1000;
+              const roadMins = Math.ceil(route.duration / 60);
+              const rH = Math.floor(roadMins/60), rM = roadMins%60;
+              const rStr = roadMins >= 60 ? `${rH}h${rM?rM+'m':''}` : `${roadMins}m`;
+              const el = document.getElementById(`cal-travel-${stop.id}`);
+              if (el) el.innerHTML = `<i class="ph ph-car"></i> ${rStr} · ${fmtDist(roadKm)} <i class="ph ph-arrow-square-out" style="font-size:11px;opacity:0.6"></i>`;
+            })
+            .catch(() => {});
+        }
+      }
+    }
+  });
+
+  // Now line
+  if (isToday) {
+    const now = nowMinutes();
+    const nl = document.createElement('div');
+    nl.className = 'cal-now-line';
+    nl.id = 'cal-now-marker';
+    // Clamp to visible range so the line always shows on today
+    const clampedNow = Math.max(dayStart, Math.min(dayEnd, now));
+    nl.style.top = (clampedNow - dayStart) * CAL_PX_MIN + 'px';
+    nl.innerHTML = `<div class="cal-now-pill" id="cal-now-time">${minutesToTime(now)}</div><div class="cal-now-bar"></div>`;
+    wrap.appendChild(nl);
+  }
+
+  outer.appendChild(wrap);
+  container.appendChild(outer);
+
+  if (isToday) {
+    requestAnimationFrame(() => {
+      const mc = document.getElementById('main-content');
+      const now = nowMinutes();
+      const scrollY = Math.max(0, (now - dayStart - 30) * CAL_PX_MIN - 100);
+      mc.scrollTo({ top: scrollY, behavior: 'smooth' });
+    });
+  }
+
+  startLeaveByTicker();
 }
 
 /* ── Timeline ──────────────────────────────────────────────────────── */
@@ -938,35 +1638,52 @@ function renderTimeline(container, scrollToNow) {
   let nowInserted = false;
 
   // In compact mode wrap everything in a single glass card
-  const compactCard = state.compactMode ? (() => {
+  const compactCard = state.cardView === 'compact' ? (() => {
     const c = document.createElement('div');
     c.className = 'compact-card';
     container.appendChild(c);
     return c;
   })() : null;
 
-  day.stops.forEach((stop, idx) => {
+  const _tlStops = getDayStops(day);
+  _tlStops.forEach((stop, idx) => {
     const stopMins = timeToMinutes(getStopTime(stop));
     if (isToday && !nowInserted && stopMins !== null && stopMins > now) {
       nowInserted = true;
       const nowLine = document.createElement('div');
-      nowLine.className = 'tl-now-line';
+      nowLine.className = 'tl-item tl-now-line';
       nowLine.id = 'tl-now-marker';
-      nowLine.innerHTML = `<span class="tl-now-label">▶ Now ${minutesToTime(now)}</span>`;
+      const _nowTimeCol = state.cardView === 'compact'
+        ? `<div class="compact-time"><button class="tl-time-btn tl-now-pill" id="tl-now-time" disabled>${minutesToTime(now)}</button></div>`
+        : `<div class="tl-left"><button class="tl-time-btn tl-now-pill" id="tl-now-time" disabled>${minutesToTime(now)}</button></div>`;
+      nowLine.innerHTML = _nowTimeCol +
+        `<div class="tl-now-track"><div class="tl-now-dot"></div><div class="tl-now-bar"></div></div>`;
       (compactCard || container).appendChild(nowLine);
       nowLineEl = nowLine;
     }
-    const item = state.compactMode
-      ? buildCompactItem(stop, idx === day.stops.length - 1)
-      : buildTimelineItem(stop, idx === day.stops.length - 1);
+    const item = state.cardView === 'compact'
+      ? buildCompactItem(stop, idx === _tlStops.length - 1)
+      : buildTimelineItem(stop, idx === _tlStops.length - 1);
     (compactCard || container).appendChild(item);
   });
+
+  // If now is after all stops, append now-line at the end
+  if (isToday && !nowInserted) {
+    const nowLine = document.createElement('div');
+    nowLine.className = 'tl-now-line';
+    nowLine.id = 'tl-now-marker';
+    const _nowTimeColEnd = state.cardView === 'compact'
+      ? `<div class="compact-time"><button class="tl-time-btn tl-now-pill" id="tl-now-time" disabled>${minutesToTime(now)}</button></div>`
+      : `<div class="tl-left"><button class="tl-time-btn tl-now-pill" id="tl-now-time" disabled>${minutesToTime(now)}</button></div>`;
+    nowLine.innerHTML = _nowTimeColEnd +
+      `<div class="tl-now-track"><div class="tl-now-dot"></div><div class="tl-now-bar"></div></div>`;
+    (compactCard || container).appendChild(nowLine);
+    nowLineEl = nowLine;
+  }
 
   // Fetch Wikipedia extracts for detail page descriptions
   lazyLoadWikiImages(day.stops);
 
-  // Pre-fetch images for all other days in the background so they're
-  // ready before the user navigates to them
   setTimeout(() => {
     TRIP_DATA.days.forEach(d => {
       if (d.id === state.currentDayId || !d.stops?.length) return;
@@ -975,15 +1692,21 @@ function renderTimeline(container, scrollToNow) {
         if (_commonsCache[stop.id] === undefined) fetchCommonsPhotos(stop);
       });
     });
-  }, 1500); // delay so current day fetches get priority
+  }, 1500);
 
-  // Only scroll to now when explicitly requested (Today button)
-  if (scrollToNow && nowLineEl) {
-    requestAnimationFrame(() => {
+  // Scroll to now on today's view — wait for layout then measure
+  // Use a render token so a subsequent renderView() cancels any pending scroll
+  const _myRender = ++_renderCount;
+  if (scrollToNow && isToday) {
+    setTimeout(() => {
+      if (_renderCount !== _myRender) return; // superseded by a later render
       const mc = document.getElementById('main-content');
       const headerH = document.getElementById('app-header').offsetHeight;
-      mc.scrollTo({ top: Math.max(0, nowLineEl.offsetTop - headerH - 16), behavior: 'smooth' });
-    });
+      const target = document.getElementById('tl-now-marker');
+      if (target) {
+        mc.scrollTo({ top: Math.max(0, target.offsetTop - headerH - 60), behavior: 'smooth' });
+      }
+    }, 120);
   }
 
   startLeaveByTicker();
@@ -999,6 +1722,14 @@ function buildCompactItem(stop, isLast) {
   const time      = getStopTime(stop);
   const isVisited = !!state.checked[stop.id];
   const info      = leaveByInfo(stop);
+  const _cTodayStr = new Date().toISOString().slice(0, 10);
+  const _cDay = TRIP_DATA.days.find(d => d.stops.some(s => s.id === stop.id));
+  const _cIsToday = _cDay && (_cDay.date === _cTodayStr ||
+    (_cDay.isFestival && _cTodayStr >= _cDay.date && _cTodayStr <= (_cDay.dateEnd || _cDay.date)));
+  const _cIsPastDay = _cDay?.date && _cDay.date < _cTodayStr;
+  const _cStopMins = timeToMinutes(time);
+  const _cDepMins = _cStopMins !== null ? _cStopMins + getStopDuration(stop) : null;
+  const cIsPast = !isVisited && (_cIsPastDay || (_cIsToday && _cDepMins !== null && _cDepMins < nowMinutes()));
 
   let metaHtml = '';
   if (info) {
@@ -1014,7 +1745,7 @@ function buildCompactItem(stop, isLast) {
       <div class="tl-dot"></div>
       ${isLast ? '' : '<div class="tl-line"></div>'}
     </div>
-    <div class="compact-body${isVisited ? ' visited' : ''}">
+    <div class="compact-body${isVisited ? ' visited' : cIsPast ? ' past' : ''}">
       <div class="compact-name">${stopTypeIcon(stop)} ${getStopName(stop)}</div>
       <div class="compact-meta">
         ${metaHtml}
@@ -1037,6 +1768,15 @@ function buildTimelineItem(stop, isLast) {
   const isEditable = timeToMinutes(time) !== null;
   const isVisited = !!state.checked[stop.id];
 
+  const _todayStr = new Date().toISOString().slice(0, 10);
+  const _currentDay = TRIP_DATA.days.find(d => d.id === state.currentDayId);
+  const _isToday = _currentDay && (_currentDay.date === _todayStr ||
+    (_currentDay.isFestival && _todayStr >= _currentDay.date && _todayStr <= (_currentDay.dateEnd || _currentDay.date)));
+  const _isPastDay = _currentDay?.date && _currentDay.date < _todayStr;
+  const _stopMins = timeToMinutes(time);
+  const _depMins = _stopMins !== null ? _stopMins + getStopDuration(stop) : null;
+  const isPast = !isVisited && (_isPastDay || (_isToday && _depMins !== null && _depMins < nowMinutes()));
+
   item.innerHTML = `
     <div class="tl-left">
       <button class="tl-time-btn" data-stop-id="${stop.id}">
@@ -1047,7 +1787,7 @@ function buildTimelineItem(stop, isLast) {
       <div class="tl-dot"></div>
       ${isLast ? '' : '<div class="tl-line"></div>'}
     </div>
-    <div class="tl-card${isVisited ? ' visited' : ''}" data-stop-id="${stop.id}">
+    <div class="tl-card${isVisited ? ' visited' : ''}${isPast && !isVisited ? ' tl-card--past' : ''}" data-stop-id="${stop.id}">
       <div class="card-visited-badge">✓</div>
       ${buildSlider(stop, 'card')}
       <div class="card-body">
@@ -1058,6 +1798,7 @@ function buildTimelineItem(stop, isLast) {
         <div class="card-meta-row">
           <span class="tl-card-badge">${typeLabel(getStopType(stop))}</span>
           ${getStopPriority(stop) > 0 ? `<span class="priority-stars">${priorityStars(getStopPriority(stop))}</span>` : ''}
+          <a class="weather-pill" data-stop-id="${stop.id}" data-lat="${getStopLat(stop)||''}" data-lng="${getStopLng(stop)||''}" href="#" onclick="return false;"></a>
         </div>
         <div class="card-reason">${getStopReason(stop)}</div>
         ${buildTags(stop)}
@@ -1092,6 +1833,31 @@ function buildTimelineItem(stop, isLast) {
   }
 
   initSlider(item.querySelector('.card-slider'), stop, 'card');
+
+  // Lazily fetch weather and update pill
+  const _weatherPill = item.querySelector('.weather-pill');
+  if (_weatherPill && _currentDay) {
+    fetchWeatherForDay(_currentDay).then(wMap => {
+      if (!wMap || !_weatherPill.isConnected) return;
+      const dateStr = _currentDay.date || '';
+      const entry = wMap.get(dateStr);
+      if (!entry) return;
+      const night = isNightTime(getStopTime(stop));
+      const icon  = night ? entry.nightIcon : entry.icon;
+      const tempC = night ? entry.nightTempC : entry.tempC;
+      const lat   = _weatherPill.dataset.lat;
+      const lng   = _weatherPill.dataset.lng;
+      _weatherPill.innerHTML = `<i class="ph ${icon}"></i> ${tempC}°C`;
+      _weatherPill.title = entry.conditionText;
+      if (lat && lng) {
+        _weatherPill.addEventListener('click', e => {
+          e.stopPropagation();
+          openWeatherApp(lat, lng);
+        });
+      }
+    });
+  }
+
   return item;
 }
 
@@ -1211,7 +1977,7 @@ function HHMMtoMins(str) {
 }
 
 /* ── Stop edit sheet ────────────────────────────────────────────────── */
-let _editStop = null, _editDay = null;
+let _editStop = null, _editDay = null, _addMode = false;
 let _editLocMap = null, _editLocMarker = null;
 let _editLat = null, _editLng = null;
 let _editSearchTimer = null;
@@ -1371,13 +2137,14 @@ async function fetchTravelMins(fromLat, fromLng, toLat, toLng) {
   } catch { return null; }
 }
 
-async function recalculateFromStop(day, fromIdx) {
+async function recalculateFromStop(day, fromIdx, statusCb) {
   const btn = document.getElementById('edit-recalc-btn');
   if (btn) { btn.disabled = true; btn.textContent = 'Recalculating…'; }
+  const allStops = getDayStops(day);
 
-  for (let i = fromIdx; i < day.stops.length - 1; i++) {
-    const from = day.stops[i];
-    const to   = day.stops[i + 1];
+  for (let i = fromIdx; i < allStops.length - 1; i++) {
+    const from = allStops[i];
+    const to   = allStops[i + 1];
     const fromLat = getStopLat(from), fromLng = getStopLng(from);
     const toLat   = getStopLat(to),   toLng   = getStopLng(to);
     if (!fromLat || !toLat) continue;
@@ -1390,31 +2157,60 @@ async function recalculateFromStop(day, fromIdx) {
     if (travelMins === null) continue;
     state.overrides[to.id] = minutesToTime(depMins + travelMins);
 
-    if (btn) btn.textContent = `Recalculating… (${i - fromIdx + 1}/${day.stops.length - 1 - fromIdx})`;
+    if (btn) btn.textContent = `Recalculating… (${i - fromIdx + 1}/${allStops.length - 1 - fromIdx})`;
+    if (statusCb) statusCb(i - fromIdx + 1, allStops.length - 1 - fromIdx);
   }
 
   save();
   renderView(false);
-  closeEditSheet();
+  if (_editStop !== null) closeEditSheet();
   if (btn) { btn.disabled = false; btn.textContent = 'Recalculate following stops'; }
 }
 
-function openEditSheet(stop) {
-  const day = TRIP_DATA.days.find(d => d.stops.some(s => s.id === stop.id));
-  _editStop = stop; _editDay = day;
-  _editLat = getStopLat(stop); _editLng = getStopLng(stop);
-
-  document.getElementById('edit-name').value   = getStopName(stop);
-  document.getElementById('edit-time').value   = getStopTime(stop) ?? '';
-  document.getElementById('edit-reason').value = getStopReason(stop);
-  document.getElementById('edit-vegan').checked = getStopVegan(stop);
-  document.getElementById('edit-loc-search').value = '';
-  document.getElementById('edit-loc-results').innerHTML = '';
-
-  const durEl = document.getElementById('edit-dur-native');
-  if (durEl) durEl.value = minsToHHMM(getStopDuration(stop));
-  renderEditTypeGrid(getStopType(stop));
-  renderEditPriority(getStopPriority(stop));
+function openEditSheet(stop, addToDayId) {
+  if (!stop && addToDayId) {
+    // Add mode
+    _addMode = true;
+    _editStop = null;
+    _editDay = TRIP_DATA.days.find(d => d.id === addToDayId);
+    _editLat = _editDay?.stops?.[0] ? getStopLat(_editDay.stops[0]) : null;
+    _editLng = _editDay?.stops?.[0] ? getStopLng(_editDay.stops[0]) : null;
+    document.getElementById('edit-name').value   = '';
+    document.getElementById('edit-time').value   = '';
+    document.getElementById('edit-reason').value = '';
+    document.getElementById('edit-vegan').checked = false;
+    document.getElementById('edit-loc-search').value = '';
+    document.getElementById('edit-loc-results').innerHTML = '';
+    const durEl = document.getElementById('edit-dur-native');
+    if (durEl) durEl.value = '00:30';
+    renderEditTypeGrid('depart');
+    renderEditPriority(2);
+    document.querySelector('.edit-sheet-title').textContent = 'Add stop';
+    document.getElementById('edit-delete-btn').style.display = 'none';
+  } else {
+    _addMode = false;
+    const day = TRIP_DATA.days.find(d => d.stops.some(s => s.id === stop.id))
+             || Object.entries(state.addedStops || {}).reduce((found, [dayId, arr]) => {
+               if (found) return found;
+               return arr.some(s => s.id === stop.id) ? TRIP_DATA.days.find(d => d.id === dayId) : null;
+             }, null);
+    _editStop = stop; _editDay = day;
+    _editLat = getStopLat(stop); _editLng = getStopLng(stop);
+    document.getElementById('edit-name').value   = getStopName(stop);
+    document.getElementById('edit-time').value   = getStopTime(stop) ?? '';
+    document.getElementById('edit-reason').value = getStopReason(stop);
+    document.getElementById('edit-vegan').checked = getStopVegan(stop);
+    document.getElementById('edit-loc-search').value = '';
+    document.getElementById('edit-loc-results').innerHTML = '';
+    const durEl = document.getElementById('edit-dur-native');
+    if (durEl) durEl.value = minsToHHMM(getStopDuration(stop));
+    renderEditTypeGrid(getStopType(stop));
+    renderEditPriority(getStopPriority(stop));
+    document.querySelector('.edit-sheet-title').textContent = 'Edit stop';
+    // Show delete button only for added stops
+    const isAdded = Object.values(state.addedStops || {}).some(arr => arr.some(s => s.id === stop.id));
+    document.getElementById('edit-delete-btn').style.display = isAdded ? '' : 'none';
+  }
 
   const sheet = document.getElementById('edit-sheet-overlay');
   sheet.classList.remove('hidden');
@@ -1429,17 +2225,39 @@ function closeEditSheet() {
   sheet.classList.remove('open');
   sheet.addEventListener('transitionend', () => sheet.classList.add('hidden'), { once: true });
   if (_editLocMap) { _editLocMap.remove(); _editLocMap = null; _editLocMarker = null; }
-  _editStop = _editDay = null;
+  _editStop = _editDay = null; _addMode = false;
 }
 
 function saveEditSheet() {
-  if (!_editStop) return;
   const name   = document.getElementById('edit-name').value.trim();
   const time   = document.getElementById('edit-time').value;
   const reason = document.getElementById('edit-reason').value.trim();
   const vegan  = document.getElementById('edit-vegan').checked;
   const dur    = HHMMtoMins(document.getElementById('edit-dur-native')?.value);
 
+  if (_addMode) {
+    if (!_editDay) return;
+    const newStop = {
+      id:           'added_' + Date.now(),
+      time:         time || '12:00',
+      location:     name || 'New stop',
+      type:         _editSelectedType || 'depart',
+      duration:     dur >= 0 ? dur : 30,
+      reason:       reason,
+      lat:          _editLat,
+      lng:          _editLng,
+      veganFriendly: vegan,
+      order:        999,
+    };
+    if (!state.addedStops[_editDay.id]) state.addedStops[_editDay.id] = [];
+    state.addedStops[_editDay.id].push(newStop);
+    save();
+    renderView(false);
+    closeEditSheet();
+    return;
+  }
+
+  if (!_editStop) return;
   state.locOverrides[_editStop.id] = {
     name: name || _editStop.location,
     lat: _editLat ?? getStopLat(_editStop),
@@ -1533,6 +2351,36 @@ function openDetail(stop) {
 
   updateDetailCheckBtn();
   overlay.scrollTop = 0;
+
+  // Populate detail weather row
+  const detailWeatherEl = document.getElementById('detail-weather');
+  if (detailWeatherEl) {
+    detailWeatherEl.classList.add('hidden');
+    detailWeatherEl.innerHTML = '';
+    const _dDay = TRIP_DATA.days.find(d => d.stops?.some(s => s.id === stop.id));
+    if (_dDay) {
+      fetchWeatherForDay(_dDay).then(wMap => {
+        if (!wMap || !detailWeatherEl.isConnected) return;
+        if (_detailStop?.id !== stop.id) return;
+        const dateStr = _dDay.date || '';
+        const entry = wMap.get(dateStr);
+        if (!entry) return;
+        const night = isNightTime(getStopTime(stop));
+        const icon  = night ? entry.nightIcon : entry.icon;
+        const tempC = night ? entry.nightTempC : entry.tempC;
+        const lat   = getStopLat(stop) || _dDay.lat || '';
+        const lng   = getStopLng(stop) || _dDay.lng || '';
+        detailWeatherEl.innerHTML = `
+          <span class="weather-icon"><i class="ph ${icon}"></i></span>
+          <span class="weather-temp">${tempC}°C</span>
+          <span class="weather-desc">${entry.conditionText}</span>
+          ${lat && lng ? `<a href="#" class="weather-link" onclick="openWeatherApp(${lat},${lng}); return false;">
+            <i class="ph ph-cloud-sun"></i> Open Weather
+          </a>` : ''}`;
+        detailWeatherEl.classList.remove('hidden');
+      });
+    }
+  }
 
   // Fetch wiki + commons together; refresh slides + description when done
   const tasks = [];
@@ -1684,14 +2532,15 @@ function initDetailNavSwipe() {
     if (!isHoriz) return;
 
     const day = TRIP_DATA.days.find(d => d.id === state.currentDayId);
-    const idx  = day && _detailStop ? day.stops.findIndex(s => s.id === _detailStop.id) : -1;
+    const _ds = day ? getDayStops(day) : [];
+    const idx  = day && _detailStop ? _ds.findIndex(s => s.id === _detailStop.id) : -1;
 
     if (diffX > 60) {
-      const prev = idx > 0 ? day.stops[idx - 1] : null;
+      const prev = idx > 0 ? _ds[idx - 1] : null;
       if (prev) openDetail(prev);
       else closeDetail();
     } else if (diffX < -60) {
-      const next = idx >= 0 ? day.stops[idx + 1] : null;
+      const next = idx >= 0 ? _ds[idx + 1] : null;
       if (next) openDetail(next);
     }
   });
@@ -1795,6 +2644,8 @@ document.addEventListener('DOMContentLoaded', () => {
   buildDayStrip();
   renderView(true); // scroll to now only on first load
   if (typeof syncInit === 'function') syncInit();
+  scheduleNotifs(); // schedule any pending departure alerts for today
+  if (state.notifsEnabled && notifGranted()) startTrafficPolling();
 
   /* Gyroscope parallax */
   (function() {
@@ -1851,6 +2702,42 @@ document.addEventListener('DOMContentLoaded', () => {
     const btn = document.getElementById('gyro-btn');
     if (btn) btn.addEventListener('click', startGyro);
 
+    // Notification toggle
+    const notifBtn = document.getElementById('notif-btn');
+    const notifTestBtn = document.getElementById('notif-test-btn');
+    if (notifBtn) {
+      updateNotifBtn();
+      // Show test button only when alerts are on
+      if (notifTestBtn) notifTestBtn.style.display = state.notifsEnabled && notifGranted() ? '' : 'none';
+      notifBtn.addEventListener('click', () => {
+        if (state.notifsEnabled) {
+          disableNotifs();
+          if (notifTestBtn) notifTestBtn.style.display = 'none';
+        } else {
+          enableNotifs().then(() => {
+            if (notifTestBtn) notifTestBtn.style.display = state.notifsEnabled ? '' : 'none';
+          });
+        }
+      });
+    }
+    if (notifTestBtn) {
+      notifTestBtn.addEventListener('click', () => testServerPush());
+    }
+
+    // Units toggle (km / miles)
+    function updateUnitsBtn() {
+      const lbl = document.getElementById('units-label');
+      if (lbl) lbl.textContent = state.useMetric ? 'Distances in km' : 'Distances in miles';
+    }
+    updateUnitsBtn();
+    const unitsBtn = document.getElementById('units-btn');
+    if (unitsBtn) unitsBtn.addEventListener('click', () => {
+      state.useMetric = !state.useMetric;
+      try { localStorage.setItem('annecy_units', state.useMetric ? 'metric' : 'imperial'); } catch {}
+      updateUnitsBtn();
+      if (state.cardView === 'calendar') renderView(false); // re-render so labels update
+    });
+
     // Auto-start: Android (no permission API) — no gesture needed
     if (typeof DeviceOrientationEvent !== 'undefined' &&
         typeof DeviceOrientationEvent.requestPermission !== 'function') {
@@ -1879,24 +2766,65 @@ document.addEventListener('DOMContentLoaded', () => {
   function updateCompactBtn() {
     const btn = document.getElementById('compact-btn');
     if (!btn) return;
-    btn.classList.toggle('compact-on', state.compactMode);
-    btn.title = state.compactMode ? 'Full cards' : 'Compact view';
-    btn.querySelector('i').className = state.compactMode ? 'ph ph-cards' : 'ph ph-rows';
+    const icons = { full: 'ph-rows', compact: 'ph-calendar', calendar: 'ph-cards' };
+    const titles = { full: 'Compact view', compact: 'Calendar view', calendar: 'Full cards' };
+    btn.querySelector('i').className = `ph ${icons[state.cardView]}`;
+    btn.title = titles[state.cardView];
+    btn.classList.toggle('compact-on', state.cardView !== 'full');
   }
   document.getElementById('compact-btn').addEventListener('click', () => {
-    state.compactMode = !state.compactMode;
-    try { localStorage.setItem('annecy_compact', state.compactMode ? '1' : '0'); } catch {}
+    const next = { full: 'compact', compact: 'calendar', calendar: 'full' };
+    state.cardView = next[state.cardView] || 'full';
+    try { localStorage.setItem('annecy_cardview', state.cardView); } catch {}
     updateCompactBtn();
     renderView(false);
   });
   updateCompactBtn();
 
-  /* Cascade toggle */
-  document.getElementById('cascade-btn').addEventListener('click', () => {
-    state.cascadeEnabled = !state.cascadeEnabled;
-    const btn = document.getElementById('cascade-btn');
-    btn.classList.toggle('cascade-on', state.cascadeEnabled);
-    btn.title = state.cascadeEnabled ? 'Cascade ON' : 'Cascade OFF';
+  /* More menu */
+  const _moreBtn  = document.getElementById('more-btn');
+  const _moreMenu = document.getElementById('more-menu');
+  function closeMoreMenu() { _moreMenu.classList.add('hidden'); }
+  function updateRippleLabel() {} // ripple is now an action, not a toggle
+  _moreBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    _moreMenu.classList.toggle('hidden');
+  });
+  document.addEventListener('click', e => {
+    if (!_moreMenu.classList.contains('hidden') && !document.getElementById('more-menu-wrap').contains(e.target))
+      closeMoreMenu();
+  });
+  document.getElementById('mm-today').addEventListener('click', () => {
+    closeMoreMenu();
+    const todayId = findTodayDayId();
+    if (todayId) selectDay(todayId);
+    else showToast('No itinerary for today');
+  });
+  document.getElementById('mm-add-stop').addEventListener('click', () => {
+    closeMoreMenu();
+    openEditSheet(null, state.currentDayId);
+  });
+  document.getElementById('mm-ripple').addEventListener('click', async () => {
+    closeMoreMenu();
+    const day = TRIP_DATA.days.find(d => d.id === state.currentDayId);
+    if (!day || day.isCountdown) { showToast('No itinerary for this day'); return; }
+    const allStops = getDayStops(day);
+    const now = nowMinutes();
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const isToday = day.date === todayStr;
+    let fromIdx = 0;
+    if (isToday) {
+      const idx = allStops.findIndex(s => {
+        const t = timeToMinutes(getStopTime(s));
+        return t !== null && t + getStopDuration(s) >= now;
+      });
+      fromIdx = idx >= 0 ? idx : allStops.length - 1;
+    }
+    const fromStop = allStops[fromIdx];
+    if (!fromStop) { showToast('No stops to recalculate'); return; }
+    showToast(`Recalculating from ${getStopTime(fromStop) || 'start'}…`);
+    await recalculateFromStop(day, fromIdx);
+    showToast('Times updated');
   });
 
   /* Drawer */
@@ -1975,24 +2903,19 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!btn) return;
     document.querySelectorAll('#time-type-seg .seg-btn').forEach(b => b.classList.toggle('active', b === btn));
   });
-  // Duration value button: toggle drum picker
-  document.getElementById('dur-value-btn').addEventListener('click', () => {
-    const wrap = document.getElementById('dur-picker-wrap');
-    wrap.classList.toggle('hidden');
-    if (!wrap.classList.contains('hidden')) {
-      const update = () => {
-        const m = getDurPickerMins();
-        const h = Math.floor(m/60), min = m%60;
-        document.getElementById('dur-value-btn').textContent = `${h}h ${String(min).padStart(2,'0')}m`;
-      };
-      document.getElementById('dur-hours').addEventListener('scroll', update, { passive: true });
-      document.getElementById('dur-mins').addEventListener('scroll', update, { passive: true });
-    }
-  });
-  document.getElementById('edit-sheet-overlay').addEventListener('click', e => {
+    document.getElementById('edit-sheet-overlay').addEventListener('click', e => {
     if (e.target.id === 'edit-sheet-overlay') closeEditSheet();
   });
   document.getElementById('edit-save-btn').addEventListener('click', saveEditSheet);
+  document.getElementById('edit-delete-btn').addEventListener('click', () => {
+    if (!_editStop || !_editDay) return;
+    const arr = state.addedStops[_editDay.id];
+    if (!arr) return;
+    state.addedStops[_editDay.id] = arr.filter(s => s.id !== _editStop.id);
+    save();
+    renderView(false);
+    closeEditSheet();
+  });
   document.getElementById('edit-recalc-btn').onclick = async () => {
     if (!_editStop || !_editDay) return;
     const stop = _editStop, day = _editDay;
@@ -2009,7 +2932,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (_editSelectedType) state.typeOverrides[stop.id] = _editSelectedType;
     if (_editSelectedPriority !== null) state.priorityOverrides[stop.id] = _editSelectedPriority;
     save();
-    const fromIdx = day.stops.findIndex(s => s.id === stop.id);
+    const fromIdx = getDayStops(day).findIndex(s => s.id === stop.id);
     await recalculateFromStop(day, fromIdx);
   };
   document.getElementById('edit-loc-search').addEventListener('input', () => {
@@ -2038,4 +2961,27 @@ document.addEventListener('DOMContentLoaded', () => {
 
   /* Service worker */
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+
+  /* Resume from background / screen wake: return to today after 15+ min away */
+  const RESUME_THRESHOLD = 15 * 60 * 1000; // 15 minutes
+  let _lastVisible = Date.now();
+
+  function handleResume() {
+    if (document.hidden) { _lastVisible = Date.now(); return; }
+    const away = Date.now() - _lastVisible;
+    if (away < RESUME_THRESHOLD) return;
+    _lastVisible = Date.now();
+    const todayId = findTodayDayId();
+    if (todayId) {
+      state.currentDayId = todayId;
+      state.currentView  = 'day';
+      updateDayStrip();
+    }
+    renderView(true);
+    scheduleNotifs();
+  }
+
+  // visibilitychange covers most cases; pageshow catches iOS PWA cold-resume
+  document.addEventListener('visibilitychange', handleResume);
+  window.addEventListener('pageshow', handleResume);
 });

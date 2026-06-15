@@ -46,7 +46,7 @@ function applyRemoteState(remote) {
 
   let changed = false;
   const keys = ['overrides','checked','locOverrides','durOverrides',
-                 'typeOverrides','priorityOverrides','reasonOverrides','veganOverrides'];
+                 'typeOverrides','priorityOverrides','reasonOverrides','veganOverrides','addedStops'];
   keys.forEach(k => {
     const incoming = remote[k] || {};
     // Local wins for keys we've touched more recently; remote fills in anything we don't have
@@ -76,6 +76,7 @@ function syncSave() {
     priorityOverrides: state.priorityOverrides,
     reasonOverrides:   state.reasonOverrides,
     veganOverrides:    state.veganOverrides,
+    addedStops:        state.addedStops,
     _ts:               Date.now(),
   };
   state._localTs = payload._ts;
