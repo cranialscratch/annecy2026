@@ -27,8 +27,15 @@
         </div>
         <div class="header-right">
           <span id="sync-dot" data-status="connected" title="Sync"></span>
-          <button id="compact-btn" class="icon-btn" title="Compact view"><i class="ph ph-rows"></i></button>
-          <button id="cascade-btn" class="icon-btn cascade-off" title="Ripple: shift all following times when you edit one"><i class="ph ph-arrows-down-up"></i></button>
+          <button id="compact-btn" class="icon-btn" title="Toggle view"><i class="ph ph-rows"></i></button>
+          <div id="more-menu-wrap">
+            <button id="more-btn" class="icon-btn" aria-label="More options"><i class="ph ph-dots-three-vertical"></i></button>
+            <div id="more-menu" class="more-menu hidden">
+              <button class="more-menu-item" id="mm-today"><i class="ph ph-calendar-blank"></i> Today</button>
+              <button class="more-menu-item" id="mm-add-stop"><i class="ph ph-plus-circle"></i> Add stop</button>
+              <button class="more-menu-item" id="mm-ripple"><i class="ph ph-arrows-down-up"></i> <span id="mm-ripple-label">Ripple off</span></button>
+            </div>
+          </div>
         </div>
       </div>
       <div id="day-strip-wrap"><div id="day-strip"></div></div>

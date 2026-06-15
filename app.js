@@ -2709,13 +2709,41 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   updateCompactBtn();
 
-  /* Cascade toggle */
-  document.getElementById('cascade-btn').addEventListener('click', () => {
-    state.cascadeEnabled = !state.cascadeEnabled;
-    const btn = document.getElementById('cascade-btn');
-    btn.classList.toggle('cascade-on', state.cascadeEnabled);
-    btn.title = state.cascadeEnabled ? 'Cascade ON' : 'Cascade OFF';
+  /* More menu */
+  const _moreBtn  = document.getElementById('more-btn');
+  const _moreMenu = document.getElementById('more-menu');
+  function closeMoreMenu() { _moreMenu.classList.add('hidden'); }
+  function updateRippleLabel() {
+    const el = document.getElementById('mm-ripple');
+    const lbl = document.getElementById('mm-ripple-label');
+    lbl.textContent = state.cascadeEnabled ? 'Ripple on' : 'Ripple off';
+    el.classList.toggle('ripple-on', state.cascadeEnabled);
+  }
+  _moreBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    _moreMenu.classList.toggle('hidden');
   });
+  document.addEventListener('click', e => {
+    if (!_moreMenu.classList.contains('hidden') && !document.getElementById('more-menu-wrap').contains(e.target))
+      closeMoreMenu();
+  });
+  document.getElementById('mm-today').addEventListener('click', () => {
+    closeMoreMenu();
+    const todayId = findTodayDayId();
+    if (todayId) selectDay(todayId);
+    else showToast('No itinerary for today');
+  });
+  document.getElementById('mm-add-stop').addEventListener('click', () => {
+    closeMoreMenu();
+    showToast('Add stop — coming soon');
+  });
+  document.getElementById('mm-ripple').addEventListener('click', () => {
+    state.cascadeEnabled = !state.cascadeEnabled;
+    updateRippleLabel();
+    closeMoreMenu();
+    showToast(state.cascadeEnabled ? 'Ripple on — edits will shift following stops' : 'Ripple off');
+  });
+  updateRippleLabel();
 
   /* Drawer */
   function updateDrawerLabels() {
