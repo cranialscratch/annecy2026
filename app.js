@@ -14,6 +14,7 @@ const state = {
   priorityOverrides: {}, // stopId → 0-3
   reasonOverrides: {},  // stopId → string
   veganOverrides: {},   // stopId → bool
+  addedStops: {},       // dayId → [stop, ...]
 };
 
 /* ── Helpers ───────────────────────────────────────────────────────── */
@@ -389,7 +390,7 @@ function collectTodayLeaveEvents() {
     const covers = day.date === today ||
       (day.isFestival && today >= day.date && today <= (day.dateEnd || day.date));
     if (!covers) continue;
-    for (const stop of day.stops) {
+    for (const stop of getDayStops(day)) {
       const type = getStopType(stop);
       // depart stops: notify at stop time - 15
       if (type === 'depart') {
@@ -688,7 +689,21 @@ async function fetchNearbyPOI(stop) {
 function findStop(stopId) {
   for (const day of TRIP_DATA.days)
     for (const s of day.stops) if (s.id === stopId) return s;
+  for (const arr of Object.values(state.addedStops || {}))
+    for (const s of arr) if (s.id === stopId) return s;
   return null;
+}
+
+function getDayStops(day) {
+  const added = (state.addedStops || {})[day.id] || [];
+  const all = [...day.stops, ...added];
+  return all.sort((a, b) => {
+    const ta = timeToMinutes(getStopTime(a)), tb = timeToMinutes(getStopTime(b));
+    if (ta === null && tb === null) return 0;
+    if (ta === null) return 1;
+    if (tb === null) return -1;
+    return ta - tb;
+  });
 }
 
 function injectWikiPhoto(stopId) {
@@ -908,6 +923,7 @@ function localSave() {
     localStorage.setItem('annecy_priority_overrides', JSON.stringify(state.priorityOverrides));
     localStorage.setItem('annecy_reason_overrides',   JSON.stringify(state.reasonOverrides));
     localStorage.setItem('annecy_vegan_overrides',    JSON.stringify(state.veganOverrides));
+    localStorage.setItem('annecy_added_stops',        JSON.stringify(state.addedStops));
   } catch {}
 }
 function save() {
@@ -924,6 +940,7 @@ function load() {
     const pr = localStorage.getItem('annecy_priority_overrides');
     const re = localStorage.getItem('annecy_reason_overrides');
     const ve = localStorage.getItem('annecy_vegan_overrides');
+    const as = localStorage.getItem('annecy_added_stops');
     if (o)  state.overrides         = JSON.parse(o);
     if (c)  state.checked           = JSON.parse(c);
     if (lo) state.locOverrides      = JSON.parse(lo);
@@ -932,6 +949,7 @@ function load() {
     if (pr) state.priorityOverrides = JSON.parse(pr);
     if (re) state.reasonOverrides   = JSON.parse(re);
     if (ve) state.veganOverrides    = JSON.parse(ve);
+    if (as) state.addedStops        = JSON.parse(as);
   } catch {}
   try {
     if (localStorage.getItem('annecy_theme') === 'light') document.body.classList.add('light');
@@ -1416,7 +1434,7 @@ function renderCalView(container) {
   if (!day || day.isCountdown) { renderTimeline(container, false); return; }
   setBgClass('bg-day');
 
-  const timedStops = day.stops.filter(s => timeToMinutes(getStopTime(s)) !== null);
+  const timedStops = getDayStops(day).filter(s => timeToMinutes(getStopTime(s)) !== null);
   if (!timedStops.length) return;
 
   const _calToday = new Date().toISOString().slice(0, 10);
@@ -1627,7 +1645,8 @@ function renderTimeline(container, scrollToNow) {
     return c;
   })() : null;
 
-  day.stops.forEach((stop, idx) => {
+  const _tlStops = getDayStops(day);
+  _tlStops.forEach((stop, idx) => {
     const stopMins = timeToMinutes(getStopTime(stop));
     if (isToday && !nowInserted && stopMins !== null && stopMins > now) {
       nowInserted = true;
@@ -1643,8 +1662,8 @@ function renderTimeline(container, scrollToNow) {
       nowLineEl = nowLine;
     }
     const item = state.cardView === 'compact'
-      ? buildCompactItem(stop, idx === day.stops.length - 1)
-      : buildTimelineItem(stop, idx === day.stops.length - 1);
+      ? buildCompactItem(stop, idx === _tlStops.length - 1)
+      : buildTimelineItem(stop, idx === _tlStops.length - 1);
     (compactCard || container).appendChild(item);
   });
 
@@ -1958,7 +1977,7 @@ function HHMMtoMins(str) {
 }
 
 /* ── Stop edit sheet ────────────────────────────────────────────────── */
-let _editStop = null, _editDay = null;
+let _editStop = null, _editDay = null, _addMode = false;
 let _editLocMap = null, _editLocMarker = null;
 let _editLat = null, _editLng = null;
 let _editSearchTimer = null;
@@ -2118,13 +2137,14 @@ async function fetchTravelMins(fromLat, fromLng, toLat, toLng) {
   } catch { return null; }
 }
 
-async function recalculateFromStop(day, fromIdx) {
+async function recalculateFromStop(day, fromIdx, statusCb) {
   const btn = document.getElementById('edit-recalc-btn');
   if (btn) { btn.disabled = true; btn.textContent = 'Recalculating…'; }
+  const allStops = getDayStops(day);
 
-  for (let i = fromIdx; i < day.stops.length - 1; i++) {
-    const from = day.stops[i];
-    const to   = day.stops[i + 1];
+  for (let i = fromIdx; i < allStops.length - 1; i++) {
+    const from = allStops[i];
+    const to   = allStops[i + 1];
     const fromLat = getStopLat(from), fromLng = getStopLng(from);
     const toLat   = getStopLat(to),   toLng   = getStopLng(to);
     if (!fromLat || !toLat) continue;
@@ -2137,31 +2157,60 @@ async function recalculateFromStop(day, fromIdx) {
     if (travelMins === null) continue;
     state.overrides[to.id] = minutesToTime(depMins + travelMins);
 
-    if (btn) btn.textContent = `Recalculating… (${i - fromIdx + 1}/${day.stops.length - 1 - fromIdx})`;
+    if (btn) btn.textContent = `Recalculating… (${i - fromIdx + 1}/${allStops.length - 1 - fromIdx})`;
+    if (statusCb) statusCb(i - fromIdx + 1, allStops.length - 1 - fromIdx);
   }
 
   save();
   renderView(false);
-  closeEditSheet();
+  if (_editStop !== null) closeEditSheet();
   if (btn) { btn.disabled = false; btn.textContent = 'Recalculate following stops'; }
 }
 
-function openEditSheet(stop) {
-  const day = TRIP_DATA.days.find(d => d.stops.some(s => s.id === stop.id));
-  _editStop = stop; _editDay = day;
-  _editLat = getStopLat(stop); _editLng = getStopLng(stop);
-
-  document.getElementById('edit-name').value   = getStopName(stop);
-  document.getElementById('edit-time').value   = getStopTime(stop) ?? '';
-  document.getElementById('edit-reason').value = getStopReason(stop);
-  document.getElementById('edit-vegan').checked = getStopVegan(stop);
-  document.getElementById('edit-loc-search').value = '';
-  document.getElementById('edit-loc-results').innerHTML = '';
-
-  const durEl = document.getElementById('edit-dur-native');
-  if (durEl) durEl.value = minsToHHMM(getStopDuration(stop));
-  renderEditTypeGrid(getStopType(stop));
-  renderEditPriority(getStopPriority(stop));
+function openEditSheet(stop, addToDayId) {
+  if (!stop && addToDayId) {
+    // Add mode
+    _addMode = true;
+    _editStop = null;
+    _editDay = TRIP_DATA.days.find(d => d.id === addToDayId);
+    _editLat = _editDay?.stops?.[0] ? getStopLat(_editDay.stops[0]) : null;
+    _editLng = _editDay?.stops?.[0] ? getStopLng(_editDay.stops[0]) : null;
+    document.getElementById('edit-name').value   = '';
+    document.getElementById('edit-time').value   = '';
+    document.getElementById('edit-reason').value = '';
+    document.getElementById('edit-vegan').checked = false;
+    document.getElementById('edit-loc-search').value = '';
+    document.getElementById('edit-loc-results').innerHTML = '';
+    const durEl = document.getElementById('edit-dur-native');
+    if (durEl) durEl.value = '00:30';
+    renderEditTypeGrid('depart');
+    renderEditPriority(2);
+    document.querySelector('.edit-sheet-title').textContent = 'Add stop';
+    document.getElementById('edit-delete-btn').style.display = 'none';
+  } else {
+    _addMode = false;
+    const day = TRIP_DATA.days.find(d => d.stops.some(s => s.id === stop.id))
+             || Object.entries(state.addedStops || {}).reduce((found, [dayId, arr]) => {
+               if (found) return found;
+               return arr.some(s => s.id === stop.id) ? TRIP_DATA.days.find(d => d.id === dayId) : null;
+             }, null);
+    _editStop = stop; _editDay = day;
+    _editLat = getStopLat(stop); _editLng = getStopLng(stop);
+    document.getElementById('edit-name').value   = getStopName(stop);
+    document.getElementById('edit-time').value   = getStopTime(stop) ?? '';
+    document.getElementById('edit-reason').value = getStopReason(stop);
+    document.getElementById('edit-vegan').checked = getStopVegan(stop);
+    document.getElementById('edit-loc-search').value = '';
+    document.getElementById('edit-loc-results').innerHTML = '';
+    const durEl = document.getElementById('edit-dur-native');
+    if (durEl) durEl.value = minsToHHMM(getStopDuration(stop));
+    renderEditTypeGrid(getStopType(stop));
+    renderEditPriority(getStopPriority(stop));
+    document.querySelector('.edit-sheet-title').textContent = 'Edit stop';
+    // Show delete button only for added stops
+    const isAdded = Object.values(state.addedStops || {}).some(arr => arr.some(s => s.id === stop.id));
+    document.getElementById('edit-delete-btn').style.display = isAdded ? '' : 'none';
+  }
 
   const sheet = document.getElementById('edit-sheet-overlay');
   sheet.classList.remove('hidden');
@@ -2176,17 +2225,39 @@ function closeEditSheet() {
   sheet.classList.remove('open');
   sheet.addEventListener('transitionend', () => sheet.classList.add('hidden'), { once: true });
   if (_editLocMap) { _editLocMap.remove(); _editLocMap = null; _editLocMarker = null; }
-  _editStop = _editDay = null;
+  _editStop = _editDay = null; _addMode = false;
 }
 
 function saveEditSheet() {
-  if (!_editStop) return;
   const name   = document.getElementById('edit-name').value.trim();
   const time   = document.getElementById('edit-time').value;
   const reason = document.getElementById('edit-reason').value.trim();
   const vegan  = document.getElementById('edit-vegan').checked;
   const dur    = HHMMtoMins(document.getElementById('edit-dur-native')?.value);
 
+  if (_addMode) {
+    if (!_editDay) return;
+    const newStop = {
+      id:           'added_' + Date.now(),
+      time:         time || '12:00',
+      location:     name || 'New stop',
+      type:         _editSelectedType || 'depart',
+      duration:     dur >= 0 ? dur : 30,
+      reason:       reason,
+      lat:          _editLat,
+      lng:          _editLng,
+      veganFriendly: vegan,
+      order:        999,
+    };
+    if (!state.addedStops[_editDay.id]) state.addedStops[_editDay.id] = [];
+    state.addedStops[_editDay.id].push(newStop);
+    save();
+    renderView(false);
+    closeEditSheet();
+    return;
+  }
+
+  if (!_editStop) return;
   state.locOverrides[_editStop.id] = {
     name: name || _editStop.location,
     lat: _editLat ?? getStopLat(_editStop),
@@ -2461,14 +2532,15 @@ function initDetailNavSwipe() {
     if (!isHoriz) return;
 
     const day = TRIP_DATA.days.find(d => d.id === state.currentDayId);
-    const idx  = day && _detailStop ? day.stops.findIndex(s => s.id === _detailStop.id) : -1;
+    const _ds = day ? getDayStops(day) : [];
+    const idx  = day && _detailStop ? _ds.findIndex(s => s.id === _detailStop.id) : -1;
 
     if (diffX > 60) {
-      const prev = idx > 0 ? day.stops[idx - 1] : null;
+      const prev = idx > 0 ? _ds[idx - 1] : null;
       if (prev) openDetail(prev);
       else closeDetail();
     } else if (diffX < -60) {
-      const next = idx >= 0 ? day.stops[idx + 1] : null;
+      const next = idx >= 0 ? _ds[idx + 1] : null;
       if (next) openDetail(next);
     }
   });
@@ -2713,12 +2785,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const _moreBtn  = document.getElementById('more-btn');
   const _moreMenu = document.getElementById('more-menu');
   function closeMoreMenu() { _moreMenu.classList.add('hidden'); }
-  function updateRippleLabel() {
-    const el = document.getElementById('mm-ripple');
-    const lbl = document.getElementById('mm-ripple-label');
-    lbl.textContent = state.cascadeEnabled ? 'Ripple on' : 'Ripple off';
-    el.classList.toggle('ripple-on', state.cascadeEnabled);
-  }
+  function updateRippleLabel() {} // ripple is now an action, not a toggle
   _moreBtn.addEventListener('click', e => {
     e.stopPropagation();
     _moreMenu.classList.toggle('hidden');
@@ -2735,15 +2802,30 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   document.getElementById('mm-add-stop').addEventListener('click', () => {
     closeMoreMenu();
-    showToast('Add stop — coming soon');
+    openEditSheet(null, state.currentDayId);
   });
-  document.getElementById('mm-ripple').addEventListener('click', () => {
-    state.cascadeEnabled = !state.cascadeEnabled;
-    updateRippleLabel();
+  document.getElementById('mm-ripple').addEventListener('click', async () => {
     closeMoreMenu();
-    showToast(state.cascadeEnabled ? 'Ripple on — edits will shift following stops' : 'Ripple off');
+    const day = TRIP_DATA.days.find(d => d.id === state.currentDayId);
+    if (!day || day.isCountdown) { showToast('No itinerary for this day'); return; }
+    const allStops = getDayStops(day);
+    const now = nowMinutes();
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const isToday = day.date === todayStr;
+    let fromIdx = 0;
+    if (isToday) {
+      const idx = allStops.findIndex(s => {
+        const t = timeToMinutes(getStopTime(s));
+        return t !== null && t + getStopDuration(s) >= now;
+      });
+      fromIdx = idx >= 0 ? idx : allStops.length - 1;
+    }
+    const fromStop = allStops[fromIdx];
+    if (!fromStop) { showToast('No stops to recalculate'); return; }
+    showToast(`Recalculating from ${getStopTime(fromStop) || 'start'}…`);
+    await recalculateFromStop(day, fromIdx);
+    showToast('Times updated');
   });
-  updateRippleLabel();
 
   /* Drawer */
   function updateDrawerLabels() {
@@ -2825,6 +2907,15 @@ document.addEventListener('DOMContentLoaded', () => {
     if (e.target.id === 'edit-sheet-overlay') closeEditSheet();
   });
   document.getElementById('edit-save-btn').addEventListener('click', saveEditSheet);
+  document.getElementById('edit-delete-btn').addEventListener('click', () => {
+    if (!_editStop || !_editDay) return;
+    const arr = state.addedStops[_editDay.id];
+    if (!arr) return;
+    state.addedStops[_editDay.id] = arr.filter(s => s.id !== _editStop.id);
+    save();
+    renderView(false);
+    closeEditSheet();
+  });
   document.getElementById('edit-recalc-btn').onclick = async () => {
     if (!_editStop || !_editDay) return;
     const stop = _editStop, day = _editDay;
@@ -2841,7 +2932,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (_editSelectedType) state.typeOverrides[stop.id] = _editSelectedType;
     if (_editSelectedPriority !== null) state.priorityOverrides[stop.id] = _editSelectedPriority;
     save();
-    const fromIdx = day.stops.findIndex(s => s.id === stop.id);
+    const fromIdx = getDayStops(day).findIndex(s => s.id === stop.id);
     await recalculateFromStop(day, fromIdx);
   };
   document.getElementById('edit-loc-search').addEventListener('input', () => {
