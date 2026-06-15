@@ -336,7 +336,9 @@ async function testServerPush() {
     body: 'Server push is working!',
     tag: 'push-test',
   });
-  showToast('Test queued — trigger in GitHub Actions now');
+  // Also fire immediately via SW so there's instant feedback
+  sendNotif('🔔 Test notification', 'Server push queued — will also arrive via server within 5 min', 'push-test-local');
+  showToast('Test sent + queued for server delivery');
 }
 
 function showToast(msg, durationMs = 2800) {
