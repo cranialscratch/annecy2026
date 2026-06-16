@@ -514,15 +514,9 @@ body.light .tl-card.visited {
   animation: shimmer 1.4s ease-in-out infinite;
 }
 .card-slides { display: flex; height: 100%; transition: transform .3s ease; will-change: transform; }
-.card-slide-wrap { flex: 0 0 100%; width: 100%; height: 100%; position: relative; overflow: hidden; }
 .card-slide {
-  width: 100%; height: 100%;
-  object-fit: cover; pointer-events: none; background: var(--bg3); display: block;
-}
-.slide-attr {
-  position: absolute; bottom: 0; left: 0; right: 0;
-  padding: 3px 8px; font-size: 9px; color: rgba(255,255,255,0.65);
-  background: rgba(0,0,0,0.45); text-overflow: ellipsis; overflow: hidden; white-space: nowrap;
+  flex: 0 0 100%; width: 100%; height: 100%;
+  object-fit: cover; pointer-events: none; background: var(--bg3);
 }
 .card-slide-placeholder,
 .card-slide.card-slide-placeholder {
