@@ -431,8 +431,9 @@ function hideVersionPanel() {
 }
 
 async function copyDevData() {
-  const statuses = getFeatureStatuses();
-  let pushEndpoint = null;
+  showToast('Building dev data…', 4000);
+  let statuses, pushEndpoint = null;
+  try { statuses = getFeatureStatuses(); } catch(e) { showToast('getFeatureStatuses error: ' + e.message); return; }
   try {
     const reg = await navigator.serviceWorker?.getRegistration?.();
     const sub = await reg?.pushManager?.getSubscription?.();
@@ -463,7 +464,8 @@ async function copyDevData() {
     recentErrors: _errorLog.slice(-15),
   };
 
-  const text = JSON.stringify(data, null, 2);
+  let text;
+  try { text = JSON.stringify(data, null, 2); } catch(e) { showToast('JSON error: ' + e.message); return; }
 
   // Show full-screen copyable text overlay
   let box = document.getElementById('devdata-overlay');
