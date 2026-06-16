@@ -1,4 +1,4 @@
-const CACHE = 'annecy2026-v149';
+const CACHE = 'annecy2026-v150';
 const CORE = [
   './index.html',
   './styles.v113.css',

@@ -519,62 +519,48 @@ function buildTags(stop) {
 }
 
 /* ── Wikipedia article titles per stop (free API, no key needed) ───── */
+// Explicit Wikipedia article per stop. Only stops listed here get a Wikipedia photo.
+// Everything else falls through to Street View (unique per GPS coordinate, no duplicates).
 const WIKI_TITLES = {
   // Day 1
-  'd1s4':  'Folkestone',
-  'd1s5':  'English_Channel_Tunnel',
+  'd1s3':  'Eurotunnel_Le_Shuttle',
+  'd1s4':  'Eurotunnel_Le_Shuttle',
+  'd1s5':  'Calais',
   'd1s6':  'Saint-Valery-sur-Somme',
   'd1s7':  'Baie_de_Somme',
-  'd1s9':  'Amiens',
-  'd1s10': 'Amiens_Cathedral',
   // Day 2
   'd2s2':  "Hortillonnages_d'Amiens",
-  'd2s3':  'Amiens_Cathedral',
-  'd2s4':  'Gerberoy',
-  'd2s5':  'Gerberoy',
-  'd2s6':  'Troyes',
-  'd2s7':  'Troyes',
-  'd2s8':  'Troyes',
-  'd2s9':  'Ruelle_des_Chats',
-  'd2s10': 'Troyes_Cathedral',
-  'd2s11': 'Troyes',
+  'd2s6':  'Gerberoy',
+  'd2s10': 'Ruelle_des_Chats',
   // Day 3
   'd3s2':  'Flavigny-sur-Ozerain',
-  'd3s3':  'Fontenay_Abbey',
-  'd3s4':  'Semur-en-Auxois',
-  'd3s5':  'Clos_de_Vougeot',
-  'd3s6':  'Route_des_Grands_Crus',
-  'd3s7':  'Vosne-Romanée',
-  'd3s8':  "Saint-Romain,_Côte-d'Or",
-  'd3s9':  'Beaune',
+  'd3s4':  'Fontenay_Abbey',
   'd3s10': 'Hospices_de_Beaune',
-  'd3s11': 'Beaune',
   // Day 4
-  'd4s2':  'Annecy',
-  'd4s4':  'Lake_Annecy',
-  // Festival days
+  'd4s4':  'Menthon-Saint-Bernard',
+  'd4s5':  'Geneva_Airport',
+  // Festival
+  'fs1':   'Annecy_International_Animation_Film_Festival',
+  'fs2':   'Menthon-Saint-Bernard',
   'fs3':   'Lake_Annecy',
   'fs4':   'Annecy',
   'fs5':   "Château_d'Annecy",
   'fs6':   'Château_de_Menthon-Saint-Bernard',
   'fs7':   'Talloires',
   'fs8':   'Gorges_du_Fier',
+  'fs9':   'Château_de_Thorens',
+  'fs10':  'Pont_des_Amours,_Annecy',
   'fs14':  "Palais_de_l'Isle",
   // Day 5
   'd5s2':  'Royal_Saltworks_of_Arc-et-Senans',
-  'd5s3':  'Saline_royale_d\'Arc-et-Senans',
-  'd5s5':  'Besançon',
-  'd5s6':  'Citadel_of_Besançon',
-  'd5s7':  'Besançon',
+  'd5s5':  'Citadel_of_Besançon',
   // Day 6
-  'd6s3':  'Chartres_Cathedral',
-  'd6s4':  'Giverny',
-  'd6s5':  'Monet\'s_garden_at_Giverny',
-  'd6s6':  'Rouen',
-  'd6s7':  'Rouen_Cathedral',
+  'd6s3':  'Giverny',
+  'd6s4':  "Claude_Monet's_garden_at_Giverny",
+  'd6s5':  'Rouen_Cathedral',
   // Day 7
   'd7s3':  'Calais',
-  'd7s4':  'English_Channel_Tunnel',
+  'd7s4':  'Eurotunnel_Le_Shuttle',
   'd7s5':  'Folkestone',
 };
 
@@ -584,12 +570,12 @@ const _poiCache  = {}; // stopId → [{ title, img, dist, url }]
 
 function loadWikiCache() {
   try {
-    const saved = localStorage.getItem('annecy_wiki_v5');
+    const saved = localStorage.getItem('annecy_wiki_v6');
     if (saved) Object.assign(_wikiCache, JSON.parse(saved));
   } catch {}
 }
 function saveWikiCache() {
-  try { localStorage.setItem('annecy_wiki_v5', JSON.stringify(_wikiCache)); } catch {}
+  try { localStorage.setItem('annecy_wiki_v6', JSON.stringify(_wikiCache)); } catch {}
 }
 
 /* ── Google Places photos ──────────────────────────────────────────── */
@@ -650,70 +636,22 @@ async function fetchGooglePlacesPhotos(stop) {
   }
 }
 
-function wikiSearchName(stop) {
-  // Explicit override always wins
-  if (WIKI_TITLES[stop.id]) return WIKI_TITLES[stop.id];
-
-  const loc = stop.location;
-
-  // Food/café: search by city/area (after comma), never by meal name
-  if (stop.type === 'food') {
-    const city = loc.split(',').slice(1).join(',').trim();
-    return city || null; // null → skip to geosearch
-  }
-
-  // Charging: strip "Tesla Supercharger" prefix and parentheticals
-  if (stop.type === 'charging') {
-    return loc.replace(/Tesla Supercharger\s*/i, '').replace(/\s*\(.*\)/, '').trim();
-  }
-
-  // Depart: strip leading "Depart " verb
-  if (stop.type === 'depart') {
-    return loc.replace(/^Depart\s+/i, '').split(',')[0].trim();
-  }
-
-  // Hotel: use last meaningful word (usually city), e.g. "Moxy Amiens" → "Amiens"
-  if (stop.type === 'hotel') {
-    const words = loc.replace(/\b(hotel|moxy|ibis|novotel|b&b|inn|centre|center)\b/gi, '').trim().split(/\s+/);
-    return words[words.length - 1] || loc;
-  }
-
-  // Default: name before the comma
-  return loc.split(',')[0].trim();
-}
-
 async function fetchWikiData(stop) {
   if (_wikiCache[stop.id] !== undefined) return _wikiCache[stop.id];
 
-  const name = wikiSearchName(stop);
+  // Only fetch Wikipedia for stops with an explicit article assigned.
+  // Everything else uses Street View — no geosearch fallback, no duplicates.
+  const article = WIKI_TITLES[stop.id];
+  if (!article) { _wikiCache[stop.id] = null; saveWikiCache(); return null; }
+
   let result = null;
-
-  // 1. Named lookup (skip if name is null — food stops with no city part)
-  if (name) {
-    try {
-      const r = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(name.replace(/\s+/g,'_'))}`);
-      if (r.ok) {
-        const d = await r.json();
-        if (d.type !== 'disambiguation') result = { img: d.thumbnail?.source || null, extract: d.extract || null };
-      }
-    } catch {}
-  }
-
-  // 2. Geosearch fallback — nearest article within 2 km
-  if (!result?.img && !result?.extract) {
-    try {
-      const gr = await fetch(`https://en.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord=${stop.lat}|${stop.lng}&gsradius=2000&gslimit=3&format=json&origin=*`);
-      const gd = await gr.json();
-      const nearest = gd.query?.geosearch?.[0];
-      if (nearest) {
-        const sr = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(nearest.title)}`);
-        if (sr.ok) {
-          const sd = await sr.json();
-          result = { img: sd.thumbnail?.source || null, extract: sd.extract || null };
-        }
-      }
-    } catch {}
-  }
+  try {
+    const r = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(article.replace(/\s+/g,'_'))}`);
+    if (r.ok) {
+      const d = await r.json();
+      if (d.type !== 'disambiguation') result = { img: d.thumbnail?.source || null, extract: d.extract || null };
+    }
+  } catch {}
 
   _wikiCache[stop.id] = result;
   saveWikiCache();
@@ -787,18 +725,11 @@ const injectWikiPhoto = injectStopPhotos;
 
 function lazyLoadWikiImages(stops) {
   stops.forEach(stop => {
-    const wikiDone    = _wikiCache[stop.id] !== undefined;
-    const commonsDone = _commonsCache[stop.id] !== undefined;
-
-    if (wikiDone && commonsDone) {
+    if (_wikiCache[stop.id] !== undefined) {
       injectStopPhotos(stop.id);
       return;
     }
-
-    const tasks = [];
-    if (!wikiDone)    tasks.push(fetchWikiData(stop));
-    if (!commonsDone) tasks.push(fetchCommonsPhotos(stop));
-    Promise.all(tasks).then(() => injectStopPhotos(stop.id));
+    fetchWikiData(stop).then(() => injectStopPhotos(stop.id));
   });
 }
 
@@ -956,13 +887,11 @@ function getPhotos(stop) {
   // Charging: satellite shows the exact parking area
   if (type === 'charging') return [satelliteUrl(stop), streetViewUrl(stop)];
 
-  // Wikipedia + Commons first (landmark photos), then Street View of exact location
-  const wiki    = _wikiCache[stop.id]?.img;
-  const commons = _commonsCache[stop.id] || [];
+  // Wikipedia iconic photo first (if this stop has an explicit article assigned),
+  // then Street View of the exact GPS location (always unique per stop).
   const photos = [];
+  const wiki = _wikiCache[stop.id]?.img;
   if (wiki) photos.push(wiki);
-  for (const u of commons) { if (u !== wiki) photos.push(u); }
-  // Always append Street View so there's a real ground-level photo of the spot
   photos.push(streetViewUrl(stop));
   return photos;
 }
@@ -2479,10 +2408,9 @@ function openDetail(stop) {
     }
   }
 
-  // Fetch wiki + commons; refresh slides when done
+  // Fetch wiki data; refresh slides + description when done
   const tasks = [];
-  if (_wikiCache[stop.id] === undefined)    tasks.push(fetchWikiData(stop));
-  if (_commonsCache[stop.id] === undefined) tasks.push(fetchCommonsPhotos(stop));
+  if (_wikiCache[stop.id] === undefined) tasks.push(fetchWikiData(stop));
 
   if (tasks.length) {
     Promise.all(tasks).then(() => {
