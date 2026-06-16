@@ -1,5 +1,5 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v180';
+const APP_VERSION = 'v181';
 const _errorLog = [];
 window.addEventListener('error', e => {
   _errorLog.push({ ts: new Date().toISOString(), msg: e.message || String(e), src: (e.filename||'').split('/').pop() + ':' + (e.lineno||'?') });
@@ -1709,6 +1709,54 @@ function renderFilterList(container, kind) {
 /* ── Countdown banner ──────────────────────────────────────────────── */
 let _countdownInterval = null;
 
+/* Returns { state:'travelling'|'at_stop'|'done', stop, nextStop, targetMs, day }
+   based on today's trip day stops and current time. */
+function getTripState() {
+  const todayStr = new Date().toISOString().slice(0, 10);
+  // Find the trip day for today (non-countdown, non-festival, matching date; or festival matching range)
+  const today = TRIP_DATA.days.find(d => {
+    if (d.isCountdown) return false;
+    if (d.isFestival) return todayStr >= d.date && todayStr <= d.dateEnd;
+    return d.date === todayStr;
+  });
+  if (!today) return null;
+  const stops = getDayStops(today);
+  if (!stops.length) return null;
+
+  const nowMs = Date.now();
+  const dayDate = today.date;
+
+  // Build stop schedule: { stop, arrivalMs, leaveMs }
+  const schedule = stops.map(s => {
+    const timeStr = getStopTime(s);
+    const arrivalMs = timeStr ? new Date(dayDate + 'T' + timeStr + ':00+01:00').getTime() : null;
+    const dur = getStopDuration(s);
+    const leaveMs = arrivalMs !== null ? arrivalMs + dur * 60000 : null;
+    return { stop: s, arrivalMs, leaveMs };
+  }).filter(s => s.arrivalMs !== null);
+
+  if (!schedule.length) return null;
+
+  // Are we at a stop? (arrived but not yet left)
+  for (let i = 0; i < schedule.length; i++) {
+    const { stop, arrivalMs, leaveMs } = schedule[i];
+    if (nowMs >= arrivalMs && nowMs < leaveMs) {
+      return { state: 'at_stop', stop, nextStop: schedule[i + 1]?.stop || null, targetMs: leaveMs, day: today };
+    }
+  }
+
+  // Are we travelling to a stop? (past leave time of previous, before arrival of next)
+  for (let i = 0; i < schedule.length; i++) {
+    const { stop, arrivalMs } = schedule[i];
+    if (nowMs < arrivalMs) {
+      return { state: 'travelling', stop, nextStop: null, targetMs: arrivalMs, day: today };
+    }
+  }
+
+  // Past all stops
+  return { state: 'done', stop: schedule[schedule.length - 1].stop, nextStop: null, targetMs: null, day: today };
+}
+
 function renderCountdownBanner(container) {
   // Departure: Wed 17 Jun 2026 10:30 UK time
   const DEPARTURE = new Date('2026-06-17T10:30:00+01:00');
@@ -1732,7 +1780,7 @@ function renderCountdownBanner(container) {
   function tick() {
     const { days, hours, mins, secs, departed } = formatCountdown();
     if (departed) {
-      banner.innerHTML = `<div class="cd-emoji"><i class="ph ph-car"></i></div><h2 class="cd-title">We're on our way!</h2><p class="cd-sub">Annecy 2026 · Have a wonderful trip</p>`;
+      renderTripProgressBanner(container, banner);
       clearInterval(_countdownInterval);
       return;
     }
@@ -1749,6 +1797,129 @@ function renderCountdownBanner(container) {
         <div class="cd-sep">:</div>
         <div class="cd-unit"><span class="cd-num">${pad(secs)}</span><span class="cd-label">sec</span></div>
       </div>`;
+  }
+
+  clearInterval(_countdownInterval);
+  tick();
+  _countdownInterval = setInterval(tick, 1000);
+}
+
+/* ── Trip progress banner (shown after departure countdown hits zero) ── */
+function renderTripProgressBanner(container, existingBanner) {
+  if (existingBanner) existingBanner.remove();
+  container.innerHTML = '';
+
+  const banner = document.createElement('div');
+  banner.className = 'countdown-banner';
+  container.appendChild(banner);
+
+  function pad2(n) { return String(n).padStart(2, '0'); }
+
+  function fmtHMS(ms) {
+    if (ms <= 0) return '00:00:00';
+    const s = Math.floor(ms / 1000);
+    return `${pad2(Math.floor(s/3600))}:${pad2(Math.floor(s/3600*60)%60 || Math.floor((s%3600)/60))}:${pad2(s%60)}`;
+  }
+
+  function fmtHMSfromMs(ms) {
+    if (ms <= 0) return '00:00:00';
+    const totalSec = Math.floor(ms / 1000);
+    const h = Math.floor(totalSec / 3600);
+    const m = Math.floor((totalSec % 3600) / 60);
+    const s = totalSec % 60;
+    return `${pad2(h)}:${pad2(m)}:${pad2(s)}`;
+  }
+
+  let _stopCard = null;
+  let _lastStopId = null;
+  let _weatherStr = '<i class="ph ph-spinner ph-spin" style="opacity:.4"></i>';
+
+  function getDistStr(stop) {
+    if (!stop.lat || !stop.lng) return null;
+    if (!navigator.geolocation) return null;
+    return new Promise(resolve => {
+      navigator.geolocation.getCurrentPosition(pos => {
+        const R = 6371;
+        const dLat = (stop.lat - pos.coords.latitude) * Math.PI / 180;
+        const dLon = (stop.lng - pos.coords.longitude) * Math.PI / 180;
+        const a = Math.sin(dLat/2)**2 + Math.cos(pos.coords.latitude*Math.PI/180)*Math.cos(stop.lat*Math.PI/180)*Math.sin(dLon/2)**2;
+        const km = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        resolve(fmtDist(km));
+      }, () => resolve(null), { timeout: 5000 });
+    });
+  }
+
+  async function loadWeather(stop, day) {
+    if (!day) return;
+    try {
+      const wMap = await fetchWeatherForDay(day);
+      if (!wMap) return;
+      const w = lookupHourlyWeather(wMap, day.date, getStopTime(stop) || '12:00');
+      if (!w) return;
+      _weatherStr = `<i class="ph ${w.icon}"></i> ${w.tempC}°C`;
+      const dist = await getDistStr(stop);
+      if (dist) _weatherStr += ` · ${dist}`;
+    } catch(e) {}
+  }
+
+  function renderStopCard(stop, day) {
+    if (_lastStopId === stop.id && _stopCard) return;
+    _lastStopId = stop.id;
+    if (_stopCard) _stopCard.remove();
+    _stopCard = buildTimelineItem(stop, false, day, null);
+    _stopCard.style.marginTop = '12px';
+    container.appendChild(_stopCard);
+    loadWeather(stop, day);
+  }
+
+  function tick() {
+    const ts = getTripState();
+    if (!ts) {
+      banner.innerHTML = `<div class="cd-emoji"><i class="ph ph-confetti"></i></div><h2 class="cd-title">Enjoy the festival!</h2>`;
+      clearInterval(_countdownInterval);
+      return;
+    }
+
+    const remaining = ts.targetMs ? ts.targetMs - Date.now() : 0;
+    const timeStr = ts.targetMs ? fmtHMSfromMs(Math.max(0, remaining)) : '—';
+
+    if (ts.state === 'travelling') {
+      const name = getStopName(ts.stop);
+      banner.innerHTML = `
+        <div class="cd-emoji"><i class="ph ph-car"></i></div>
+        <h2 class="cd-title">${name}</h2>
+        <p class="cd-sub">Time to next stop</p>
+        <div class="cd-units">
+          <div class="cd-unit"><span class="cd-num">${timeStr.split(':')[0]}</span><span class="cd-label">hrs</span></div>
+          <div class="cd-sep">:</div>
+          <div class="cd-unit"><span class="cd-num">${timeStr.split(':')[1]}</span><span class="cd-label">min</span></div>
+          <div class="cd-sep">:</div>
+          <div class="cd-unit"><span class="cd-num">${timeStr.split(':')[2]}</span><span class="cd-label">sec</span></div>
+        </div>
+        <p class="cd-sub" style="margin-top:12px;margin-bottom:0">${_weatherStr}</p>`;
+      renderStopCard(ts.stop, ts.day);
+
+    } else if (ts.state === 'at_stop') {
+      const name = getStopName(ts.stop);
+      banner.innerHTML = `
+        <div class="cd-emoji"><i class="ph ph-smiley"></i></div>
+        <p class="cd-sub" style="margin-bottom:4px">Enjoy</p>
+        <h2 class="cd-title">${name}</h2>
+        <p class="cd-sub">Back on the road in</p>
+        <div class="cd-units">
+          <div class="cd-unit"><span class="cd-num">${timeStr.split(':')[0]}</span><span class="cd-label">hrs</span></div>
+          <div class="cd-sep">:</div>
+          <div class="cd-unit"><span class="cd-num">${timeStr.split(':')[1]}</span><span class="cd-label">min</span></div>
+          <div class="cd-sep">:</div>
+          <div class="cd-unit"><span class="cd-num">${timeStr.split(':')[2]}</span><span class="cd-label">sec</span></div>
+        </div>
+        <p class="cd-sub" style="margin-top:12px;margin-bottom:0">${_weatherStr}</p>`;
+      renderStopCard(ts.stop, ts.day);
+
+    } else {
+      banner.innerHTML = `<div class="cd-emoji"><i class="ph ph-confetti"></i></div><h2 class="cd-title">You've arrived!</h2><p class="cd-sub">Enjoy Annecy 2026</p>`;
+      clearInterval(_countdownInterval);
+    }
   }
 
   clearInterval(_countdownInterval);
