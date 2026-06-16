@@ -597,12 +597,12 @@ const _googlePhotos = {}; // stopId → [url, ...] | null
 
 function loadGooglePhotos() {
   try {
-    const saved = localStorage.getItem('annecy_gplaces_v1');
+    const saved = localStorage.getItem('annecy_gplaces_v2');
     if (saved) Object.assign(_googlePhotos, JSON.parse(saved));
   } catch {}
 }
 function saveGooglePhotos() {
-  try { localStorage.setItem('annecy_gplaces_v1', JSON.stringify(_googlePhotos)); } catch {}
+  try { localStorage.setItem('annecy_gplaces_v2', JSON.stringify(_googlePhotos)); } catch {}
 }
 
 function googleSearchQuery(stop) {
@@ -614,7 +614,8 @@ function googleSearchQuery(stop) {
 }
 
 async function fetchGooglePlacesPhotos(stop) {
-  if (_googlePhotos[stop.id] !== undefined) return _googlePhotos[stop.id];
+  // null = no photos found (retry allowed); undefined = never fetched
+  if (_googlePhotos[stop.id]?.length) return _googlePhotos[stop.id];
   const query = googleSearchQuery(stop);
   if (!query) { _googlePhotos[stop.id] = []; return []; }
   try {
@@ -635,7 +636,7 @@ async function fetchGooglePlacesPhotos(stop) {
     if (!searchRes.ok) { _googlePhotos[stop.id] = []; saveGooglePhotos(); return []; }
     const searchData = await searchRes.json();
     const place = searchData.places?.[0];
-    if (!place?.photos?.length) { _googlePhotos[stop.id] = []; saveGooglePhotos(); return []; }
+    if (!place?.photos?.length) { _googlePhotos[stop.id] = null; saveGooglePhotos(); return []; }
     // Take up to 5 photos, build display URLs
     const urls = place.photos.slice(0, 5).map(photo =>
       `https://places.googleapis.com/v1/${photo.name}/media?maxWidthPx=800&key=${GKEY}`
@@ -644,7 +645,7 @@ async function fetchGooglePlacesPhotos(stop) {
     saveGooglePhotos();
     return urls;
   } catch {
-    _googlePhotos[stop.id] = [];
+    // Don't cache failures — retry next load
     return [];
   }
 }
