@@ -1,3 +1,15 @@
+/* ── Version & error capture ───────────────────────────────────────── */
+const APP_VERSION = 'v164';
+const _errorLog = [];
+window.addEventListener('error', e => {
+  _errorLog.push({ ts: new Date().toISOString(), msg: e.message || String(e), src: (e.filename||'').split('/').pop() + ':' + (e.lineno||'?') });
+  if (_errorLog.length > 30) _errorLog.shift();
+});
+window.addEventListener('unhandledrejection', e => {
+  _errorLog.push({ ts: new Date().toISOString(), msg: String(e.reason) });
+  if (_errorLog.length > 30) _errorLog.shift();
+});
+
 /* ── State ─────────────────────────────────────────────────────────── */
 const state = {
   currentDayId: null,
@@ -341,6 +353,127 @@ async function testServerPush() {
   // Also fire immediately via SW so there's instant feedback
   sendNotif('🔔 Test notification', 'Server push queued — will also arrive via server within 5 min', 'push-test-local');
   showToast('Test sent + queued for server delivery');
+}
+
+/* ── Version panel ─────────────────────────────────────────────────── */
+function getFeatureStatuses() {
+  const placesTotal      = Object.keys(_placesCache).length;
+  const placesWithPhotos = Object.values(_placesCache).filter(v => v?.photos?.length).length;
+  const wikiCached       = Object.keys(_wikiCache).filter(k => _wikiCache[k] != null).length;
+  const weatherCached    = Object.keys(_weatherCache).filter(k => _weatherCache[k] != null).length;
+  const notifPerm        = typeof Notification !== 'undefined' ? Notification.permission : 'unsupported';
+  const hasPush          = 'PushManager' in window;
+  const swCtrl           = !!navigator.serviceWorker?.controller;
+  const hasSW            = 'serviceWorker' in navigator;
+
+  return [
+    { cat:'UI',            name:'Timeline / full-card view',        status:'ok',                                                         note:'Always available' },
+    { cat:'UI',            name:'Compact view',                     status:'ok',                                                         note:'Always available' },
+    { cat:'UI',            name:'Calendar view',                    status:'ok',                                                         note:'Fixed v164 — DOM insertBefore crash' },
+    { cat:'UI',            name:'Festival calendar (date+weather)', status:'ok',                                                         note:'Redesigned v161' },
+    { cat:'UI',            name:'Dark / light mode toggle',         status:'ok',                                                         note:'Always available' },
+    { cat:'UI',            name:'Detail overlay',                   status:'ok',                                                         note:'Always available' },
+    { cat:'UI',            name:'Leave-by countdown pills',         status:'ok',                                                         note:'Always available' },
+    { cat:'UI',            name:'Edit times + ripple cascade',      status:'ok',                                                         note:'Always available' },
+    { cat:'UI',            name:'Add / edit stops',                 status:'ok',                                                         note:'Always available' },
+    { cat:'UI',            name:'Map view (Leaflet)',               status: typeof L !== 'undefined' ? 'ok' : 'warn',                    note: typeof L !== 'undefined' ? 'Leaflet loaded' : 'Leaflet not yet loaded — loads on first use' },
+    { cat:'Data',          name:'Trip itinerary',                   status: TRIP_DATA?.days?.length > 3 ? 'ok' : 'error',               note: `${TRIP_DATA?.days?.length || 0} days in TRIP_DATA` },
+    { cat:'Data',          name:'Firebase sync',                    status: _db ? 'ok' : 'error',                                       note: _db ? 'Connected — shared state live' : 'Not connected' },
+    { cat:'Photos',        name:'Google Places photo pipeline',     status: placesTotal === 0 ? 'warn' : placesWithPhotos > 0 ? 'ok' : 'warn', note: `${placesWithPhotos} of ${placesTotal} stops have photos cached` },
+    { cat:'Photos',        name:'Wikipedia article photos',         status: wikiCached > 0 ? 'ok' : 'warn',                            note: `${wikiCached} articles cached` },
+    { cat:'Photos',        name:'Street View / Satellite fallback', status:'ok',                                                         note:'Always available via Google Static Maps' },
+    { cat:'Weather',       name:'Open-Meteo forecast',              status: weatherCached > 0 ? 'ok' : 'warn',                          note: `${weatherCached} day(s) cached` },
+    { cat:'Notifications', name:'Notification permission',          status: notifPerm === 'granted' ? 'ok' : notifPerm === 'denied' ? 'error' : 'warn', note: notifPerm },
+    { cat:'Notifications', name:'Departure alerts',                 status: state.notifsEnabled && notifPerm === 'granted' ? 'ok' : 'warn', note: state.notifsEnabled ? 'Enabled' : 'Disabled in settings' },
+    { cat:'Notifications', name:'Push API (browser support)',       status: hasPush ? 'ok' : 'error',                                   note: hasPush ? 'PushManager available' : 'PushManager not available' },
+    { cat:'Notifications', name:'Server push (Cloud Function)',     status:'warn',                                                       note:'Cannot verify from client — use test push to check' },
+    { cat:'SW / Cache',    name:'Service Worker support',           status: hasSW ? 'ok' : 'error',                                     note: hasSW ? 'serviceWorker in navigator' : 'Not supported' },
+    { cat:'SW / Cache',    name:'Service Worker active',            status: swCtrl ? 'ok' : 'warn',                                     note: swCtrl ? `Active (cache ${APP_VERSION})` : 'Not yet controlling — reload after first install' },
+    { cat:'SW / Cache',    name:'Offline / PWA cache',              status: swCtrl ? 'ok' : 'warn',                                     note: swCtrl ? 'Core assets cached' : 'SW not active yet' },
+  ];
+}
+
+function showVersionPanel() {
+  const panel = document.getElementById('version-overlay');
+  if (!panel) return;
+  panel.classList.remove('hidden');
+  requestAnimationFrame(() => panel.classList.add('open'));
+
+  // Populate feature list
+  const body = document.getElementById('version-body');
+  if (!body) return;
+  const statuses = getFeatureStatuses();
+  const cats = [...new Set(statuses.map(f => f.cat))];
+
+  const iconMap = { ok:'ph-check-circle', warn:'ph-warning', error:'ph-x-circle' };
+  const colMap  = { ok:'vs-ok', warn:'vs-warn', error:'vs-error' };
+
+  body.innerHTML = cats.map(cat => {
+    const items = statuses.filter(f => f.cat === cat);
+    return `
+      <div class="vs-cat-label">${cat}</div>
+      ${items.map(f => `
+        <div class="vs-item">
+          <i class="ph ${iconMap[f.status]} ${colMap[f.status]}"></i>
+          <div class="vs-item-text">
+            <div class="vs-item-name">${f.name}</div>
+            <div class="vs-item-note">${f.note}</div>
+          </div>
+        </div>`).join('')}`;
+  }).join('');
+}
+
+function hideVersionPanel() {
+  const panel = document.getElementById('version-overlay');
+  if (!panel) return;
+  panel.classList.remove('open');
+  setTimeout(() => panel.classList.add('hidden'), 280);
+}
+
+async function copyDevData() {
+  const statuses = getFeatureStatuses();
+  let pushEndpoint = null;
+  try {
+    const reg = await navigator.serviceWorker?.getRegistration?.();
+    const sub = await reg?.pushManager?.getSubscription?.();
+    if (sub) pushEndpoint = '…' + sub.endpoint.slice(-40);
+  } catch {}
+
+  const data = {
+    version: APP_VERSION,
+    timestamp: new Date().toISOString(),
+    userAgent: navigator.userAgent,
+    platform: navigator.platform || navigator.userAgentData?.platform || 'unknown',
+    online: navigator.onLine,
+    today: new Date().toISOString().slice(0, 10),
+    currentDayId: state.currentDayId,
+    cardView: state.cardView,
+    notifsEnabled: state.notifsEnabled,
+    notifPermission: typeof Notification !== 'undefined' ? Notification.permission : 'N/A',
+    pushAPISupported: 'PushManager' in window,
+    pushEndpoint,
+    firebaseConnected: !!_db,
+    swController: !!navigator.serviceWorker?.controller,
+    placesCacheStops: Object.keys(_placesCache).length,
+    placesWithPhotos: Object.values(_placesCache).filter(v => v?.photos?.length).length,
+    wikiCached: Object.keys(_wikiCache).filter(k => _wikiCache[k] != null).length,
+    weatherDaysCached: Object.keys(_weatherCache).filter(k => _weatherCache[k] != null).length,
+    tripDays: TRIP_DATA?.days?.length,
+    features: statuses.map(f => ({ cat: f.cat, name: f.name, status: f.status, note: f.note })),
+    recentErrors: _errorLog.slice(-15),
+  };
+
+  const text = JSON.stringify(data, null, 2);
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.focus(); ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+  }
+  showToast('Dev data copied to clipboard');
 }
 
 function showToast(msg, durationMs = 2800) {
@@ -2928,6 +3061,14 @@ document.addEventListener('DOMContentLoaded', () => {
     if (notifTestBtn) {
       notifTestBtn.addEventListener('click', () => testServerPush());
     }
+
+    // Version panel
+    const versionBtn = document.getElementById('version-btn');
+    if (versionBtn) versionBtn.addEventListener('click', () => { closeDrawer(); showVersionPanel(); });
+    const versionClose = document.getElementById('version-close');
+    if (versionClose) versionClose.addEventListener('click', hideVersionPanel);
+    const copyDevBtn = document.getElementById('copy-dev-data-btn');
+    if (copyDevBtn) copyDevBtn.addEventListener('click', copyDevData);
 
     // Units toggle (km / miles)
     function updateUnitsBtn() {
