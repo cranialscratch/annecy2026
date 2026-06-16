@@ -570,10 +570,10 @@ const _poiCache  = {}; // stopId → [{ title, img, dist, url }]
 // _placesCache[stopId] = { placeId, photos:[url,...], attributions:[str,...], ts }
 const _placesCache = {};
 function loadPlacesCache() {
-  try { const s = localStorage.getItem('annecy_places_v1'); if (s) Object.assign(_placesCache, JSON.parse(s)); } catch {}
+  try { const s = localStorage.getItem('annecy_places_v2'); if (s) Object.assign(_placesCache, JSON.parse(s)); } catch {}
 }
 function savePlacesCache() {
-  try { localStorage.setItem('annecy_places_v1', JSON.stringify(_placesCache)); } catch {}
+  try { localStorage.setItem('annecy_places_v2', JSON.stringify(_placesCache)); } catch {}
 }
 
 function _scorePlacesPhoto(ref, idx) {
@@ -604,7 +604,7 @@ async function fetchPlacesPhotos(stop) {
         'X-Goog-FieldMask': 'places.id,places.location',
       },
       body: JSON.stringify({
-        textQuery: stop.location,
+        textQuery: stop.placesQuery || stop.location,
         locationBias: { circle: { center: { latitude: stop.lat, longitude: stop.lng }, radius: 3000 } },
         maxResultCount: 3,
       }),
