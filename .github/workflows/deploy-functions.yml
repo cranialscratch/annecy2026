@@ -36,4 +36,4 @@ jobs:
       - name: Deploy Cloud Functions
         env:
           GOOGLE_APPLICATION_CREDENTIALS: /tmp/sa.json
-        run: firebase deploy --only functions --project annecy-2026 --non-interactive
+        run: firebase deploy --only functions --project annecy-2026 --non-interactive --force
