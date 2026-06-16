@@ -1,5 +1,5 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v164';
+const APP_VERSION = 'v180';
 const _errorLog = [];
 window.addEventListener('error', e => {
   _errorLog.push({ ts: new Date().toISOString(), msg: e.message || String(e), src: (e.filename||'').split('/').pop() + ':' + (e.lineno||'?') });
@@ -3073,6 +3073,11 @@ function initDaySwipe() {
 }
 
 /* ── Init ──────────────────────────────────────────────────────────── */
+function updateHeaderHeight() {
+  const h = document.getElementById('app-header');
+  if (h) document.documentElement.style.setProperty('--header-h', h.offsetHeight + 'px');
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   load();
   loadWikiCache();
@@ -3081,6 +3086,8 @@ document.addEventListener('DOMContentLoaded', () => {
   state.currentDayId = findTodayDayId() || TRIP_DATA.days[0].id;
   buildDayStrip();
   renderView(true); // scroll to now only on first load
+  updateHeaderHeight();
+  new ResizeObserver(updateHeaderHeight).observe(document.getElementById('app-header'));
   if (typeof syncInit === 'function') syncInit();
   scheduleNotifs(); // schedule any pending departure alerts for today
   if (state.notifsEnabled && notifGranted()) startTrafficPolling();
