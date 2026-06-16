@@ -568,6 +568,94 @@ const WIKI_TITLES = {
 const _wikiCache = {}; // stopId → { img, extract } | null
 const _poiCache  = {}; // stopId → [{ title, img, dist, url }]
 
+/* ── Google Places photo cache ─────────────────────────────────────── */
+// _placesCache[stopId] = { placeId, photos:[url,...], attributions:[str,...], ts }
+const _placesCache = {};
+function loadPlacesCache() {
+  try { const s = localStorage.getItem('annecy_places_v1'); if (s) Object.assign(_placesCache, JSON.parse(s)); } catch {}
+}
+function savePlacesCache() {
+  try { localStorage.setItem('annecy_places_v1', JSON.stringify(_placesCache)); } catch {}
+}
+
+function _scorePlacesPhoto(ref, idx) {
+  const w = ref.widthPx || 0, h = ref.heightPx || 0;
+  let s = Math.min(w, 2000) / 20;
+  if (w > h)    s += 40;   // landscape
+  if (w > 1400) s += 20;   // high-res
+  if (idx === 0) s += 30;  // Google's cover photo
+  if (w < 400 || h < 300) s -= 60;
+  return s;
+}
+
+async function fetchPlacesPhotos(stop) {
+  const cached = _placesCache[stop.id];
+  // Return cached if < 7 days old
+  if (cached?.photos?.length && cached.ts && Date.now() - cached.ts < 7 * 86400_000) return cached.photos;
+
+  const type = getStopType(stop);
+  if (type === 'charging' || type === 'depart') return [];
+
+  try {
+    // Step 1: Text Search to resolve Place ID
+    const searchRes = await fetch('https://places.googleapis.com/v1/places:searchText', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': GKEY,
+        'X-Goog-FieldMask': 'places.id,places.location',
+      },
+      body: JSON.stringify({
+        textQuery: stop.location,
+        locationBias: { circle: { center: { latitude: stop.lat, longitude: stop.lng }, radius: 3000 } },
+        maxResultCount: 3,
+      }),
+    });
+    if (!searchRes.ok) return [];
+    const searchData = await searchRes.json();
+    const candidates = searchData.places || [];
+    if (!candidates.length) return [];
+
+    // Pick closest candidate to stop coordinates
+    let best = candidates[0], bestDist = Infinity;
+    for (const p of candidates) {
+      const d = Math.hypot((p.location?.latitude||0) - stop.lat, (p.location?.longitude||0) - stop.lng);
+      if (d < bestDist) { bestDist = d; best = p; }
+    }
+    const placeId = best.id;
+
+    // Step 2: Place Details to get photo references
+    const detailRes = await fetch(`https://places.googleapis.com/v1/places/${placeId}`, {
+      headers: { 'X-Goog-Api-Key': GKEY, 'X-Goog-FieldMask': 'photos' },
+    });
+    if (!detailRes.ok) return [];
+    const detailData = await detailRes.json();
+    const refs = detailData.photos || [];
+    if (!refs.length) return [];
+
+    // Step 3: Score, sort, cap at 20
+    const scored = refs
+      .map((ref, idx) => ({ ref, score: _scorePlacesPhoto(ref, idx) }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 20);
+
+    const photos = scored.map(({ ref }) =>
+      `https://places.googleapis.com/v1/${ref.name}/media?maxWidthPx=1200&key=${GKEY}`
+    );
+    const attributions = scored.map(({ ref }) =>
+      (ref.authorAttributions || []).map(a => a.displayName).filter(Boolean).join(', ')
+    );
+
+    _placesCache[stop.id] = { placeId, photos, attributions, ts: Date.now() };
+    savePlacesCache();
+    return photos;
+  } catch { return []; }
+}
+
+function getPlacesAttribution(stop, idx) {
+  return _placesCache[stop.id]?.attributions?.[idx] || '';
+}
+
 function loadWikiCache() {
   try {
     const saved = localStorage.getItem('annecy_wiki_v6');
@@ -725,11 +813,16 @@ const injectWikiPhoto = injectStopPhotos;
 
 function lazyLoadWikiImages(stops) {
   stops.forEach(stop => {
-    if (_wikiCache[stop.id] !== undefined) {
+    const type = getStopType(stop);
+    if (type === 'depart' || type === 'charging') return;
+    // Kick off Places fetch; inject photos when it resolves
+    if (_placesCache[stop.id]?.photos?.length) {
       injectStopPhotos(stop.id);
-      return;
+    } else {
+      fetchPlacesPhotos(stop).then(() => injectStopPhotos(stop.id));
     }
-    fetchWikiData(stop).then(() => injectStopPhotos(stop.id));
+    // Also fetch wiki in parallel (for extract text)
+    if (_wikiCache[stop.id] === undefined) fetchWikiData(stop);
   });
 }
 
@@ -751,7 +844,7 @@ const TYPE_GRAD = {
 };
 
 /* ── Get slides for a stop ─────────────────────────────────────────── */
-const GKEY = 'AIzaSyBDIpPyqjOtvh1y-1nwyJgIj9TVjQFD_Jo';
+const GKEY = 'AIzaSyCiV3X0vUMJBkIpU_UgBWwyPzIAjyjJM9I';
 
 // Satellite aerial as a fallback — much more interesting than Street View
 function satelliteUrl(stop) {
@@ -884,11 +977,13 @@ async function fetchCommonsPhotos(stop) {
 
 function getPhotos(stop) {
   const type = getStopType(stop);
-  // Charging: satellite shows the exact parking area
   if (type === 'charging') return [satelliteUrl(stop), streetViewUrl(stop)];
 
-  // Wikipedia iconic photo first (if this stop has an explicit article assigned),
-  // then Street View of the exact GPS location (always unique per stop).
+  // Google Places photos — venue-specific, quality-scored
+  const gp = _placesCache[stop.id]?.photos;
+  if (gp?.length) return gp;
+
+  // Fallback while Places loads: Wikipedia thumbnail + Street View
   const photos = [];
   const wiki = _wikiCache[stop.id]?.img;
   if (wiki) photos.push(wiki);
@@ -2408,9 +2503,12 @@ function openDetail(stop) {
     }
   }
 
-  // Fetch wiki data; refresh slides + description when done
+  // Fetch wiki + Places data; refresh slides + description when done
   const tasks = [];
   if (_wikiCache[stop.id] === undefined) tasks.push(fetchWikiData(stop));
+  const type = getStopType(stop);
+  if (type !== 'depart' && type !== 'charging' && !_placesCache[stop.id]?.photos?.length)
+    tasks.push(fetchPlacesPhotos(stop));
 
   if (tasks.length) {
     Promise.all(tasks).then(() => {
@@ -2665,6 +2763,7 @@ function initDaySwipe() {
 document.addEventListener('DOMContentLoaded', () => {
   load();
   loadWikiCache();
+  loadPlacesCache();
   loadGooglePhotos();
   state.currentDayId = findTodayDayId() || TRIP_DATA.days[0].id;
   buildDayStrip();
