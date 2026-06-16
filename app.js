@@ -714,6 +714,46 @@ function getPhotos(stop) {
 }
 
 
+/* ── Core stop helpers ─────────────────────────────────────────────── */
+function findStop(stopId) {
+  for (const day of TRIP_DATA.days) {
+    for (const s of day.stops) if (s.id === stopId) return s;
+    const added = (state.addedStops || {})[day.id] || [];
+    for (const s of added) if (s.id === stopId) return s;
+  }
+  return null;
+}
+
+function getDayStops(day) {
+  const added = (state.addedStops || {})[day.id] || [];
+  const all = [...day.stops, ...added];
+  return all.sort((a, b) => {
+    const ta = timeToMinutes(getStopTime(a)), tb = timeToMinutes(getStopTime(b));
+    if (ta === null && tb === null) return 0;
+    if (ta === null) return 1;
+    if (tb === null) return -1;
+    return ta - tb;
+  });
+}
+
+/* ── Type gradient colours for placeholder slides ──────────────────── */
+const TYPE_GRAD = {
+  charging:     ['#0f3', '#064'],
+  hotel:        ['#38bdf8','#0369a1'],
+  transport:    ['#a78bfa','#4c1d95'],
+  food:         ['#fb923c','#92400e'],
+  architecture: ['#fbbf24','#78350f'],
+  village:      ['#2dd4bf','#134e4a'],
+  town:         ['#2dd4bf','#134e4a'],
+  experience:   ['#fb7185','#881337'],
+  wander:       ['#34d399','#064e3b'],
+  depart:       ['#94a3b8','#1e293b'],
+  scenic:       ['#4ade80','#14532d'],
+  historic:     ['#fcd34d','#713f12'],
+  festival:     ['#c084fc','#3b0764'],
+  work:         ['#64748b','#1e293b'],
+};
+
 /* ── Google API key & map URLs ─────────────────────────────────────── */
 const GKEY = 'AIzaSyCiV3X0vUMJBkIpU_UgBWwyPzIAjyjJM9I';
 
