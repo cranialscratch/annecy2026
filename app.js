@@ -360,7 +360,7 @@ async function scheduleHourlyCountdown() {
   for (let t = start.getTime(); t < departureMs; t += 3600000) {
     const h = new Date(t).getHours();
     if (h >= 0 && h < 8) continue; // skip midnight–8am
-    const hoursLeft = Math.max(1, Math.round((departureMs - t) / 3600000));
+    const hoursLeft = Math.max(1, Math.floor((departureMs - t) / 3600000));
     updates[`countdown_${t}`] = {
       fireAt: t,
       title: '🚗 Departure countdown',
