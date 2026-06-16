@@ -4,14 +4,13 @@ const webpush   = require('web-push');
 
 admin.initializeApp();
 
-// VAPID keys stored via: firebase functions:config:set vapid.public="..." vapid.private="..."
-const cfg = functions.config();
+// VAPID keys from environment variables (set via .env file at deploy time)
+const vapidPublic  = process.env.VAPID_PUBLIC;
+const vapidPrivate = process.env.VAPID_PRIVATE;
+
 try {
-  webpush.setVapidDetails(
-    'mailto:matt@uservox.com',
-    cfg.vapid?.public,
-    cfg.vapid?.private,
-  );
+  if (!vapidPublic || !vapidPrivate) throw new Error('VAPID_PUBLIC or VAPID_PRIVATE not set');
+  webpush.setVapidDetails('mailto:matt@uservox.com', vapidPublic, vapidPrivate);
 } catch(e) {
   console.error('VAPID init failed:', e.message);
 }
@@ -23,7 +22,7 @@ exports.sendPushNotifs = functions
   .onRun(async () => {
     const db  = admin.database();
     const now = Date.now();
-    const WINDOW_MS = 5 * 60 * 1000; // send if up to 5 min overdue (handles cold starts)
+    const WINDOW_MS = 5 * 60 * 1000;
 
     const [queueSnap, subSnap] = await Promise.all([
       db.ref('pushQueue').once('value'),
@@ -33,15 +32,15 @@ exports.sendPushNotifs = functions
     const allQueues = queueSnap.val() || {};
     const allSubs   = subSnap.val()   || {};
 
-    const removes  = [];
-    const sends    = [];
+    const removes = [];
+    const sends   = [];
 
     for (const [deviceId, queue] of Object.entries(allQueues)) {
       const sub = allSubs[deviceId];
 
       for (const [key, notif] of Object.entries(queue || {})) {
         const age = now - notif.fireAt;
-        if (age < 0 || age > WINDOW_MS) continue; // not yet due, or too old
+        if (age < 0 || age > WINDOW_MS) continue;
 
         removes.push(db.ref(`pushQueue/${deviceId}/${key}`).remove());
 
@@ -58,11 +57,9 @@ exports.sendPushNotifs = functions
             console.log(`Sent push to ${deviceId}: ${notif.title}`);
           }).catch(err => {
             console.error(`Push failed for ${deviceId}: ${err.statusCode} ${err.message}`);
-            // Log to Firebase so client can read it
             db.ref(`pushErrors/${deviceId}`).push({
               ts: now, key, status: err.statusCode || 0, msg: err.message || String(err),
             });
-            // Subscription gone — clean it up
             if (err.statusCode === 410 || err.statusCode === 404) {
               removes.push(db.ref(`pushSubs/${deviceId}`).remove());
             }

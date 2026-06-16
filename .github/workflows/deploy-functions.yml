@@ -26,14 +26,12 @@ jobs:
       - name: Write service account key
         run: echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > /tmp/sa.json
 
-      - name: Set VAPID config in Firebase
-        env:
-          GOOGLE_APPLICATION_CREDENTIALS: /tmp/sa.json
+      - name: Create functions .env file with VAPID keys
         run: |
-          firebase functions:config:set \
-            vapid.public="BO4iAHni_Sj3kSZdr5x7Zcg755jVTIQ66zKCQT42psEvHCu_ia_8ABg-Z7UT1xPgoUusTVyH5Ftp0D9acj0Zvzg" \
-            vapid.private="${{ secrets.VAPID_PRIVATE_KEY }}" \
-            --project annecy-2026
+          cat > functions/.env << EOF
+          VAPID_PUBLIC=BO4iAHni_Sj3kSZdr5x7Zcg755jVTIQ66zKCQT42psEvHCu_ia_8ABg-Z7UT1xPgoUusTVyH5Ftp0D9acj0Zvzg
+          VAPID_PRIVATE=${{ secrets.VAPID_PRIVATE_KEY }}
+          EOF
 
       - name: Deploy Cloud Functions
         env:
