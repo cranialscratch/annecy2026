@@ -269,7 +269,7 @@ function notifGranted() {
 }
 
 /* ── Web Push (server-side delivery so notifications fire when backgrounded) */
-const VAPID_PUBLIC_KEY = 'BAWWgB9Fd6E6bRrhjgYfbDIwi1uHpKWVeBW9QyZLOz6WtYw4FvIJRUXGsaWYXKbspGfzCCg8-QMF_ONzsAdYhtI';
+const VAPID_PUBLIC_KEY = 'BO4iAHni_Sj3kSZdr5x7Zcg755jVTIQ66zKCQT42psEvHCu_ia_8ABg-Z7UT1xPgoUusTVyH5Ftp0D9acj0Zvzg';
 
 function getDeviceId() {
   let id = localStorage.getItem('annecy_device_id');
@@ -290,12 +290,20 @@ async function subscribePush() {
   if (!('PushManager' in window) || !_db) return;
   try {
     const reg = await navigator.serviceWorker.ready;
+    // Re-subscribe if VAPID key changed (stored key version tracks this)
+    const storedKeyVer = localStorage.getItem('vapid_key_ver');
+    const currentKeyVer = VAPID_PUBLIC_KEY.slice(-12);
     let sub = await reg.pushManager.getSubscription();
+    if (sub && storedKeyVer !== currentKeyVer) {
+      await sub.unsubscribe();
+      sub = null;
+    }
     if (!sub) {
       sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlB64ToUint8(VAPID_PUBLIC_KEY),
       });
+      localStorage.setItem('vapid_key_ver', currentKeyVer);
     }
     await _db.ref(`pushSubs/${getDeviceId()}`).set(JSON.parse(JSON.stringify(sub)));
   } catch (e) { console.warn('Push subscribe failed', e); }

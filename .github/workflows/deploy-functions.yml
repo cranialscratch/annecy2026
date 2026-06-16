@@ -1,0 +1,41 @@
+name: Deploy Firebase Functions
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'functions/**'
+      - '.github/workflows/deploy-functions.yml'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Firebase CLI
+        run: npm install -g firebase-tools
+
+      - name: Install function dependencies
+        run: cd functions && npm install
+
+      - name: Write service account key
+        run: echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > /tmp/sa.json
+
+      - name: Set VAPID config in Firebase
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: /tmp/sa.json
+        run: |
+          firebase functions:config:set \
+            vapid.public="BO4iAHni_Sj3kSZdr5x7Zcg755jVTIQ66zKCQT42psEvHCu_ia_8ABg-Z7UT1xPgoUusTVyH5Ftp0D9acj0Zvzg" \
+            vapid.private="${{ secrets.VAPID_PRIVATE_KEY }}" \
+            --project annecy-2026
+
+      - name: Deploy Cloud Functions
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: /tmp/sa.json
+        run: firebase deploy --only functions --project annecy-2026 --non-interactive
