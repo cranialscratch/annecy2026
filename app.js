@@ -578,69 +578,108 @@ function saveWikiCache() {
   try { localStorage.setItem('annecy_wiki_v6', JSON.stringify(_wikiCache)); } catch {}
 }
 
-/* ── Google Places photos ──────────────────────────────────────────── */
-const _googlePhotos = {}; // stopId → [url, ...] | null
+/* ── Google Places photo pipeline ─────────────────────────────────── */
+// Data model: _placesData[stopId] = { placeId, name, address, photos:[url], attributions:[str], ts }
+const _placesData = {};
 
-function loadGooglePhotos() {
+function loadPlacesData() {
   try {
-    const saved = localStorage.getItem('annecy_gplaces_v2');
-    if (saved) Object.assign(_googlePhotos, JSON.parse(saved));
+    const s = localStorage.getItem('annecy_places_v1');
+    if (s) Object.assign(_placesData, JSON.parse(s));
   } catch {}
 }
-function saveGooglePhotos() {
-  try { localStorage.setItem('annecy_gplaces_v2', JSON.stringify(_googlePhotos)); } catch {}
+function savePlacesData() {
+  try { localStorage.setItem('annecy_places_v1', JSON.stringify(_placesData)); } catch {}
 }
 
-function googleSearchQuery(stop) {
+function scorePlacesPhoto(ref, idx) {
+  const w = ref.widthPx || 0, h = ref.heightPx || 0;
+  let s = Math.min(w, 2000) / 20;
+  if (w > h)    s += 40;
+  if (w > 1400) s += 20;
+  if (idx === 0) s += 30;
+  if (w < 400 || h < 300) s -= 60;
+  return s;
+}
+
+async function resolvePlaceId(stop) {
   const type = getStopType(stop);
-  if (type === 'charging') return null; // satellite used instead
-  if (type === 'depart')   return null; // no photo on depart rows
-  // Use the location name as-is — it's specific enough for Places search
-  return stop.location;
-}
-
-async function fetchGooglePlacesPhotos(stop) {
-  // null = no photos found (retry allowed); undefined = never fetched
-  if (_googlePhotos[stop.id]?.length) return _googlePhotos[stop.id];
-  const query = googleSearchQuery(stop);
-  if (!query) { _googlePhotos[stop.id] = []; return []; }
+  if (type === 'charging' || type === 'depart') return null;
   try {
-    // Text search for the place
-    const searchRes = await fetch(`https://places.googleapis.com/v1/places:searchText`, {
+    const res = await fetch('https://places.googleapis.com/v1/places:searchText', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'X-Goog-Api-Key': GKEY,
-        'X-Goog-FieldMask': 'places.photos,places.id',
+        'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.location,places.types',
       },
       body: JSON.stringify({
-        textQuery: query,
-        locationBias: { circle: { center: { latitude: stop.lat, longitude: stop.lng }, radius: 5000 } },
-        maxResultCount: 1,
+        textQuery: stop.location,
+        locationBias: { circle: { center: { latitude: stop.lat, longitude: stop.lng }, radius: 3000 } },
+        maxResultCount: 3,
       }),
     });
-    if (!searchRes.ok) { _googlePhotos[stop.id] = []; saveGooglePhotos(); return []; }
-    const searchData = await searchRes.json();
-    const place = searchData.places?.[0];
-    if (!place?.photos?.length) { _googlePhotos[stop.id] = null; saveGooglePhotos(); return []; }
-    // Take up to 5 photos, build display URLs
-    const urls = place.photos.slice(0, 5).map(photo =>
-      `https://places.googleapis.com/v1/${photo.name}/media?maxWidthPx=800&key=${GKEY}`
+    if (!res.ok) return null;
+    const data = await res.json();
+    const candidates = data.places || [];
+    let best = null, bestDist = Infinity;
+    for (const p of candidates) {
+      const dist = Math.hypot((p.location?.latitude||0) - stop.lat, (p.location?.longitude||0) - stop.lng);
+      if (dist < bestDist) { bestDist = dist; best = p; }
+    }
+    if (!best) return null;
+    return { placeId: best.id, name: best.displayName?.text || '', address: best.formattedAddress || '' };
+  } catch { return null; }
+}
+
+async function resolveStopPhotos(stop) {
+  const cached = _placesData[stop.id];
+  if (cached?.photos?.length && cached.ts && (Date.now() - cached.ts < 7 * 86400_000)) return cached.photos;
+
+  const type = getStopType(stop);
+  if (type === 'charging' || type === 'depart') return [];
+
+  try {
+    let placeId = cached?.placeId, name = cached?.name || '', address = cached?.address || '';
+    if (!placeId) {
+      const match = await resolvePlaceId(stop);
+      if (!match) return [];
+      placeId = match.placeId; name = match.name; address = match.address;
+    }
+
+    const detailRes = await fetch(`https://places.googleapis.com/v1/places/${placeId}`, {
+      headers: { 'X-Goog-Api-Key': GKEY, 'X-Goog-FieldMask': 'photos' },
+    });
+    if (!detailRes.ok) return [];
+    const detailData = await detailRes.json();
+    const refs = detailData.photos || [];
+    if (!refs.length) return [];
+
+    const scored = refs
+      .map((ref, idx) => ({ ref, score: scorePlacesPhoto(ref, idx) }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 20);
+
+    const photos = scored.map(({ ref }) =>
+      `https://places.googleapis.com/v1/${ref.name}/media?maxWidthPx=1200&key=${GKEY}`
     );
-    _googlePhotos[stop.id] = urls;
-    saveGooglePhotos();
-    return urls;
-  } catch {
-    // Don't cache failures — retry next load
-    return [];
-  }
+    const attributions = scored.map(({ ref }) =>
+      (ref.authorAttributions || []).map(a => a.displayName).filter(Boolean).join(', ')
+    );
+
+    _placesData[stop.id] = { placeId, name, address, photos, attributions, ts: Date.now() };
+    savePlacesData();
+    return photos;
+  } catch { return []; }
+}
+
+function getPlaceAttribution(stop, idx) {
+  return _placesData[stop.id]?.attributions?.[idx] || '';
 }
 
 async function fetchWikiData(stop) {
   if (_wikiCache[stop.id] !== undefined) return _wikiCache[stop.id];
 
-  // Only fetch Wikipedia for stops with an explicit article assigned.
-  // Everything else uses Street View — no geosearch fallback, no duplicates.
   const article = WIKI_TITLES[stop.id];
   if (!article) { _wikiCache[stop.id] = null; saveWikiCache(); return null; }
 
@@ -658,242 +697,31 @@ async function fetchWikiData(stop) {
   return result;
 }
 
-async function fetchNearbyPOI(stop) {
-  if (_poiCache[stop.id] !== undefined) return _poiCache[stop.id];
-  try {
-    const gr = await fetch(`https://en.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord=${stop.lat}|${stop.lng}&gsradius=8000&gslimit=15&format=json&origin=*`);
-    const gd = await gr.json();
-    const places = (gd.query?.geosearch || []).filter(p => p.dist > 100);
-    const summaries = await Promise.all(places.slice(0, 10).map(async p => {
-      try {
-        const sr = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(p.title)}`);
-        if (!sr.ok) return null;
-        const sd = await sr.json();
-        if (!sd.thumbnail?.source) return null;
-        return { title: p.title, img: sd.thumbnail.source, dist: p.dist,
-          url: `https://en.m.wikipedia.org/wiki/${encodeURIComponent(p.title)}` };
-      } catch { return null; }
-    }));
-    const poi = summaries.filter(Boolean);
-    _poiCache[stop.id] = poi;
-    return poi;
-  } catch {
-    _poiCache[stop.id] = [];
-    return [];
-  }
-}
-
-function findStop(stopId) {
-  for (const day of TRIP_DATA.days)
-    for (const s of day.stops) if (s.id === stopId) return s;
-  for (const arr of Object.values(state.addedStops || {}))
-    for (const s of arr) if (s.id === stopId) return s;
-  return null;
-}
-
-function getDayStops(day) {
-  const added = (state.addedStops || {})[day.id] || [];
-  const all = [...day.stops, ...added];
-  return all.sort((a, b) => {
-    const ta = timeToMinutes(getStopTime(a)), tb = timeToMinutes(getStopTime(b));
-    if (ta === null && tb === null) return 0;
-    if (ta === null) return 1;
-    if (tb === null) return -1;
-    return ta - tb;
-  });
-}
-
-function injectStopPhotos(stopId) {
-  const item = document.getElementById(`stop-${stopId}`);
-  if (!item) return;
-  const stop = findStop(stopId);
-  if (!stop) return;
-  const photos = getPhotos(stop);
-  // Only inject if we have real photos (not just satellite fallback placeholder)
-  if (!photos.length) return;
-  const oldSlider = item.querySelector('.card-slider');
-  if (!oldSlider) return;
-  const tmp = document.createElement('div');
-  tmp.innerHTML = buildSlider(stop, 'card');
-  const newSlider = tmp.firstChild;
-  oldSlider.replaceWith(newSlider);
-  initSlider(newSlider, stop, 'card');
-}
-
-// Keep old name as alias for detail page calls
-const injectWikiPhoto = injectStopPhotos;
-
-function lazyLoadWikiImages(stops) {
-  stops.forEach(stop => {
-    if (_wikiCache[stop.id] !== undefined) {
-      injectStopPhotos(stop.id);
-      return;
-    }
-    fetchWikiData(stop).then(() => injectStopPhotos(stop.id));
-  });
-}
-
-/* ── Type gradient colours for placeholder slides ──────────────────── */
-const TYPE_GRAD = {
-  charging:     ['#0f3', '#064'],
-  hotel:        ['#38bdf8','#0369a1'],
-  transport:    ['#a78bfa','#4c1d95'],
-  food:         ['#fb923c','#92400e'],
-  architecture: ['#fbbf24','#78350f'],
-  village:      ['#2dd4bf','#134e4a'],
-  town:         ['#2dd4bf','#134e4a'],
-  experience:   ['#fb7185','#881337'],
-  wander:       ['#34d399','#064e3b'],
-  depart:       ['#94a3b8','#1e293b'],
-  scenic:       ['#4ade80','#14532d'],
-  historic:     ['#fcd34d','#713f12'],
-  festival:     ['#c084fc','#3b0764'],
-};
-
-/* ── Get slides for a stop ─────────────────────────────────────────── */
-const GKEY = 'AIzaSyBDIpPyqjOtvh1y-1nwyJgIj9TVjQFD_Jo';
-
-// Satellite aerial as a fallback — much more interesting than Street View
-function satelliteUrl(stop) {
-  return `https://maps.googleapis.com/maps/api/staticmap?center=${stop.lat},${stop.lng}&zoom=16&size=640x380&maptype=satellite&key=${GKEY}`;
-}
-function streetViewUrl(stop) {
-  return `https://maps.googleapis.com/maps/api/streetview?size=640x380&location=${stop.lat},${stop.lng}&fov=90&pitch=10&key=${GKEY}`;
-}
-
-/* ── Weather cache & fetch (Open-Meteo — free, no key needed) ───────── */
-const _weatherCache = {}; // dayId → Map<dateString, {icon, tempC, nightIcon, nightTempC, conditionText}>
-
-// WMO weather code → Phosphor icon
-// WMO code → {icon (day), icon (night), label}
-function wmoToWeather(code, isNight) {
-  if (code === 0)              return { icon: isNight ? 'ph-moon-stars' : 'ph-sun',       label: isNight ? 'Clear night' : 'Clear sky' };
-  if (code <= 2)               return { icon: isNight ? 'ph-cloud-moon' : 'ph-cloud-sun', label: 'Partly cloudy' };
-  if (code === 3)              return { icon: 'ph-cloud',            label: 'Overcast' };
-  if (code <= 48)              return { icon: 'ph-cloud-fog',        label: 'Fog' };
-  if (code <= 55)              return { icon: 'ph-cloud-drizzle',    label: 'Drizzle' };
-  if (code <= 57)              return { icon: 'ph-cloud-sleet',      label: 'Freezing drizzle' };
-  if (code <= 65)              return { icon: 'ph-cloud-rain',       label: code >= 63 ? 'Heavy rain' : 'Rain' };
-  if (code <= 67)              return { icon: 'ph-cloud-sleet',      label: 'Freezing rain' };
-  if (code <= 77)              return { icon: 'ph-snowflake',        label: 'Snow' };
-  if (code <= 82)              return { icon: 'ph-cloud-rain',       label: 'Rain showers' };
-  if (code <= 86)              return { icon: 'ph-snowflake',        label: 'Snow showers' };
-  if (code === 95)             return { icon: 'ph-cloud-lightning',  label: 'Thunderstorm' };
-  if (code <= 99)              return { icon: 'ph-cloud-lightning',  label: 'Thunderstorm with hail' };
-  return { icon: 'ph-thermometer', label: 'Unknown' };
-}
-
-function isNightTime(timeStr) {
-  const mins = timeToMinutes(timeStr);
-  if (mins === null) return false;
-  return mins >= 18 * 60 || mins < 6 * 60;
-}
-
-async function fetchWeatherForDay(day) {
-  if (_weatherCache[day.id] !== undefined) return _weatherCache[day.id];
-  let lat = day.lat, lng = day.lng;
-  if (lat == null || lng == null) {
-    for (const s of day.stops) {
-      const sLat = getStopLat(s), sLng = getStopLng(s);
-      if (sLat && sLng) { lat = sLat; lng = sLng; break; }
-    }
-  }
-  if (lat == null || lng == null) { _weatherCache[day.id] = null; return null; }
-
-  // Determine date range: single day or festival span
-  const startDate = day.date;
-  const endDate   = day.dateEnd || day.date;
-
-  try {
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}` +
-      `&daily=weathercode,temperature_2m_max,temperature_2m_min` +
-      `&timezone=auto&forecast_days=16`;
-    const res = await fetch(url);
-    if (!res.ok) { _weatherCache[day.id] = null; return null; }
-    const data = await res.json();
-    const map = new Map();
-    const dates = data.daily?.time || [];
-    dates.forEach((d, i) => {
-      const code    = data.daily.weathercode[i];
-      const tempMax = Math.round(data.daily.temperature_2m_max[i]);
-      const tempMin = Math.round(data.daily.temperature_2m_min[i]);
-      const dayW    = wmoToWeather(code, false);
-      const nightW  = wmoToWeather(code, true);
-      map.set(d, {
-        icon: dayW.icon, tempC: tempMax,
-        nightIcon: nightW.icon, nightTempC: tempMin,
-        conditionText: dayW.label,
-      });
-    });
-    _weatherCache[day.id] = map;
-    return map;
-  } catch (e) {
-    _weatherCache[day.id] = null;
-    return null;
-  }
-}
-
-function getWeatherForStop(weatherMap, stop) {
-  if (!weatherMap) return null;
-  // Find the day this stop belongs to
-  const day = TRIP_DATA.days.find(d => d.id === state.currentDayId || d.stops?.some(s => s.id === stop.id));
-  const dateStr = day?.date || '';
-  const entry = weatherMap.get(dateStr);
-  if (!entry) return null;
-  const night = isNightTime(getStopTime(stop));
-  return {
-    icon: night ? entry.nightIcon : entry.icon,
-    tempC: night ? entry.nightTempC : entry.tempC,
-    conditionText: entry.conditionText,
-    conditionType: entry.conditionType,
-  };
-}
-
-const _commonsCache = {}; // stopId → [url, ...]
-async function fetchCommonsPhotos(stop) {
-  if (_commonsCache[stop.id] !== undefined) return _commonsCache[stop.id];
-  const name = wikiSearchName(stop);
-  if (!name) { _commonsCache[stop.id] = []; return []; }
-  try {
-    const url = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch=${encodeURIComponent(name)}&gsrnamespace=6&gsrlimit=10&prop=imageinfo&iiprop=url|mime|size&iiurlwidth=640&format=json&origin=*`;
-    const r = await fetch(url);
-    const d = await r.json();
-    const pages = Object.values(d.query?.pages || {});
-    const imgs = pages
-      .filter(p => {
-        const ii = p.imageinfo?.[0];
-        if (!ii) return false;
-        const mime = ii.mime || '';
-        if (!mime.startsWith('image/')) return false;
-        if (mime === 'image/svg+xml') return false;
-        const title = (p.title || '').toLowerCase();
-        // Skip maps, flags, coats of arms, icons
-        if (/map|flag|coat|arms|logo|icon|seal|blank|locator/i.test(title)) return false;
-        return true;
-      })
-      .map(p => p.imageinfo[0].thumburl)
-      .filter(Boolean)
-      .slice(0, 5);
-    _commonsCache[stop.id] = imgs;
-    return imgs;
-  } catch {
-    _commonsCache[stop.id] = [];
-    return [];
-  }
-}
-
 function getPhotos(stop) {
   const type = getStopType(stop);
-  // Charging: satellite shows the exact parking area
   if (type === 'charging') return [satelliteUrl(stop), streetViewUrl(stop)];
 
-  // Wikipedia iconic photo first (if this stop has an explicit article assigned),
-  // then Street View of the exact GPS location (always unique per stop).
+  // Google Places photos (venue-specific, quality-scored) — loaded async
+  const gp = _placesData[stop.id]?.photos;
+  if (gp?.length) return gp;
+
+  // Fallback while Places is loading: wiki thumbnail + Street View
   const photos = [];
   const wiki = _wikiCache[stop.id]?.img;
   if (wiki) photos.push(wiki);
   photos.push(streetViewUrl(stop));
   return photos;
+}
+
+
+/* ── Google API key & map URLs ─────────────────────────────────────── */
+const GKEY = 'AIzaSyCiV3X0vUMJBkIpU_UgBWwyPzIAjyjJM9I';
+
+function satelliteUrl(stop) {
+  return `https://maps.googleapis.com/maps/api/staticmap?center=${stop.lat},${stop.lng}&zoom=16&size=640x380&maptype=satellite&key=${GKEY}`;
+}
+function streetViewUrl(stop) {
+  return `https://maps.googleapis.com/maps/api/streetview?size=800x500&location=${stop.lat},${stop.lng}&fov=90&pitch=10&key=${GKEY}`;
 }
 
 /* ── Nav URLs ──────────────────────────────────────────────────────── */
@@ -1681,18 +1509,18 @@ function renderTimeline(container, scrollToNow) {
     nowLineEl = nowLine;
   }
 
-  // Fetch Wikipedia extracts for detail page descriptions
-  lazyLoadWikiImages(day.stops);
+  // Resolve Google Places photos for visible stops, then background-prefetch other days
+  lazyLoadStopPhotos(day.stops);
 
   setTimeout(() => {
     TRIP_DATA.days.forEach(d => {
       if (d.id === state.currentDayId || !d.stops?.length) return;
       d.stops.forEach(stop => {
-        if (_wikiCache[stop.id]    === undefined) fetchWikiData(stop);
-        if (_commonsCache[stop.id] === undefined) fetchCommonsPhotos(stop);
+        if (_wikiCache[stop.id] === undefined) fetchWikiData(stop);
+        if (!_placesData[stop.id]?.photos?.length) resolveStopPhotos(stop);
       });
     });
-  }, 1500);
+  }, 2000);
 
   // Scroll to now on today's view — wait for layout then measure
   // Use a render token so a subsequent renderView() cancels any pending scroll
@@ -1887,23 +1715,57 @@ function buildTimelineItem(stop, isLast, day, nextStop) {
   return item;
 }
 
+/* ── Photo injection helpers ───────────────────────────────────────── */
+function injectStopPhotos(stopId) {
+  const item = document.getElementById(`stop-${stopId}`);
+  if (!item) return;
+  const stop = findStop(stopId);
+  if (!stop) return;
+  const oldSlider = item.querySelector('.card-slider');
+  if (!oldSlider) return;
+  const tmp = document.createElement('div');
+  tmp.innerHTML = buildSlider(stop, 'card');
+  const newSlider = tmp.firstChild;
+  oldSlider.replaceWith(newSlider);
+  initSlider(newSlider, stop, 'card');
+}
+const injectWikiPhoto = injectStopPhotos; // alias used in detail page
+
+function lazyLoadStopPhotos(stops) {
+  stops.forEach(stop => {
+    const type = getStopType(stop);
+    if (type === 'depart' || type === 'charging') return;
+
+    // Fast: wiki data (description + thumbnail fallback)
+    if (_wikiCache[stop.id] === undefined) fetchWikiData(stop);
+
+    // Main: Google Places photos
+    if (_placesData[stop.id]?.photos?.length) {
+      injectStopPhotos(stop.id);
+    } else {
+      resolveStopPhotos(stop).then(() => injectStopPhotos(stop.id));
+    }
+  });
+}
+
 /* ── Image slider HTML ─────────────────────────────────────────────── */
 function buildSlider(stop, prefix) {
   const photos = getPhotos(stop);
   const [c1, c2] = TYPE_GRAD[getStopType(stop)] || ['#334155','#0f172a'];
-  const slides = photos.map((url) => {
+  const slides = photos.map((url, i) => {
     if (url === '__placeholder__') {
       return `<div class="${prefix}-slide ${prefix}-slide-placeholder" style="background:linear-gradient(145deg,${c1}55,${c2})">
         <div class="ph-icon">${stopTypeIcon(stop)}</div>
         <div class="ph-name">${stop.location}</div>
       </div>`;
     }
-    return `<img class="${prefix}-slide" src="${url}" loading="lazy" alt="${stop.location}">`;
+    const attr = getPlaceAttribution(stop, i);
+    const attrHtml = attr ? `<div class="slide-attr">Photo: ${attr}</div>` : '';
+    return `<div class="${prefix}-slide-wrap"><img class="${prefix}-slide" src="${url}" loading="${i === 0 ? 'eager' : 'lazy'}" alt="${stop.location}">${attrHtml}</div>`;
   }).join('');
   const dots = photos.length > 1
     ? `<div class="${prefix}-dots">${photos.map((_,i) => `<span class="${prefix}-dot${i===0?' active':''}"></span>`).join('')}</div>`
     : '';
-  // loading class removed once first image fires onload
   const hasRealImg = photos.some(u => u !== '__placeholder__');
   return `<div class="${prefix}-slider${hasRealImg ? ' loading' : ''}"><div class="${prefix}-slides">${slides}</div>${dots}</div>`;
 }
@@ -1917,18 +1779,19 @@ function initSlider(sliderEl, stop, prefix) {
   let _tappedByTouch = false;
   const [c1, c2] = TYPE_GRAD[getStopType(stop)] || ['#334155','#0f172a'];
 
-  // Shimmer: remove once any image loads; replace broken images with placeholder
+  // Shimmer: remove once first image loads; replace broken images with placeholder
   const imgs = sliderEl.querySelectorAll(`img.${prefix}-slide`);
-  imgs.forEach((img, i) => {
+  imgs.forEach((img) => {
     if (img.complete && img.naturalWidth) { sliderEl.classList.remove('loading'); return; }
     img.addEventListener('load',  () => sliderEl.classList.remove('loading'), { once: true });
     img.addEventListener('error', () => {
-      // Swap broken img → styled placeholder
       const ph = document.createElement('div');
       ph.className = `${prefix}-slide ${prefix}-slide-placeholder`;
       ph.style.background = `linear-gradient(145deg,${c1}55,${c2})`;
       ph.innerHTML = `<div class="ph-icon">${stopTypeIcon(stop)}</div><div class="ph-name">${stop.location}</div>`;
-      img.replaceWith(ph);
+      // Replace the wrapper div (parent of img)
+      const wrapper = img.closest(`.${prefix}-slide-wrap`) || img;
+      wrapper.replaceWith(ph);
       sliderEl.classList.remove('loading');
     }, { once: true });
   });
@@ -2408,25 +2271,27 @@ function openDetail(stop) {
     }
   }
 
-  // Fetch wiki data; refresh slides + description when done
-  const tasks = [];
-  if (_wikiCache[stop.id] === undefined) tasks.push(fetchWikiData(stop));
-
-  if (tasks.length) {
-    Promise.all(tasks).then(() => {
+  // Fetch wiki extract for description, then resolve Google Places photos
+  if (_wikiCache[stop.id] === undefined) {
+    fetchWikiData(stop).then(() => {
       if (!_detailStop || _detailStop.id !== stop.id) return;
       const data = _wikiCache[stop.id];
       if (data?.extract) document.getElementById('detail-reason').textContent = data.extract;
+    });
+  } else {
+    const data = _wikiCache[stop.id];
+    if (data?.extract) document.getElementById('detail-reason').textContent = data.extract;
+  }
+
+  // Resolve Places photos — refresh slides when loaded
+  if (!_placesData[stop.id]?.photos?.length) {
+    resolveStopPhotos(stop).then(photos => {
+      if (!_detailStop || _detailStop.id !== stop.id || !photos.length) return;
       slidesEl.style.transition = 'none';
       slidesEl.style.transform  = 'translateX(0)';
       _detailCurrent = 0;
       setDetailSlides(getPhotos(stop), stop);
-      injectWikiPhoto(stop.id);
     });
-  } else {
-    // already cached — just make sure extract is shown
-    const data = _wikiCache[stop.id];
-    if (data?.extract) document.getElementById('detail-reason').textContent = data.extract;
   }
 
   // Fetch nearby POIs — add to both the carousel and the detail slider
@@ -2665,7 +2530,7 @@ function initDaySwipe() {
 document.addEventListener('DOMContentLoaded', () => {
   load();
   loadWikiCache();
-  loadGooglePhotos();
+  loadPlacesData();
   state.currentDayId = findTodayDayId() || TRIP_DATA.days[0].id;
   buildDayStrip();
   renderView(true); // scroll to now only on first load
