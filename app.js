@@ -1785,6 +1785,7 @@ function renderTimeline(container, scrollToNow) {
     banner.className = 'festival-banner';
     banner.innerHTML = `<div class="cd-emoji"><i class="ph ph-film-slate"></i></div><h2>International Animation<br>Film Festival 2026</h2><p>Annecy, France</p><div class="festival-dates">20 – 27 June 2026</div>`;
     container.appendChild(banner);
+    container.appendChild(buildCalDayHeader(day, 'tl-fest'));
   }
 
   const today = new Date().toISOString().slice(0,10);
