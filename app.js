@@ -306,20 +306,61 @@ async function writePushQueue() {
   const now = new Date();
   const nowMs = now.getTime();
   const todayStartMs = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-  const queue = {};
+  const newEntries = {};
   collectTodayLeaveEvents().forEach(({ stop, notifMins, label }) => {
     if (notifMins < 0) return;
     const fireMs = todayStartMs + notifMins * 60000;
-    if (fireMs < nowMs - 60000) return; // already well past
-    queue[stop.id + '_' + notifMins] = {
+    if (fireMs < nowMs - 60000) return;
+    newEntries['sched_' + stop.id + '_' + notifMins] = {
       fireAt: fireMs,
       title: '🕐 Departure reminder',
       body: label,
       tag: `depart-${stop.id}`,
     };
   });
-  await _db.ref(`pushQueue/${getDeviceId()}`).set(Object.keys(queue).length ? queue : null);
+  // Use update() so test_* and countdown_* entries are never wiped
+  const deviceRef = _db.ref(`pushQueue/${getDeviceId()}`);
+  const snap = await deviceRef.once('value');
+  const existing = snap.val() || {};
+  const updates = {};
+  // Remove stale sched_ entries not in the new set
+  Object.keys(existing).filter(k => k.startsWith('sched_') && !newEntries[k]).forEach(k => { updates[k] = null; });
+  Object.assign(updates, newEntries);
+  if (Object.keys(updates).length) await deviceRef.update(updates);
 }
+
+async function scheduleHourlyCountdown() {
+  if (!_db || !state.notifsEnabled || !notifGranted()) return;
+  const day1 = TRIP_DATA.days.find(d => d.id === 'day1');
+  if (!day1) return;
+  // Departure = start of Day 1 (08:00 local, use noon to avoid DST edge)
+  const departureMs = new Date(day1.date + 'T08:00:00').getTime();
+  const nowMs = Date.now();
+  if (nowMs >= departureMs) return;
+
+  const deviceRef = _db.ref(`pushQueue/${getDeviceId()}`);
+  const snap = await deviceRef.once('value');
+  const existing = snap.val() || {};
+  const updates = {};
+  // Clear stale countdown_ entries
+  Object.keys(existing).filter(k => k.startsWith('countdown_')).forEach(k => { updates[k] = null; });
+
+  // Generate one entry per hour from next full hour until departure
+  const start = new Date(); start.setMinutes(0, 0, 0); start.setHours(start.getHours() + 1);
+  for (let t = start.getTime(); t < departureMs; t += 3600000) {
+    const h = new Date(t).getHours();
+    if (h >= 0 && h < 8) continue; // skip midnight–8am
+    const hoursLeft = Math.max(1, Math.round((departureMs - t) / 3600000));
+    updates[`countdown_${t}`] = {
+      fireAt: t,
+      title: '🚗 Departure countdown',
+      body: `${hoursLeft} hour${hoursLeft !== 1 ? 's' : ''} to go until we leave for Annecy!`,
+      tag: 'countdown',
+    };
+  }
+  if (Object.keys(updates).length) await deviceRef.update(updates);
+}
+
 
 function updateNotifBtn() {
   const btn = document.getElementById('notif-btn');
@@ -472,8 +513,10 @@ async function copyDevData() {
         _db.ref(`pushSubs/${deviceId}`).once('value'),
         _db.ref(`pushQueue/${deviceId}`).once('value'),
       ]);
+      const errSnap = await _db.ref(`pushErrors/${deviceId}`).limitToLast(5).once('value');
       data.pushSubInFirebase  = subSnap.exists() ? '…' + (subSnap.val()?.endpoint || '').slice(-40) : null;
       data.pushQueueEntries   = qSnap.exists() ? Object.keys(qSnap.val() || {}).length : 0;
+      data.pushErrors         = errSnap.exists() ? Object.values(errSnap.val()) : [];
     } catch(e) { data.pushFirebaseReadError = e.message; }
   }
 
@@ -634,6 +677,7 @@ function scheduleNotifs() {
 
   // Write queue to Firebase for server-side delivery while backgrounded
   writePushQueue();
+  scheduleHourlyCountdown();
 
   // Reset fired set at midnight
   clearTimeout(_notifMidnightTimer);
