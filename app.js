@@ -464,6 +464,19 @@ async function copyDevData() {
     recentErrors: _errorLog.slice(-15),
   };
 
+  // Read push diagnostics from Firebase
+  if (_db) {
+    try {
+      const deviceId = getDeviceId();
+      const [subSnap, qSnap] = await Promise.all([
+        _db.ref(`pushSubs/${deviceId}`).once('value'),
+        _db.ref(`pushQueue/${deviceId}`).once('value'),
+      ]);
+      data.pushSubInFirebase  = subSnap.exists() ? '…' + (subSnap.val()?.endpoint || '').slice(-40) : null;
+      data.pushQueueEntries   = qSnap.exists() ? Object.keys(qSnap.val() || {}).length : 0;
+    } catch(e) { data.pushFirebaseReadError = e.message; }
+  }
+
   let text;
   try { text = JSON.stringify(data, null, 2); } catch(e) { showToast('JSON error: ' + e.message); return; }
 
