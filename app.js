@@ -787,18 +787,15 @@ const injectWikiPhoto = injectStopPhotos;
 
 function lazyLoadWikiImages(stops) {
   stops.forEach(stop => {
-    const googleDone  = _googlePhotos[stop.id] !== undefined;
     const wikiDone    = _wikiCache[stop.id] !== undefined;
     const commonsDone = _commonsCache[stop.id] !== undefined;
 
-    // If Google photos already cached and present, inject immediately
-    if (googleDone && _googlePhotos[stop.id]?.length) {
+    if (wikiDone && commonsDone) {
       injectStopPhotos(stop.id);
       return;
     }
 
     const tasks = [];
-    if (!googleDone)  tasks.push(fetchGooglePlacesPhotos(stop));
     if (!wikiDone)    tasks.push(fetchWikiData(stop));
     if (!commonsDone) tasks.push(fetchCommonsPhotos(stop));
     Promise.all(tasks).then(() => injectStopPhotos(stop.id));
@@ -828,6 +825,9 @@ const GKEY = 'AIzaSyBDIpPyqjOtvh1y-1nwyJgIj9TVjQFD_Jo';
 // Satellite aerial as a fallback — much more interesting than Street View
 function satelliteUrl(stop) {
   return `https://maps.googleapis.com/maps/api/staticmap?center=${stop.lat},${stop.lng}&zoom=16&size=640x380&maptype=satellite&key=${GKEY}`;
+}
+function streetViewUrl(stop) {
+  return `https://maps.googleapis.com/maps/api/streetview?size=640x380&location=${stop.lat},${stop.lng}&fov=90&pitch=10&key=${GKEY}`;
 }
 
 /* ── Weather cache & fetch (Open-Meteo — free, no key needed) ───────── */
@@ -953,19 +953,17 @@ async function fetchCommonsPhotos(stop) {
 
 function getPhotos(stop) {
   const type = getStopType(stop);
-  if (type === 'charging') return [satelliteUrl(stop)];
+  // Charging: satellite shows the exact parking area
+  if (type === 'charging') return [satelliteUrl(stop), streetViewUrl(stop)];
 
-  // Google Places photos first — real visitor photos of the specific venue
-  const google = _googlePhotos[stop.id];
-  if (google?.length) return google;
-
-  // Fall back to Wikipedia + Wikimedia Commons
+  // Wikipedia + Commons first (landmark photos), then Street View of exact location
   const wiki    = _wikiCache[stop.id]?.img;
   const commons = _commonsCache[stop.id] || [];
   const photos = [];
   if (wiki) photos.push(wiki);
   for (const u of commons) { if (u !== wiki) photos.push(u); }
-  if (!photos.length) photos.push(satelliteUrl(stop));
+  // Always append Street View so there's a real ground-level photo of the spot
+  photos.push(streetViewUrl(stop));
   return photos;
 }
 
@@ -2481,11 +2479,10 @@ function openDetail(stop) {
     }
   }
 
-  // Fetch Google Places + wiki + commons; refresh slides when done
+  // Fetch wiki + commons; refresh slides when done
   const tasks = [];
-  if (_googlePhotos[stop.id] === undefined)  tasks.push(fetchGooglePlacesPhotos(stop));
-  if (_wikiCache[stop.id] === undefined)     tasks.push(fetchWikiData(stop));
-  if (_commonsCache[stop.id] === undefined)  tasks.push(fetchCommonsPhotos(stop));
+  if (_wikiCache[stop.id] === undefined)    tasks.push(fetchWikiData(stop));
+  if (_commonsCache[stop.id] === undefined) tasks.push(fetchCommonsPhotos(stop));
 
   if (tasks.length) {
     Promise.all(tasks).then(() => {
