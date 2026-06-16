@@ -465,9 +465,37 @@ async function copyDevData() {
 
   const text = JSON.stringify(data, null, 2);
 
-  // prompt() opens a native OS dialog with pre-selected text — works on iOS PWA
-  // The user can copy directly from the dialog with the native copy button
-  window.prompt('Select all and copy this diagnostic data:', text);
+  // Show full-screen copyable text overlay
+  let box = document.getElementById('devdata-overlay');
+  if (!box) {
+    box = document.createElement('div');
+    box.id = 'devdata-overlay';
+    box.innerHTML = `
+      <div id="devdata-panel">
+        <div id="devdata-header">
+          <span>Dev Data — select all &amp; copy</span>
+          <button id="devdata-close" class="icon-btn glass-btn"><i class="ph ph-x"></i></button>
+        </div>
+        <textarea id="devdata-ta" spellcheck="false" autocorrect="off" autocomplete="off"></textarea>
+        <div id="devdata-footer">
+          <button class="pill-btn primary full-width" id="devdata-copy-btn"><i class="ph ph-clipboard-text"></i> Copy to clipboard</button>
+        </div>
+      </div>`;
+    document.getElementById('app').appendChild(box);
+    document.getElementById('devdata-close').addEventListener('click', () => box.classList.add('hidden'));
+    document.getElementById('devdata-copy-btn').addEventListener('click', () => {
+      const ta = document.getElementById('devdata-ta');
+      ta.select();
+      ta.setSelectionRange(0, 99999);
+      try { navigator.clipboard.writeText(ta.value).then(() => showToast('Copied!')).catch(() => {}); } catch {}
+      try { document.execCommand('copy'); showToast('Copied!'); } catch {}
+    });
+  }
+  const ta = document.getElementById('devdata-ta');
+  ta.value = text;
+  box.classList.remove('hidden');
+  // Select all text so it's ready to copy on devices that support it
+  setTimeout(() => { ta.focus(); ta.select(); ta.setSelectionRange(0, 99999); }, 100);
 }
 
 function showToast(msg, durationMs = 2800) {
