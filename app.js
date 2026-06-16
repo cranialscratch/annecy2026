@@ -527,7 +527,6 @@ const WIKI_TITLES = {
   'd1s4':  'Eurotunnel_Le_Shuttle',
   'd1s5':  'Calais',
   'd1s6':  'Saint-Valery-sur-Somme',
-  'd1s7':  'Baie_de_Somme',
   // Day 2
   'd2s2':  "Hortillonnages_d'Amiens",
   'd2s6':  'Gerberoy',
@@ -556,7 +555,6 @@ const WIKI_TITLES = {
   'd5s5':  'Citadel_of_Besançon',
   // Day 6
   'd6s3':  'Giverny',
-  'd6s4':  "Claude_Monet's_garden_at_Giverny",
   'd6s5':  'Rouen_Cathedral',
   // Day 7
   'd7s3':  'Calais',
