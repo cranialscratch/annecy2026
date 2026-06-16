@@ -1520,22 +1520,16 @@ function renderCountdownBanner(container) {
   _countdownInterval = setInterval(tick, 1000);
 }
 
-/* ── Shared day+weather header for calendar views ──────────────────── */
+/* ── Date+weather header for regular calendar days ─────────────────── */
 function buildCalDayHeader(day, containerId) {
-  const todayStr = new Date().toISOString().slice(0, 10);
-  // For festival: use today if within range; for normal days: use day.date
-  const dateStr = day.isFestival
-    ? (todayStr >= day.date && todayStr <= day.dateEnd ? todayStr : day.date)
-    : day.date;
+  const dateStr = day.date;
   const dateLabel = new Date(dateStr + 'T12:00:00').toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long' });
-
   const header = document.createElement('div');
   header.className = 'cal-day-header';
   const weatherId = containerId + '-weather';
   header.innerHTML = `
     <div class="cal-day-header-date">${dateLabel}</div>
     <div class="cal-day-header-weather" id="${weatherId}"><i class="ph ph-spinner ph-spin" style="opacity:.4"></i></div>`;
-
   fetchWeatherForDay(day).then(wMap => {
     const el = document.getElementById(weatherId);
     if (!el || !wMap) { if (el) el.innerHTML = ''; return; }
@@ -1543,13 +1537,40 @@ function buildCalDayHeader(day, containerId) {
     if (!entry) { el.innerHTML = ''; return; }
     el.innerHTML = `<i class="ph ${entry.icon}"></i> <strong>${entry.tempC}°C</strong> <span>${entry.conditionText}</span>`;
   });
-
   return header;
+}
+
+/* ── Festival banner — title + today's date + weather ──────────────── */
+function buildFestivalBanner(day) {
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const dateStr  = (todayStr >= day.date && todayStr <= day.dateEnd) ? todayStr : day.date;
+  const dateLabel = new Date(dateStr + 'T12:00:00').toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long' });
+
+  const banner = document.createElement('div');
+  banner.className = 'festival-banner';
+  banner.innerHTML = `
+    <div class="cd-emoji"><i class="ph ph-film-slate"></i></div>
+    <h2>International Animation<br>Film Festival 2026</h2>
+    <p>Annecy, France</p>
+    <div class="festival-banner-row">
+      <div class="festival-banner-date"><i class="ph ph-calendar-blank"></i> ${dateLabel}</div>
+      <div class="festival-banner-weather" id="fest-banner-weather"><i class="ph ph-spinner ph-spin" style="opacity:.5"></i></div>
+    </div>`;
+
+  fetchWeatherForDay(day).then(wMap => {
+    const el = document.getElementById('fest-banner-weather');
+    if (!el || !wMap) { if (el) el.innerHTML = ''; return; }
+    const entry = wMap.get(dateStr);
+    if (!entry) { el.innerHTML = ''; return; }
+    el.innerHTML = `<i class="ph ${entry.icon}"></i> ${entry.tempC}°C &middot; ${entry.conditionText}`;
+  });
+
+  return banner;
 }
 
 /* ── Festival calendar view ────────────────────────────────────────── */
 function renderFestivalCalView(container, day) {
-  container.appendChild(buildCalDayHeader(day, 'fest-cal'));
+  container.appendChild(buildFestivalBanner(day));
 
   // Venue list
   const list = document.createElement('div');
@@ -1781,11 +1802,7 @@ function renderTimeline(container, scrollToNow) {
   setBgClass('bg-day');
 
   if (day.isFestival) {
-    const banner = document.createElement('div');
-    banner.className = 'festival-banner';
-    banner.innerHTML = `<div class="cd-emoji"><i class="ph ph-film-slate"></i></div><h2>International Animation<br>Film Festival 2026</h2><p>Annecy, France</p><div class="festival-dates">20 – 27 June 2026</div>`;
-    container.appendChild(banner);
-    container.appendChild(buildCalDayHeader(day, 'tl-fest'));
+    container.appendChild(buildFestivalBanner(day));
   }
 
   const today = new Date().toISOString().slice(0,10);

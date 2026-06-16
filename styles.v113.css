@@ -368,6 +368,24 @@ body.light #app.bg-day  .day-chip.active { color: var(--accent) !important; bord
   text-shadow: 0 1px 8px rgba(180,80,255,0.5);
 }
 
+/* Date + weather row inside the festival banner */
+.festival-banner-row {
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;
+  margin-top: 18px; padding: 10px 14px;
+  background: rgba(0,0,0,0.28);
+  border-radius: 12px;
+  border: 1px solid rgba(200,120,255,0.25);
+  position: relative; z-index: 1;
+}
+.festival-banner-date {
+  font-size: 14px; font-weight: 700; color: #e8b4ff;
+  display: flex; align-items: center; gap: 6px;
+}
+.festival-banner-weather {
+  font-size: 14px; color: #f0d6ff;
+  display: flex; align-items: center; gap: 6px;
+}
+
 /* ─── Overview ──────────────────────────────────────────────────────── */
 .overview-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .overview-card {
