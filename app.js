@@ -431,8 +431,14 @@ function hideVersionPanel() {
 }
 
 async function copyDevData() {
-  // Build synchronous data first so clipboard write happens while user gesture is still live
   const statuses = getFeatureStatuses();
+  let pushEndpoint = null;
+  try {
+    const reg = await navigator.serviceWorker?.getRegistration?.();
+    const sub = await reg?.pushManager?.getSubscription?.();
+    if (sub) pushEndpoint = '…' + sub.endpoint.slice(-40);
+  } catch {}
+
   const data = {
     version: APP_VERSION,
     timestamp: new Date().toISOString(),
@@ -445,7 +451,7 @@ async function copyDevData() {
     notifsEnabled: state.notifsEnabled,
     notifPermission: typeof Notification !== 'undefined' ? Notification.permission : 'N/A',
     pushAPISupported: 'PushManager' in window,
-    pushEndpoint: null,
+    pushEndpoint,
     firebaseConnected: !!_db,
     swController: !!navigator.serviceWorker?.controller,
     placesCacheStops: Object.keys(_placesCache).length,
@@ -457,29 +463,22 @@ async function copyDevData() {
     recentErrors: _errorLog.slice(-15),
   };
 
-  // Write to clipboard immediately (iOS requires clipboard access within the same user-gesture tick)
   const text = JSON.stringify(data, null, 2);
-  let copied = false;
-  try {
-    await navigator.clipboard.writeText(text);
-    copied = true;
-  } catch {
-    try {
-      const ta = document.createElement('textarea');
-      ta.value = text; ta.style.cssText = 'position:fixed;opacity:0;top:0;left:0';
-      document.body.appendChild(ta); ta.focus(); ta.select();
-      copied = document.execCommand('copy');
-      document.body.removeChild(ta);
-    } catch {}
-  }
-  showToast(copied ? 'Dev data copied to clipboard' : 'Copy failed — check browser permissions');
 
-  // Async: update pushEndpoint in background (non-blocking, for next copy)
-  try {
-    const reg = await navigator.serviceWorker?.getRegistration?.();
-    const sub = await reg?.pushManager?.getSubscription?.();
-    if (sub) data.pushEndpoint = '…' + sub.endpoint.slice(-40);
-  } catch {}
+  // Show data in selectable textarea (most reliable on iOS PWA)
+  const body = document.getElementById('version-body');
+  if (body) {
+    body.innerHTML = `
+      <div style="padding:12px 18px 4px">
+        <div style="font-size:12px;color:#94a3b8;margin-bottom:8px">Select all and copy:</div>
+        <textarea id="dev-data-ta" readonly style="width:100%;height:220px;background:#1e293b;color:#e2e8f0;border:1px solid rgba(255,255,255,0.12);border-radius:10px;padding:10px;font-size:11px;font-family:monospace;resize:none;box-sizing:border-box">${text}</textarea>
+      </div>`;
+    const ta = document.getElementById('dev-data-ta');
+    if (ta) { ta.focus(); ta.select(); }
+  }
+
+  // Also try clipboard API
+  try { await navigator.clipboard.writeText(text); showToast('Copied to clipboard'); } catch {}
 }
 
 function showToast(msg, durationMs = 2800) {
