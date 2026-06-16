@@ -1082,7 +1082,8 @@ function streetViewUrl(stop) {
 }
 
 /* ── Weather cache & fetch (Open-Meteo — free, no key needed) ───────── */
-const _weatherCache = {}; // dayId → Map<dateString, {icon, tempC, nightIcon, nightTempC, conditionText}>
+// dayId → { ts: fetchedAt, map: Map<dateString, Map<hour, {tempC, icon, conditionText}>> }
+const _weatherCache = {};
 
 // WMO weather code → Phosphor icon
 // WMO code → {icon (day), icon (night), label}
@@ -1110,63 +1111,69 @@ function isNightTime(timeStr) {
 }
 
 async function fetchWeatherForDay(day) {
-  if (_weatherCache[day.id] !== undefined) return _weatherCache[day.id];
+  const TWO_HOURS = 2 * 60 * 60 * 1000;
+  const cached = _weatherCache[day.id];
+  if (cached && (Date.now() - cached.ts) < TWO_HOURS) return cached.map;
+
   let lat = day.lat, lng = day.lng;
   if (lat == null || lng == null) {
-    for (const s of day.stops) {
+    for (const s of (day.stops || [])) {
       const sLat = getStopLat(s), sLng = getStopLng(s);
       if (sLat && sLng) { lat = sLat; lng = sLng; break; }
     }
   }
-  if (lat == null || lng == null) { _weatherCache[day.id] = null; return null; }
-
-  // Determine date range: single day or festival span
-  const startDate = day.date;
-  const endDate   = day.dateEnd || day.date;
+  if (lat == null || lng == null) { _weatherCache[day.id] = { ts: Date.now(), map: null }; return null; }
 
   try {
+    // Hourly data gives accurate temperature for each stop's specific time
     const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}` +
-      `&daily=weathercode,temperature_2m_max,temperature_2m_min` +
-      `&timezone=auto&forecast_days=16`;
+      `&hourly=temperature_2m,weathercode&timezone=auto&forecast_days=16`;
     const res = await fetch(url);
-    if (!res.ok) { _weatherCache[day.id] = null; return null; }
+    if (!res.ok) { _weatherCache[day.id] = { ts: Date.now(), map: null }; return null; }
     const data = await res.json();
+
+    // map: dateString → Map<hour(0-23), {tempC, icon, conditionText}>
     const map = new Map();
-    const dates = data.daily?.time || [];
-    dates.forEach((d, i) => {
-      const code    = data.daily.weathercode[i];
-      const tempMax = Math.round(data.daily.temperature_2m_max[i]);
-      const tempMin = Math.round(data.daily.temperature_2m_min[i]);
-      const dayW    = wmoToWeather(code, false);
-      const nightW  = wmoToWeather(code, true);
-      map.set(d, {
-        icon: dayW.icon, tempC: tempMax,
-        nightIcon: nightW.icon, nightTempC: tempMin,
-        conditionText: dayW.label,
-      });
+    (data.hourly?.time || []).forEach((t, i) => {
+      const [date, hStr] = t.split('T');
+      const hour  = parseInt(hStr, 10);
+      const tempC = Math.round(data.hourly.temperature_2m[i]);
+      const isNight = hour >= 20 || hour < 6;
+      const w = wmoToWeather(data.hourly.weathercode[i], isNight);
+      if (!map.has(date)) map.set(date, new Map());
+      map.get(date).set(hour, { tempC, icon: w.icon, conditionText: w.label });
     });
-    _weatherCache[day.id] = map;
+
+    _weatherCache[day.id] = { ts: Date.now(), map };
     return map;
   } catch (e) {
-    _weatherCache[day.id] = null;
+    _weatherCache[day.id] = { ts: Date.now(), map: null };
     return null;
   }
 }
 
+// Look up hourly weather from map for a given date + time string
+function lookupHourlyWeather(wMap, dateStr, timeStr) {
+  if (!wMap) return null;
+  const hourMap = wMap.get(dateStr);
+  if (!hourMap) return null;
+  const hour = parseInt((timeStr || '12:00').split(':')[0], 10);
+  return hourMap.get(hour) || hourMap.get(Math.min(23, hour + 1)) || hourMap.get(Math.max(0, hour - 1)) || [...hourMap.values()][0] || null;
+}
+
 function getWeatherForStop(weatherMap, stop) {
   if (!weatherMap) return null;
-  // Find the day this stop belongs to
-  const day = TRIP_DATA.days.find(d => d.id === state.currentDayId || d.stops?.some(s => s.id === stop.id));
-  const dateStr = day?.date || '';
-  const entry = weatherMap.get(dateStr);
-  if (!entry) return null;
-  const night = isNightTime(getStopTime(stop));
-  return {
-    icon: night ? entry.nightIcon : entry.icon,
-    tempC: night ? entry.nightTempC : entry.tempC,
-    conditionText: entry.conditionText,
-    conditionType: entry.conditionType,
-  };
+  const day = TRIP_DATA.days.find(d => d.stops?.some(s => s.id === stop.id));
+  // For festival/multi-day spans use today's date so weather is current
+  const today = new Date().toISOString().slice(0, 10);
+  const dateStr = (day?.isFestival) ? today : (day?.date || today);
+  const hourMap = weatherMap.get(dateStr);
+  if (!hourMap) return null;
+
+  const timeStr = getStopTime(stop) || '12:00';
+  const hour = parseInt(timeStr.split(':')[0], 10);
+  // Exact hour match, or nearest available
+  return hourMap.get(hour) || hourMap.get(Math.min(23, hour + 1)) || hourMap.get(Math.max(0, hour - 1)) || [...hourMap.values()][0] || null;
 }
 
 const _commonsCache = {}; // stopId → [url, ...]
@@ -1762,9 +1769,10 @@ function buildCalDayHeader(day, containerId) {
   fetchWeatherForDay(day).then(wMap => {
     const el = document.getElementById(weatherId);
     if (!el || !wMap) { if (el) el.innerHTML = ''; return; }
-    const entry = wMap.get(dateStr);
-    if (!entry) { el.innerHTML = ''; return; }
-    el.innerHTML = `<i class="ph ${entry.icon}"></i> <strong>${entry.tempC}°C</strong> <span>${entry.conditionText}</span>`;
+    // Use midday (12:00) as representative temperature for the day header
+    const w = lookupHourlyWeather(wMap, dateStr, '12:00');
+    if (!w) { el.innerHTML = ''; return; }
+    el.innerHTML = `<i class="ph ${w.icon}"></i> <strong>${w.tempC}°C</strong> <span>${w.conditionText}</span>`;
   });
   return header;
 }
@@ -1789,9 +1797,9 @@ function buildFestivalBanner(day) {
   fetchWeatherForDay(day).then(wMap => {
     const el = document.getElementById('fest-banner-weather');
     if (!el || !wMap) { if (el) el.innerHTML = ''; return; }
-    const entry = wMap.get(dateStr);
-    if (!entry) { el.innerHTML = ''; return; }
-    el.innerHTML = `<i class="ph ${entry.icon}"></i> ${entry.tempC}°C &middot; ${entry.conditionText}`;
+    const w = lookupHourlyWeather(wMap, dateStr, '14:00'); // afternoon representative
+    if (!w) { el.innerHTML = ''; return; }
+    el.innerHTML = `<i class="ph ${w.icon}"></i> ${w.tempC}°C &middot; ${w.conditionText}`;
   });
 
   return banner;
@@ -1927,13 +1935,11 @@ function renderCalView(container) {
     if (calWPill) {
       fetchWeatherForDay(day).then(wMap => {
         if (!wMap || !calWPill.isConnected) return;
-        const dateStr = day.date || '';
-        const entry = wMap.get(dateStr);
-        if (!entry) return;
-        const night = isNightTime(getStopTime(stop));
-        const icon = night ? entry.nightIcon : entry.icon;
-        const tempC = night ? entry.nightTempC : entry.tempC;
-        calWPill.innerHTML = `<i class="ph ${icon}"></i> ${tempC}°`;
+        const today = new Date().toISOString().slice(0, 10);
+        const dateStr = day.isFestival ? today : (day.date || '');
+        const w = lookupHourlyWeather(wMap, dateStr, getStopTime(stop));
+        if (!w) return;
+        calWPill.innerHTML = `<i class="ph ${w.icon}"></i> ${w.tempC}°`;
       });
     }
 
@@ -2269,12 +2275,11 @@ function buildTimelineItem(stop, isLast, day, nextStop) {
   if (_weatherPill && _currentDay) {
     fetchWeatherForDay(_currentDay).then(wMap => {
       if (!wMap || !_weatherPill.isConnected) return;
-      const dateStr = _currentDay.date || '';
-      const entry = wMap.get(dateStr);
-      if (!entry) return;
-      const night = isNightTime(getStopTime(stop));
-      const icon  = night ? entry.nightIcon : entry.icon;
-      const tempC = night ? entry.nightTempC : entry.tempC;
+      const today = new Date().toISOString().slice(0, 10);
+      const dateStr = _currentDay.isFestival ? today : (_currentDay.date || '');
+      const w = lookupHourlyWeather(wMap, dateStr, getStopTime(stop));
+      if (!w) return;
+      const { icon, tempC } = w;
       const lat   = _weatherPill.dataset.lat;
       const lng   = _weatherPill.dataset.lng;
       _weatherPill.innerHTML = `<i class="ph ${icon}"></i> ${tempC}°C`;
@@ -2792,12 +2797,11 @@ function openDetail(stop) {
       fetchWeatherForDay(_dDay).then(wMap => {
         if (!wMap || !detailWeatherEl.isConnected) return;
         if (_detailStop?.id !== stop.id) return;
-        const dateStr = _dDay.date || '';
-        const entry = wMap.get(dateStr);
-        if (!entry) return;
-        const night = isNightTime(getStopTime(stop));
-        const icon  = night ? entry.nightIcon : entry.icon;
-        const tempC = night ? entry.nightTempC : entry.tempC;
+        const today = new Date().toISOString().slice(0, 10);
+        const dateStr = _dDay.isFestival ? today : (_dDay.date || '');
+        const w = lookupHourlyWeather(wMap, dateStr, getStopTime(stop));
+        if (!w) return;
+        const { icon, tempC } = w;
         const lat   = getStopLat(stop) || _dDay.lat || '';
         const lng   = getStopLng(stop) || _dDay.lng || '';
         detailWeatherEl.innerHTML = `
