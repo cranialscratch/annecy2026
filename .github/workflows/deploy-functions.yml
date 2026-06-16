@@ -28,10 +28,7 @@ jobs:
 
       - name: Create functions .env file with VAPID keys
         run: |
-          cat > functions/.env << EOF
-          VAPID_PUBLIC=BO4iAHni_Sj3kSZdr5x7Zcg755jVTIQ66zKCQT42psEvHCu_ia_8ABg-Z7UT1xPgoUusTVyH5Ftp0D9acj0Zvzg
-          VAPID_PRIVATE=${{ secrets.VAPID_PRIVATE_KEY }}
-          EOF
+          printf 'VAPID_PUBLIC=BO4iAHni_Sj3kSZdr5x7Zcg755jVTIQ66zKCQT42psEvHCu_ia_8ABg-Z7UT1xPgoUusTVyH5Ftp0D9acj0Zvzg\nVAPID_PRIVATE=${{ secrets.VAPID_PRIVATE_KEY }}\n' > functions/.env
 
       - name: Deploy Cloud Functions
         env:
