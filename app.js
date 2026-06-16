@@ -285,8 +285,8 @@ async function subscribePush() {
         applicationServerKey: urlB64ToUint8(VAPID_PUBLIC_KEY),
       });
     }
-    if (sub) await _db.ref(`pushSubs/${getDeviceId()}`).set(JSON.parse(JSON.stringify(sub)));
-  } catch (e) { console.warn('[push] subscribe failed:', e); }
+    await _db.ref(`pushSubs/${getDeviceId()}`).set(JSON.parse(JSON.stringify(sub)));
+  } catch (e) { console.warn('Push subscribe failed', e); }
 }
 
 async function writePushQueue() {
@@ -310,16 +310,14 @@ async function writePushQueue() {
 }
 
 function updateNotifBtn() {
-  const btn     = document.getElementById('notif-btn');
-  const lbl     = document.getElementById('notif-label');
+  const btn = document.getElementById('notif-btn');
+  const lbl = document.getElementById('notif-label');
   const testBtn = document.getElementById('notif-test-btn');
-  const status  = document.getElementById('notif-status');
   if (!btn || !lbl) return;
   if (!notifSupported()) {
     btn.style.opacity = '0.4';
     lbl.textContent = 'Alerts not supported';
     if (testBtn) testBtn.style.display = 'none';
-    if (status)  status.style.display = 'none';
     return;
   }
   const on = state.notifsEnabled && notifGranted();
@@ -327,60 +325,22 @@ function updateNotifBtn() {
   btn.querySelector('.ph').className = on
     ? 'ph ph-bell-ringing drawer-icon'
     : 'ph ph-bell drawer-icon';
-  if (testBtn) testBtn.style.display = on ? '' : 'none';
-
-  // Status diagnostics
-  if (status) {
-    if (!on) { status.style.display = 'none'; return; }
-    status.style.display = '';
-    const perm    = Notification.permission;
-    const hasPush = 'PushManager' in window;
-    const events  = collectTodayLeaveEvents();
-    const lines   = [
-      `<span class="${perm==='granted'?'ns-ok':'ns-warn'}"><i class="ph ph-${perm==='granted'?'check':'warning'}"></i> Permission: ${perm}</span>`,
-      `<span class="${hasPush?'ns-ok':'ns-warn'}"><i class="ph ph-${hasPush?'check':'warning'}"></i> Push API: ${hasPush?'supported':'not supported'}</span>`,
-      `<span class="ns-ok"><i class="ph ph-bell"></i> Today's alerts: ${events.length} scheduled</span>`,
-    ];
-    status.innerHTML = lines.join('');
-  }
 }
 
 
 async function testServerPush() {
-  if (!notifGranted()) { showToast('Notifications not granted — enable first'); return; }
-
-  // Step 1: Immediate local notification via SW (proves SW+permission work)
-  showToast('Step 1: firing local SW notification…');
-  await sendNotif('🔔 Local test', 'SW notifications are working — ' + new Date().toLocaleTimeString(), 'push-test-local');
-
-  // Step 2: Server push subscription + queue
-  if (!_db) { showToast('Firebase not connected — local only worked'); return; }
-  showToast('Step 2: subscribing to server push…');
-  try {
-    const reg = await navigator.serviceWorker.ready;
-    let sub = await reg.pushManager.getSubscription();
-    if (!sub) {
-      sub = await reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlB64ToUint8(VAPID_PUBLIC_KEY),
-      });
-    }
-    if (!sub) { showToast('Push subscribe returned null — browser may not support it'); return; }
-    await _db.ref(`pushSubs/${getDeviceId()}`).set(JSON.parse(JSON.stringify(sub)));
-    showToast('Subscribed ✓ — writing to push queue…');
-
-    const key = 'test_' + Date.now();
-    await _db.ref(`pushQueue/${getDeviceId()}/${key}`).set({
-      fireAt: Date.now(),
-      title: '🔔 Server push test',
-      body: 'If you see this backgrounded, server push works! Sent ' + new Date().toLocaleTimeString(),
-      tag: 'push-test-server',
-    });
-    showToast('Queued ✓ — background push due within 1 min');
-  } catch (e) {
-    console.error('[push] subscribe/queue failed:', e);
-    showToast('Push subscribe failed: ' + (e.message || e));
-  }
+  if (!_db) { showToast('Firebase not connected'); return; }
+  await subscribePush();
+  const key = 'test_' + Date.now();
+  await _db.ref(`pushQueue/${getDeviceId()}/${key}`).set({
+    fireAt: Date.now(),
+    title: '🔔 Test notification',
+    body: 'Server push is working!',
+    tag: 'push-test',
+  });
+  // Also fire immediately via SW so there's instant feedback
+  sendNotif('🔔 Test notification', 'Server push queued — will also arrive via server within 5 min', 'push-test-local');
+  showToast('Test sent + queued for server delivery');
 }
 
 function showToast(msg, durationMs = 2800) {

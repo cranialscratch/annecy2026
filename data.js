@@ -53,26 +53,6 @@ const TRIP_DATA = {
         { id:"tBs10", order:10, time:"21:30", tz:"UK", location:"Home — Test End", type:"hotel", priority:0, lat:51.0333, lng:-2.5333, mapsUrl:"https://maps.google.com/?q=North+Cadbury+Somerset", reason:"End of Test Day B." }
       ]
     },
-    /* ── Test Day C — Tue 16 Jun — push notification testing ─────── */
-    {
-      id: "testC",
-      date: "2026-06-16",
-      label: "Test",
-      title: "Test Day C",
-      subtitle: "Push notification · leave-by testing",
-      stops: [
-        { id:"tCs1", order:1,  time:"08:00", tz:"UK", location:"Home — Test Start",              type:"depart",       priority:0, lat:51.0333, lng:-2.5333, mapsUrl:"https://maps.google.com/?q=North+Cadbury+Somerset",   reason:"Notif fires at 07:45 (depart −15 min)." },
-        { id:"tCs2", order:2,  time:"09:00", tz:"UK", location:"Morning Coffee",                 type:"food",         priority:2, lat:51.0400, lng:-2.5200, mapsUrl:"https://maps.google.com/?q=cafe+Somerset",             reason:"Leave-by at 09:45 — notif fires at 09:30.", duration:45, veganFriendly:true },
-        { id:"tCs3", order:3,  time:"10:30", tz:"UK", location:"Historic House Visit",           type:"architecture", priority:3, lat:51.0550, lng:-2.5100, mapsUrl:"https://maps.google.com/?q=Montacute+House+Somerset",   reason:"Leave-by at 12:00 — notif fires at 11:45.", duration:90 },
-        { id:"tCs4", order:4,  time:"12:30", tz:"UK", location:"Village Lunch",                  type:"food",         priority:2, lat:51.0650, lng:-2.5050, mapsUrl:"https://maps.google.com/?q=Montacute+village+Somerset", reason:"Leave-by at 13:30 — notif fires at 13:15.", duration:60, veganFriendly:true },
-        { id:"tCs5", order:5,  time:"14:00", tz:"UK", location:"Depart for Charger",             type:"depart",       priority:0, lat:51.0700, lng:-2.5000, mapsUrl:"https://maps.google.com/?q=North+Cadbury+Somerset",   reason:"Notif fires at 13:45." },
-        { id:"tCs6", order:6,  time:"14:30", tz:"UK", location:"Tesla Supercharger Shepton Mallet", type:"charging",  priority:0, lat:51.1936, lng:-2.5475, mapsUrl:"https://maps.google.com/?q=Tesla+Supercharger+Shepton+Mallet", reason:"Charge stop — no leave-by notif (no duration)." },
-        { id:"tCs7", order:7,  time:"15:30", tz:"UK", location:"Gorge Walk",                    type:"experience",   priority:3, lat:51.2737, lng:-2.7577, mapsUrl:"https://maps.google.com/?q=Cheddar+Gorge",             reason:"Leave-by at 17:00 — notif fires at 16:45.", duration:90 },
-        { id:"tCs8", order:8,  time:"17:30", tz:"UK", location:"Depart Gorge",                  type:"depart",       priority:0, lat:51.2737, lng:-2.7577, mapsUrl:"https://maps.google.com/?q=Cheddar+Gorge",             reason:"Notif fires at 17:15." },
-        { id:"tCs9", order:9,  time:"19:00", tz:"UK", location:"Dinner",                        type:"food",         priority:2, lat:51.0333, lng:-2.5333, mapsUrl:"https://maps.google.com/?q=vegan+restaurant+Somerset", reason:"Leave-by at 20:30 — notif fires at 20:15.", duration:90, veganFriendly:true },
-        { id:"tCs10", order:10, time:"21:00", tz:"UK", location:"Home — Test End",              type:"hotel",        priority:0, lat:51.0333, lng:-2.5333, mapsUrl:"https://maps.google.com/?q=North+Cadbury+Somerset",   reason:"End of Test Day C." }
-      ]
-    },
     /* ── Day 1 — Wed 17 Jun — North Cadbury to Amiens ─────────────── */
     {
       id: "day1",
