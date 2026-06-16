@@ -977,6 +977,9 @@ function getPhotos(stop) {
   const type = getStopType(stop);
   if (type === 'charging') return [satelliteUrl(stop), streetViewUrl(stop)];
 
+  // Stop-level override (e.g. custom local image set in data.js)
+  if (stop.photos?.length) return stop.photos;
+
   // Google Places photos — venue-specific, quality-scored
   const gp = _placesCache[stop.id]?.photos;
   if (gp?.length) return gp;
