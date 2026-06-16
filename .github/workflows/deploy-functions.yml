@@ -27,8 +27,11 @@ jobs:
         run: echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > /tmp/sa.json
 
       - name: Create functions .env file with VAPID keys
+        env:
+          VAPID_PRIVATE: ${{ secrets.VAPID_PRIVATE_KEY }}
         run: |
-          printf 'VAPID_PUBLIC=BO4iAHni_Sj3kSZdr5x7Zcg755jVTIQ66zKCQT42psEvHCu_ia_8ABg-Z7UT1xPgoUusTVyH5Ftp0D9acj0Zvzg\nVAPID_PRIVATE=${{ secrets.VAPID_PRIVATE_KEY }}\n' > functions/.env
+          echo "VAPID_PUBLIC=BO4iAHni_Sj3kSZdr5x7Zcg755jVTIQ66zKCQT42psEvHCu_ia_8ABg-Z7UT1xPgoUusTVyH5Ftp0D9acj0Zvzg" > functions/.env
+          echo "VAPID_PRIVATE=${VAPID_PRIVATE}" >> functions/.env
 
       - name: Deploy Cloud Functions
         env:
