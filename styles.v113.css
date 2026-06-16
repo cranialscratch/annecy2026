@@ -1635,3 +1635,63 @@ body.light #app-toast { background: rgba(30, 30, 50, 0.92); }
   font-size: 10px; line-height: 1.4; pointer-events: none; z-index: 3;
   max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+
+/* ── Festival calendar view ─────────────────────────────────────────── */
+.fest-cal-header {
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;
+  padding: 14px 16px 10px;
+  background: rgba(124,58,237,0.18);
+  border-bottom: 1px solid rgba(124,58,237,0.3);
+  border-radius: 12px 12px 0 0;
+  margin: 0 0 2px;
+}
+.fest-cal-date {
+  font-size: 16px; font-weight: 700; color: #e2e8f0;
+  display: flex; align-items: center; gap: 8px;
+}
+.fest-cal-weather {
+  font-size: 14px; color: #cbd5e1;
+  display: flex; align-items: center; gap: 6px;
+}
+.fest-cal-weather strong { color: #f1f5f9; font-size: 15px; }
+.fest-cal-weather i.ph-spinner { opacity: .5; }
+body.light .fest-cal-date  { color: #1e293b; }
+body.light .fest-cal-weather { color: #475569; }
+body.light .fest-cal-weather strong { color: #1e293b; }
+body.light .fest-cal-header {
+  background: rgba(124,58,237,0.08);
+  border-color: rgba(124,58,237,0.2);
+}
+
+.fest-cal-list {
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 10px 0 24px;
+}
+.fest-cal-item {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 10px 14px 10px 16px;
+  border-left: 3px solid #7c3aed;
+  background: rgba(30,41,59,0.55);
+  backdrop-filter: blur(8px);
+  border-radius: 0 10px 10px 0;
+  cursor: pointer;
+  transition: background .15s;
+}
+.fest-cal-item:hover, .fest-cal-item:active {
+  background: rgba(51,65,85,0.75);
+}
+.fest-cal-item.visited { opacity: .55; }
+.fest-cal-item-name {
+  font-size: 14px; font-weight: 600; color: #f1f5f9;
+  display: flex; align-items: center; gap: 6px;
+}
+.fest-cal-item-meta {
+  font-size: 12px; color: #94a3b8;
+  display: flex; align-items: center; gap: 4px;
+}
+body.light .fest-cal-item {
+  background: rgba(255,255,255,0.82);
+}
+body.light .fest-cal-item:hover { background: rgba(241,245,249,0.95); }
+body.light .fest-cal-item-name { color: #1e293b; }
+body.light .fest-cal-item-meta { color: #64748b; }

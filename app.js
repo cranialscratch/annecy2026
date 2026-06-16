@@ -1520,6 +1520,61 @@ function renderCountdownBanner(container) {
   _countdownInterval = setInterval(tick, 1000);
 }
 
+/* ── Festival calendar view ────────────────────────────────────────── */
+function renderFestivalCalView(container, day) {
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const festDate = todayStr >= day.date && todayStr <= day.dateEnd ? todayStr : day.date;
+  const dateLabel = new Date(festDate + 'T12:00:00').toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long' });
+
+  // Header: date + weather placeholder
+  const header = document.createElement('div');
+  header.className = 'fest-cal-header';
+  header.innerHTML = `
+    <div class="fest-cal-date"><i class="ph ph-film-slate"></i> ${dateLabel}</div>
+    <div class="fest-cal-weather" id="fest-cal-weather">
+      <i class="ph ph-spinner ph-spin"></i>
+    </div>`;
+  container.appendChild(header);
+
+  // Fetch and inject weather
+  fetchWeatherForDay(day).then(wMap => {
+    const el = document.getElementById('fest-cal-weather');
+    if (!el || !wMap) { if (el) el.innerHTML = ''; return; }
+    const entry = wMap.get(festDate);
+    if (!entry) { el.innerHTML = ''; return; }
+    const night = false; // daytime
+    const icon  = entry.icon;
+    const tempC = entry.tempC;
+    el.innerHTML = `<i class="ph ${icon}"></i> <strong>${tempC}°C</strong> <span>${entry.conditionText}</span>`;
+  });
+
+  // Venue list
+  const list = document.createElement('div');
+  list.className = 'fest-cal-list';
+
+  const TYPE_COL = {
+    charging:'#16a34a', hotel:'#0284c7', transport:'#7c3aed', food:'#ea580c',
+    architecture:'#d97706', village:'#0d9488', town:'#0d9488', experience:'#db2777',
+    wander:'#059669', depart:'#475569', scenic:'#16a34a', historic:'#b45309', festival:'#7c3aed', work:'#6366f1',
+  };
+
+  getDayStops(day).forEach(stop => {
+    const type = getStopType(stop);
+    const col  = TYPE_COL[type] || '#334155';
+    const item = document.createElement('div');
+    item.className = 'fest-cal-item';
+    item.style.borderLeftColor = col;
+    if (state.checked[stop.id]) item.classList.add('visited');
+    item.innerHTML = `
+      <div class="fest-cal-item-name">${stopTypeIcon(stop)} ${getStopName(stop)}</div>
+      <div class="fest-cal-item-meta">${typeLabel(type)}${stop.veganFriendly ? ' · <i class="ph ph-leaf"></i> Vegan' : ''}</div>`;
+    item.addEventListener('click', () => openDetail(stop));
+    list.appendChild(item);
+  });
+
+  container.appendChild(list);
+}
+
 /* ── Calendar view ─────────────────────────────────────────────────── */
 const CAL_PX_MIN = 1.5; // px per minute (90px/hour)
 
@@ -1528,6 +1583,8 @@ function renderCalView(container) {
   const day = TRIP_DATA.days.find(d => d.id === state.currentDayId);
   if (!day || day.isCountdown) { renderTimeline(container, false); return; }
   setBgClass('bg-day');
+
+  if (day.isFestival) { renderFestivalCalView(container, day); return; }
 
   const timedStops = getDayStops(day).filter(s => timeToMinutes(getStopTime(s)) !== null);
   if (!timedStops.length) return;
