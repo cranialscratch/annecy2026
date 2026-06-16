@@ -1713,3 +1713,17 @@ body.light .fest-cal-item {
 body.light .fest-cal-item:hover { background: #fff; }
 body.light .fest-cal-item-name { color: #0f172a; }
 body.light .fest-cal-item-meta { color: #475569; }
+
+/* ── Notification status diagnostics ───────────────────────────────── */
+.drawer-notif-status {
+  margin: 2px 12px 4px 44px;
+  display: flex; flex-direction: column; gap: 3px;
+}
+.drawer-notif-status span {
+  font-size: 11px; display: flex; align-items: center; gap: 5px;
+  padding: 2px 0;
+}
+.ns-ok   { color: #4ade80; }
+.ns-warn { color: #fbbf24; }
+body.light .ns-ok   { color: #16a34a; }
+body.light .ns-warn { color: #b45309; }
