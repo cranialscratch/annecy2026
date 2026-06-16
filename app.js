@@ -431,14 +431,8 @@ function hideVersionPanel() {
 }
 
 async function copyDevData() {
+  // Build synchronous data first so clipboard write happens while user gesture is still live
   const statuses = getFeatureStatuses();
-  let pushEndpoint = null;
-  try {
-    const reg = await navigator.serviceWorker?.getRegistration?.();
-    const sub = await reg?.pushManager?.getSubscription?.();
-    if (sub) pushEndpoint = '…' + sub.endpoint.slice(-40);
-  } catch {}
-
   const data = {
     version: APP_VERSION,
     timestamp: new Date().toISOString(),
@@ -451,7 +445,7 @@ async function copyDevData() {
     notifsEnabled: state.notifsEnabled,
     notifPermission: typeof Notification !== 'undefined' ? Notification.permission : 'N/A',
     pushAPISupported: 'PushManager' in window,
-    pushEndpoint,
+    pushEndpoint: null,
     firebaseConnected: !!_db,
     swController: !!navigator.serviceWorker?.controller,
     placesCacheStops: Object.keys(_placesCache).length,
@@ -463,17 +457,29 @@ async function copyDevData() {
     recentErrors: _errorLog.slice(-15),
   };
 
+  // Write to clipboard immediately (iOS requires clipboard access within the same user-gesture tick)
   const text = JSON.stringify(data, null, 2);
+  let copied = false;
   try {
     await navigator.clipboard.writeText(text);
+    copied = true;
   } catch {
-    const ta = document.createElement('textarea');
-    ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
-    document.body.appendChild(ta); ta.focus(); ta.select();
-    document.execCommand('copy');
-    document.body.removeChild(ta);
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text; ta.style.cssText = 'position:fixed;opacity:0;top:0;left:0';
+      document.body.appendChild(ta); ta.focus(); ta.select();
+      copied = document.execCommand('copy');
+      document.body.removeChild(ta);
+    } catch {}
   }
-  showToast('Dev data copied to clipboard');
+  showToast(copied ? 'Dev data copied to clipboard' : 'Copy failed — check browser permissions');
+
+  // Async: update pushEndpoint in background (non-blocking, for next copy)
+  try {
+    const reg = await navigator.serviceWorker?.getRegistration?.();
+    const sub = await reg?.pushManager?.getSubscription?.();
+    if (sub) data.pushEndpoint = '…' + sub.endpoint.slice(-40);
+  } catch {}
 }
 
 function showToast(msg, durationMs = 2800) {
