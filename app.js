@@ -465,20 +465,9 @@ async function copyDevData() {
 
   const text = JSON.stringify(data, null, 2);
 
-  // Show data in selectable textarea (most reliable on iOS PWA)
-  const body = document.getElementById('version-body');
-  if (body) {
-    body.innerHTML = `
-      <div style="padding:12px 18px 4px">
-        <div style="font-size:12px;color:#94a3b8;margin-bottom:8px">Select all and copy:</div>
-        <textarea id="dev-data-ta" readonly style="width:100%;height:220px;background:#1e293b;color:#e2e8f0;border:1px solid rgba(255,255,255,0.12);border-radius:10px;padding:10px;font-size:11px;font-family:monospace;resize:none;box-sizing:border-box">${text}</textarea>
-      </div>`;
-    const ta = document.getElementById('dev-data-ta');
-    if (ta) { ta.focus(); ta.select(); }
-  }
-
-  // Also try clipboard API
-  try { await navigator.clipboard.writeText(text); showToast('Copied to clipboard'); } catch {}
+  // prompt() opens a native OS dialog with pre-selected text — works on iOS PWA
+  // The user can copy directly from the dialog with the native copy button
+  window.prompt('Select all and copy this diagnostic data:', text);
 }
 
 function showToast(msg, durationMs = 2800) {
