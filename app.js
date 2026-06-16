@@ -341,8 +341,10 @@ async function scheduleHourlyCountdown() {
   if (!_db || !state.notifsEnabled || !notifGranted()) return;
   const day1 = TRIP_DATA.days.find(d => d.id === 'day1');
   if (!day1) return;
-  // Departure = start of Day 1 (08:00 local, use noon to avoid DST edge)
-  const departureMs = new Date(day1.date + 'T08:00:00').getTime();
+  // Departure = first stop of Day 1 (read its time field)
+  const firstStop = day1.stops?.[0];
+  const firstTime = firstStop?.time || '10:30';
+  const departureMs = new Date(day1.date + 'T' + firstTime + ':00').getTime();
   const nowMs = Date.now();
   if (nowMs >= departureMs) return;
 
