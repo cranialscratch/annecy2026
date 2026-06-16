@@ -480,7 +480,6 @@ function hideVersionPanel() {
 }
 
 async function copyDevData() {
-  showToast('Building dev data…', 4000);
   let statuses, pushEndpoint = null;
   try { statuses = getFeatureStatuses(); } catch(e) { showToast('getFeatureStatuses error: ' + e.message); return; }
   try {
