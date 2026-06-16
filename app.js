@@ -1773,7 +1773,7 @@ function renderCalView(container) {
   }
 
   outer.appendChild(wrap);
-  container.insertBefore(buildCalDayHeader(day, 'cal'), outer);
+  container.appendChild(buildCalDayHeader(day, 'cal'));
   container.appendChild(outer);
 
   if (isToday) {
