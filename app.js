@@ -719,6 +719,12 @@ const WIKI_TITLES = {
   'd7s5':  'Folkestone',
 };
 
+function wikiSearchName(stop) {
+  const t = WIKI_TITLES[stop.id];
+  if (t) return t.replace(/_/g, ' ');
+  return stop.placesQuery || stop.location || null;
+}
+
 /* ── Wikipedia data cache ──────────────────────────────────────────── */
 const _wikiCache = {}; // stopId → { img, extract } | null
 const _poiCache  = {}; // stopId → [{ title, img, dist, url }]
