@@ -14,45 +14,6 @@ const TRIP_DATA = {
       subtitle: "Time until departure",
       stops: []
     },
-    /* ── Test Day A — Sun 14 Jun — leave-by / edit / ripple testing ── */
-    {
-      id: "testA",
-      date: "2026-06-14",
-      label: "Test",
-      title: "Test Day A",
-      subtitle: "Leave-by · Edit · Ripple testing",
-      stops: [
-        { id:"tAs1", order:1, time:"08:00", tz:"UK", location:"Home — Test Start", type:"depart", priority:0, lat:51.0333, lng:-2.5333, mapsUrl:"https://maps.google.com/?q=North+Cadbury+Somerset", reason:"Kick off. Edit this time and use Ripple to shift everything below." },
-        { id:"tAs2", order:2, time:"09:00", tz:"UK", location:"Coffee Stop", type:"food", priority:2, lat:51.0333, lng:-2.5000, mapsUrl:"https://maps.google.com/?q=coffee+shop+Somerset", reason:"Test leave-by: 45-minute window. If your clock is between 09:00–09:45 you will see the live countdown.", duration:45, veganFriendly:true },
-        { id:"tAs3", order:3, time:"10:00", tz:"UK", location:"Town Centre Wander", type:"wander", priority:2, lat:51.0500, lng:-2.5000, mapsUrl:"https://maps.google.com/?q=Somerton+Somerset", reason:"Test leave-by: 90-minute window. Between 10:00–11:30 you see Leave in Xm.", duration:90 },
-        { id:"tAs4", order:4, time:"12:00", tz:"UK", location:"Lunch", type:"food", priority:2, lat:51.0600, lng:-2.5200, mapsUrl:"https://maps.google.com/?q=restaurant+Somerset", reason:"Test leave-by: 60-minute window. Between 12:00–13:00 you see Leave in Xm.", duration:60, veganFriendly:true },
-        { id:"tAs5", order:5, time:"14:00", tz:"UK", location:"Nature Reserve", type:"experience", priority:3, lat:51.0700, lng:-2.5400, mapsUrl:"https://maps.google.com/?q=Glastonbury+Tor", reason:"Test leave-by: 2-hour window. Between 14:00–16:00 you see Leave in Xm.", duration:120 },
-        { id:"tAs6", order:6, time:"16:30", tz:"UK", location:"Tesla Supercharger Shepton Mallet", type:"charging", priority:0, lat:51.1936, lng:-2.5475, mapsUrl:"https://maps.google.com/?q=Tesla+Supercharger+Shepton+Mallet", reason:"Charge stop with no duration set — no leave-by pill should appear here." },
-        { id:"tAs7", order:7, time:"17:30", tz:"UK", location:"Viewpoint Hill", type:"scenic", priority:3, lat:51.0800, lng:-2.5600, mapsUrl:"https://maps.google.com/?q=Cheddar+Gorge", reason:"Test leave-by: 30-minute window. Between 17:30–18:00.", duration:30 },
-        { id:"tAs8", order:8, time:"19:00", tz:"UK", location:"Dinner", type:"food", priority:2, lat:51.0333, lng:-2.5333, mapsUrl:"https://maps.google.com/?q=vegan+restaurant+Somerset", reason:"Test leave-by: 90-minute window. Between 19:00–20:30.", duration:90, veganFriendly:true },
-        { id:"tAs9", order:9, time:"21:00", tz:"UK", location:"Home — Test End", type:"hotel", priority:0, lat:51.0333, lng:-2.5333, mapsUrl:"https://maps.google.com/?q=North+Cadbury+Somerset", reason:"End of Test Day A." }
-      ]
-    },
-    /* ── Test Day B — Mon 15 Jun — leave-by / edit / ripple testing ── */
-    {
-      id: "testB",
-      date: "2026-06-15",
-      label: "Test",
-      title: "Test Day B",
-      subtitle: "Leave-by · Edit · Ripple testing",
-      stops: [
-        { id:"tBs1", order:1, time:"07:30", tz:"UK", location:"Home — Test Start", type:"depart", priority:0, lat:51.0333, lng:-2.5333, mapsUrl:"https://maps.google.com/?q=North+Cadbury+Somerset", reason:"Edit this time then use Ripple — all following stops should shift by the same amount." },
-        { id:"tBs2", order:2, time:"08:30", tz:"UK", location:"Breakfast Café", type:"food", priority:2, lat:51.0400, lng:-2.5200, mapsUrl:"https://maps.google.com/?q=cafe+Somerset", reason:"Leave-by test: 45-minute window. Between 08:30–09:15.", duration:45, veganFriendly:true },
-        { id:"tBs3", order:3, time:"10:00", tz:"UK", location:"Historic House", type:"architecture", priority:3, lat:51.0550, lng:-2.5100, mapsUrl:"https://maps.google.com/?q=Montacute+House+Somerset", reason:"Leave-by test: 2-hour window. Between 10:00–12:00.", duration:120 },
-        { id:"tBs4", order:4, time:"12:30", tz:"UK", location:"Village Wander", type:"village", priority:2, lat:51.0650, lng:-2.5050, mapsUrl:"https://maps.google.com/?q=Montacute+village+Somerset", reason:"Leave-by test: 60-minute window. Between 12:30–13:30.", duration:60 },
-        { id:"tBs5", order:5, time:"14:00", tz:"UK", location:"Lunch Stop", type:"food", priority:2, lat:51.0700, lng:-2.5000, mapsUrl:"https://maps.google.com/?q=vegan+food+Somerset", reason:"Leave-by test: urgent zone — only 15 minutes. Opens urgent mode immediately.", duration:15, veganFriendly:true },
-        { id:"tBs6", order:6, time:"15:00", tz:"UK", location:"Supercharger Test", type:"charging", priority:0, lat:51.0800, lng:-2.5100, mapsUrl:"https://maps.google.com/?q=Tesla+Supercharger", reason:"No duration set on this charging stop — no leave-by pill." },
-        { id:"tBs7", order:7, time:"16:30", tz:"UK", location:"Gorge Walk", type:"experience", priority:3, lat:51.2737, lng:-2.7577, mapsUrl:"https://maps.google.com/?q=Cheddar+Gorge", reason:"Leave-by test: 90-minute window. Between 16:30–18:00.", duration:90 },
-        { id:"tBs8", order:8, time:"18:30", tz:"UK", location:"Sunset Point", type:"scenic", priority:3, lat:51.0900, lng:-2.5500, mapsUrl:"https://maps.google.com/?q=Glastonbury+Tor", reason:"Leave-by test: 30 minutes exactly. Between 18:30–19:00.", duration:30 },
-        { id:"tBs9", order:9, time:"19:30", tz:"UK", location:"Dinner", type:"food", priority:2, lat:51.0333, lng:-2.5333, mapsUrl:"https://maps.google.com/?q=vegan+restaurant+Somerset", reason:"Leave-by test: 90-minute window. Between 19:30–21:00.", duration:90, veganFriendly:true },
-        { id:"tBs10", order:10, time:"21:30", tz:"UK", location:"Home — Test End", type:"hotel", priority:0, lat:51.0333, lng:-2.5333, mapsUrl:"https://maps.google.com/?q=North+Cadbury+Somerset", reason:"End of Test Day B." }
-      ]
-    },
     /* ── Day 1 — Wed 17 Jun — North Cadbury to Amiens ─────────────── */
     {
       id: "day1",
