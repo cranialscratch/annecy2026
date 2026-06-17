@@ -1,5 +1,5 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v188';
+const APP_VERSION = 'v189';
 const _errorLog = [];
 window.addEventListener('error', e => {
   _errorLog.push({ ts: new Date().toISOString(), msg: e.message || String(e), src: (e.filename||'').split('/').pop() + ':' + (e.lineno||'?') });
@@ -2483,11 +2483,13 @@ function buildTimelineItem(stop, isLast, day, nextStop) {
         <div class="tl-depart-from">${getStopName(stop)}</div>
         ${nextName ? `<div class="tl-depart-arrow"><i class="ph ph-arrow-right"></i></div><div class="tl-depart-to">${nextIcon} ${nextName}</div>` : ''}
         <div class="tl-depart-note">${getStopReason(stop)}</div>
+        ${_isToday ? `<button class="travel-action-btn departed-btn" data-stop-id="${stop.id}"><i class="ph ph-flag-checkered"></i> Departed</button>` : ''}
       </div>`;
     if (isEditable) {
       const _d = TRIP_DATA.days.find(d => d.id === state.currentDayId);
       item.querySelector('.tl-time-btn').addEventListener('click', () => openTimeModal(stop, _d));
     }
+    item.querySelector('.departed-btn')?.addEventListener('click', e => { e.stopPropagation(); openTravelAction(stop, 'departed'); });
     return item;
   }
 
@@ -2517,6 +2519,10 @@ function buildTimelineItem(stop, isLast, day, nextStop) {
         <div class="card-reason">${getStopReason(stop)}</div>
         ${buildTags(stop)}
         ${hasExplicitDuration(stop) ? `<div data-leaveby="${stop.id}" class="leave-by-pill" style="display:none"></div>` : ''}
+        ${_isToday ? `<div class="travel-actions-row">
+          ${getStopType(stop) === 'hotel' ? `<button class="travel-action-btn arrived-btn" data-stop-id="${stop.id}"><i class="ph ph-bed"></i> Arrived</button>` : ''}
+          ${hasExplicitDuration(stop) && getStopType(stop) !== 'hotel' ? `<button class="travel-action-btn extend-btn" data-stop-id="${stop.id}"><i class="ph ph-plus"></i> Extend 5m</button>` : ''}
+        </div>` : ''}
         <div class="tl-actions">${buildIconActions(stop)}</div>
       </div>
     </div>`;
@@ -2525,6 +2531,9 @@ function buildTimelineItem(stop, isLast, day, nextStop) {
     const day = TRIP_DATA.days.find(d => d.id === state.currentDayId);
     item.querySelector('.tl-time-btn').addEventListener('click', () => openTimeModal(stop, day));
   }
+  item.querySelector('.departed-btn')?.addEventListener('click', e => { e.stopPropagation(); openTravelAction(stop, 'departed'); });
+  item.querySelector('.arrived-btn')?.addEventListener('click',  e => { e.stopPropagation(); openTravelAction(stop, 'arrived'); });
+  item.querySelector('.extend-btn')?.addEventListener('click',   e => { e.stopPropagation(); extendStop(stop); });
   item.querySelector('.check-btn').addEventListener('click', e => {
     e.stopPropagation();
     toggleCheck(stop.id, item);
@@ -3384,6 +3393,157 @@ function saveModal() {
   save(); closeModal(); renderView(false);
 }
 
+/* ── Travel actions: Departed / Arrived / Extend ───────────────────── */
+
+function snapshotState() {
+  return {
+    overrides:         JSON.parse(JSON.stringify(state.overrides)),
+    checked:           JSON.parse(JSON.stringify(state.checked)),
+    durOverrides:      JSON.parse(JSON.stringify(state.durOverrides)),
+    crossDayMoves:     JSON.parse(JSON.stringify(state.crossDayMoves || {})),
+  };
+}
+
+let _undoSnapshot = null;
+let _undoTimer = null;
+
+function saveUndoSnapshot() {
+  _undoSnapshot = snapshotState();
+}
+
+function showUndoToast(msg) {
+  let el = document.getElementById('app-toast');
+  if (!el) { el = document.createElement('div'); el.id = 'app-toast'; document.getElementById('app').appendChild(el); }
+  el.innerHTML = `${msg} <button id="undo-btn" style="margin-left:10px;font-weight:700;text-decoration:underline;background:none;border:none;color:inherit;cursor:pointer;font-size:inherit">Undo</button>`;
+  el.classList.add('visible');
+  clearTimeout(el._t);
+  el._t = setTimeout(() => { el.classList.remove('visible'); _undoSnapshot = null; }, 10000);
+  document.getElementById('undo-btn').addEventListener('click', () => {
+    if (!_undoSnapshot) return;
+    Object.assign(state.overrides,     _undoSnapshot.overrides);
+    Object.assign(state.checked,       _undoSnapshot.checked);
+    Object.assign(state.durOverrides,  _undoSnapshot.durOverrides);
+    state.crossDayMoves = _undoSnapshot.crossDayMoves;
+    _undoSnapshot = null;
+    save(); renderView(false);
+    el.classList.remove('visible');
+    showToast('Changes undone');
+  });
+}
+
+function extendStop(stop) {
+  saveUndoSnapshot();
+  const day = TRIP_DATA.days.find(d => d.id === state.currentDayId);
+  if (!day) return;
+  const cur = state.durOverrides[stop.id] ?? stop.duration ?? 30;
+  state.durOverrides[stop.id] = cur + 5;
+  // Cascade the 5 minute extension to following stops
+  const stops = getDayStops(day);
+  let found = false;
+  stops.forEach(s => {
+    if (!found) { if (s.id === stop.id) found = true; return; }
+    const t = timeToMinutes(getStopTime(s));
+    if (t !== null) state.overrides[s.id] = minutesToTime(t + 5);
+  });
+  save(); renderView(false);
+  showUndoToast('+5 min added');
+}
+
+let _travelActionStop = null;
+let _travelActionType = null;
+
+function openTravelAction(stop, type) {
+  _travelActionStop = stop;
+  _travelActionType = type;
+  const planned = getStopTime(stop);
+  const actual  = minutesToTime(nowMinutes());
+  const delta   = nowMinutes() - (timeToMinutes(planned) || 0);
+  const lateStr = delta > 0 ? `${delta} min late` : delta < 0 ? `${-delta} min early` : 'on time';
+  const label   = type === 'departed' ? 'Departed' : 'Arrived';
+
+  document.getElementById('travel-action-title').textContent = `${label}: ${getStopName(stop)}`;
+  document.getElementById('travel-action-summary').textContent =
+    `Planned ${planned} · Actual ${actual} · ${lateStr}`;
+
+  const skipList = document.getElementById('travel-action-skip-list');
+  skipList.innerHTML = '';
+  if (delta > 0) {
+    // Show remaining stops for today so user can choose to skip
+    const day = TRIP_DATA.days.find(d => d.id === state.currentDayId);
+    if (day) {
+      const remaining = getDayStops(day).filter(s => {
+        const t = timeToMinutes(getStopTime(s));
+        return t !== null && t > (timeToMinutes(planned) || 0) && s.id !== stop.id
+          && !['depart','transport','hotel','charging'].includes(getStopType(s));
+      });
+      remaining.forEach(s => {
+        const row = document.createElement('label');
+        row.className = 'skip-stop-row';
+        row.innerHTML = `<input type="checkbox" value="${s.id}"><span style="flex:1">${stopTypeIcon(s)} ${getStopName(s)}</span><span class="skip-time">${getStopTime(s)}</span>`;
+        skipList.appendChild(row);
+      });
+    }
+  }
+
+  document.getElementById('travel-action-ripple').style.display = delta !== 0 ? '' : 'none';
+  document.getElementById('travel-action-overlay').classList.remove('hidden');
+}
+
+function closeTravelAction() {
+  document.getElementById('travel-action-overlay').classList.add('hidden');
+  _travelActionStop = _travelActionType = null;
+}
+
+function applyTravelAction(ripple) {
+  if (!_travelActionStop) return;
+  saveUndoSnapshot();
+
+  const planned = timeToMinutes(getStopTime(_travelActionStop)) || 0;
+  const actual  = nowMinutes();
+  const delta   = actual - planned;
+
+  // Mark skipped stops
+  document.querySelectorAll('#travel-action-skip-list input:checked').forEach(cb => {
+    state.checked[cb.value] = true;
+  });
+
+  // Record actual time
+  state.overrides[_travelActionStop.id] = minutesToTime(actual);
+
+  if (ripple && delta !== 0) {
+    const day = TRIP_DATA.days.find(d => d.id === state.currentDayId);
+    if (day) {
+      const skipped = new Set([...document.querySelectorAll('#travel-action-skip-list input:checked')].map(cb => cb.value));
+      const days = TRIP_DATA.days;
+      const dayIdx = days.findIndex(d => d.id === day.id);
+      if (!state.crossDayMoves) state.crossDayMoves = {};
+      const homeDayStops = [...day.stops, ...(state.addedStops?.[day.id] || [])];
+      const homeDayIds = new Set(homeDayStops.map(s => s.id));
+      const movedFromThisDay = Object.entries(state.crossDayMoves)
+        .filter(([stopId]) => homeDayIds.has(stopId))
+        .map(([stopId]) => homeDayStops.find(s => s.id === stopId)).filter(Boolean);
+      const sorted = [...homeDayStops, ...movedFromThisDay.filter(s => !homeDayIds.has(s.id))];
+      sorted.sort((a, b) => (timeToMinutes(getStopTime(a)) ?? 9999) - (timeToMinutes(getStopTime(b)) ?? 9999));
+      let found = false;
+      sorted.forEach(s => {
+        if (!found) { if (s.id === _travelActionStop.id) found = true; return; }
+        if (skipped.has(s.id)) return;
+        const cur = timeToMinutes(getStopTime(s));
+        if (cur === null) return;
+        const currentDayIdx = state.crossDayMoves[s.id] ? days.findIndex(d => d.id === state.crossDayMoves[s.id]) : dayIdx;
+        const newAbsolute  = currentDayIdx * 1440 + cur + delta;
+        const targetDayIdx = Math.min(Math.max(0, Math.floor(newAbsolute / 1440)), days.length - 1);
+        state.overrides[s.id] = minutesToTime(newAbsolute);
+        if (targetDayIdx !== dayIdx) state.crossDayMoves[s.id] = days[targetDayIdx].id;
+        else delete state.crossDayMoves[s.id];
+      });
+    }
+  }
+
+  save(); closeTravelAction(); renderView(false);
+  showUndoToast(_travelActionType === 'departed' ? 'Departed recorded' : 'Arrival recorded');
+}
+
 /* ── Opening hours check after cascade ─────────────────────────────── */
 async function checkCascadedStops(changedStops, dayDate) {
   const date = new Date(dayDate + 'T12:00:00');
@@ -3744,6 +3904,11 @@ document.addEventListener('DOMContentLoaded', () => {
       const cur = timeToMinutes(input.value || '00:00');
       if (cur !== null) input.value = minutesToTime(cur + parseInt(btn.dataset.delta, 10));
     }));
+
+  /* Travel action sheet */
+  document.getElementById('travel-action-close').addEventListener('click', closeTravelAction);
+  document.getElementById('travel-action-ripple').addEventListener('click', () => applyTravelAction(true));
+  document.getElementById('travel-action-done').addEventListener('click',   () => applyTravelAction(false));
 
   /* Skip prompt */
   document.getElementById('skip-prompt-close').addEventListener('click', closeSkipPrompt);

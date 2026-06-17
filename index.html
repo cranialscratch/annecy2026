@@ -137,6 +137,22 @@
     </div>
   </div>
 
+  <!-- Travel action sheet (Departed / Arrived) -->
+  <div id="travel-action-overlay" class="hidden">
+    <div id="travel-action-sheet">
+      <div class="modal-header">
+        <h3 id="travel-action-title"></h3>
+        <button id="travel-action-close" class="icon-btn"><i class="ph ph-x"></i></button>
+      </div>
+      <p id="travel-action-summary" style="padding:0 20px 10px;font-size:14px;color:var(--text2)"></p>
+      <div id="travel-action-skip-list"></div>
+      <div class="modal-footer" style="flex-direction:column;gap:8px">
+        <button id="travel-action-ripple" class="pill-btn primary" style="width:100%"><i class="ph ph-arrows-clockwise"></i> Ripple delay to following stops</button>
+        <button id="travel-action-done" class="pill-btn secondary" style="width:100%">Record time only</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Skip-prompt sheet -->
   <div id="skip-prompt-overlay" class="hidden">
     <div id="skip-prompt-sheet">
@@ -303,8 +319,8 @@
   <!-- Firebase (compat SDK — no bundler needed) -->
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
-  <script src="data.js?v=188"></script>
-  <script src="sync.js?v=188"></script>
-  <script src="app.js?v=188"></script>
+  <script src="data.js?v=189"></script>
+  <script src="sync.js?v=189"></script>
+  <script src="app.js?v=189"></script>
 </body>
 </html>
