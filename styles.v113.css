@@ -489,11 +489,17 @@ body.light .tl-depart-row {
 .tl-swipe-wrap {
   flex: 1; min-width: 0;
   position: relative; overflow: hidden;
-  border-radius: 18px; /* clip the revealed button to card radius */
+  border-radius: 18px;
+}
+/* Card sits on top covering the actions; translateX reveals them */
+.tl-swipe-wrap .tl-card {
+  position: relative; z-index: 1;
+  width: 100%; box-sizing: border-box;
+  will-change: transform;
 }
 .tl-swipe-actions {
   position: absolute; top: 0; right: 0; bottom: 0;
-  display: flex; align-items: stretch;
+  display: flex; align-items: stretch; z-index: 0;
 }
 .swipe-skip-btn {
   background: rgba(217,119,6,.92); color: #fff;
