@@ -1,5 +1,5 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v193';
+const APP_VERSION = 'v194';
 const _errorLog = [];
 window.addEventListener('error', e => {
   _errorLog.push({ ts: new Date().toISOString(), msg: e.message || String(e), src: (e.filename||'').split('/').pop() + ':' + (e.lineno||'?') });
@@ -3330,7 +3330,7 @@ function openTimeModal(stop, day) {
   _modalStop = stop; _modalDay = day;
   document.getElementById('modal-location').innerHTML = stopTypeIcon(stop) + ' ' + stop.location;
   document.getElementById('modal-time-input').value = getStopTime(stop);
-  document.getElementById('modal-cascade').checked = state.cascadeEnabled;
+  document.getElementById('modal-cascade').checked = false;
   document.getElementById('modal-overlay').classList.remove('hidden');
 }
 function resetDayTimes() {
@@ -3478,46 +3478,18 @@ function showUndoToast(msg) {
 
 function extendStop(stop, deltaMins) {
   saveUndoSnapshot();
-  const day = TRIP_DATA.days.find(d => d.id === state.currentDayId);
-  if (!day) return;
-  const cur = state.durOverrides[stop.id] ?? stop.duration ?? 30;
-  const next = Math.max(5, cur + deltaMins); // never below 5 mins
-  const actual = next - cur; // real delta after floor
+  const cur  = state.durOverrides[stop.id] ?? stop.duration ?? 30;
+  const next = Math.max(5, cur + deltaMins);
   state.durOverrides[stop.id] = next;
-  // Cascade the delta to following stops
-  if (actual !== 0) {
-    const stops = getDayStops(day);
-    let found = false;
-    stops.forEach(s => {
-      if (!found) { if (s.id === stop.id) found = true; return; }
-      const t = timeToMinutes(getStopTime(s));
-      if (t !== null) state.overrides[s.id] = minutesToTime(t + actual);
-    });
-  }
+  // Duration only — arrival times of other stops are not touched.
+  // Use the time modal (ripple) to shift following stops.
   save(); renderView(false);
-  showUndoToast(`${deltaMins > 0 ? '+' : ''}${deltaMins} min`);
 }
 
 function resetStopDuration(stop) {
   saveUndoSnapshot();
-  const day = TRIP_DATA.days.find(d => d.id === state.currentDayId);
-  if (!day) return;
-  const cur  = state.durOverrides[stop.id] ?? stop.duration ?? 30;
-  const orig = stop.duration ?? 30;
-  const delta = orig - cur; // negative if we extended, positive if shrunk
   delete state.durOverrides[stop.id];
-  // Cascade delta to following stops
-  if (delta !== 0) {
-    const stops = getDayStops(day);
-    let found = false;
-    stops.forEach(s => {
-      if (!found) { if (s.id === stop.id) found = true; return; }
-      const t = timeToMinutes(getStopTime(s));
-      if (t !== null) state.overrides[s.id] = minutesToTime(t + delta);
-    });
-  }
   save(); renderView(false);
-  showUndoToast('Duration reset');
 }
 
 let _travelActionStop = null;
