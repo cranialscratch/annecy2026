@@ -1,5 +1,5 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v209';
+const APP_VERSION = 'v210';
 const _errorLog = [];
 window.addEventListener('error', e => {
   _errorLog.push({ ts: new Date().toISOString(), msg: e.message || String(e), src: (e.filename||'').split('/').pop() + ':' + (e.lineno||'?') });
@@ -1553,7 +1553,6 @@ function renderView(scrollToNow) {
 /* ── Map view ──────────────────────────────────────────────────────── */
 let _leafletMap      = null;
 let _mapDayId        = null;
-let _mapSkipHash     = null;
 let _userLat         = null, _userLng = null;
 let _locMarker       = null, _locCircle = null;
 let _geoWatchId      = null;
@@ -1718,74 +1717,82 @@ async function fetchDayRoute(stops) {
   } catch { return null; }
 }
 
+// Tracked Leaflet layers so we can update them in-place
+let _mapMarkerLayer  = null;
+let _mapRouteLayer   = null;
+
 function renderMapView() {
   const day = TRIP_DATA.days.find(d => d.id === state.currentDayId);
   if (!day) return;
 
   const container = document.getElementById('map-container');
 
-  // All stops for this day (base + user-added)
-  const allDayStops = [...(day.stops || []), ...(state.addedStops?.[day.id] || [])];
+  // All stops for this day (base + user-added), in original order
+  const allDayStops = [...(day.stops || []), ...(state.addedStops?.[day.id] || [])]
+    .sort((a, b) => (a.order ?? 9999) - (b.order ?? 9999));
 
-  // Compute a hash of which stops are skipped today so we can detect changes
-  const skipHash = allDayStops.map(s => s.id).filter(id => state.skipped[id]).join(',');
+  const stops       = allDayStops.filter(s => s.lat && s.lng);
+  const activeStops = stops.filter(s => !state.skipped[s.id]);
 
-  // Destroy old map if day changed or skipped stops changed
-  if (_leafletMap && (_mapDayId !== state.currentDayId || _mapSkipHash !== skipHash)) {
+  // Destroy map only when the day changes
+  if (_leafletMap && _mapDayId !== state.currentDayId) {
     _leafletMap.remove();
-    _leafletMap = null;
+    _leafletMap = null; _mapMarkerLayer = null; _mapRouteLayer = null;
     _locMarker = null; _locCircle = null;
     container.innerHTML = '';
   }
-
-  if (_leafletMap) {
-    _leafletMap.invalidateSize();
-    return;
-  }
-
-  _mapDayId    = state.currentDayId;
-  _mapSkipHash = skipHash;
-  startLocationWatch();
 
   const isDark = !document.body.classList.contains('light');
   const tileUrl = isDark
     ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
     : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
 
-  const stops = allDayStops.filter(s => s.lat && s.lng)
-    .sort((a, b) => (a.order ?? 9999) - (b.order ?? 9999));
-  const activeStops = stops.filter(s => !state.skipped[s.id]);
-
   // Countdown day: no route stops, just show user location
   if (!stops.length) {
-    const fallback = L.map(container, { zoomControl: false, attributionControl: false });
-    _leafletMap = fallback;
-    L.tileLayer(tileUrl, { maxZoom: 19, subdomains: 'abcd' }).addTo(fallback);
-    L.control.zoom({ position: 'topright' }).addTo(fallback);
-    fallback.setView([51.0333, -2.5333], 10); // North Cadbury as default
-    if (_userLat !== null) {
-      fallback.setView([_userLat, _userLng], 13);
-      updateLocMarker(500);
+    if (!_leafletMap) {
+      const fallback = L.map(container, { zoomControl: false, attributionControl: false });
+      _leafletMap = fallback;
+      _mapDayId   = state.currentDayId;
+      L.tileLayer(tileUrl, { maxZoom: 19, subdomains: 'abcd' }).addTo(fallback);
+      L.control.zoom({ position: 'topright' }).addTo(fallback);
+      fallback.setView([51.0333, -2.5333], 10);
+      if (_userLat !== null) { fallback.setView([_userLat, _userLng], 13); updateLocMarker(500); }
+      buildAndAppendPOIWrap(container, day);
+      startLocationWatch();
+    } else {
+      _leafletMap.invalidateSize();
     }
-    buildAndAppendPOIWrap(container, day);
     return;
   }
 
-  const map = L.map(container, { zoomControl: false, attributionControl: false });
-  _leafletMap = map;
+  // ── First build ────────────────────────────────────────────────────
+  if (!_leafletMap) {
+    const map = L.map(container, { zoomControl: false, attributionControl: false });
+    _leafletMap = map;
+    _mapDayId   = state.currentDayId;
+    L.tileLayer(tileUrl, { maxZoom: 19, subdomains: 'abcd' }).addTo(map);
+    L.control.zoom({ position: 'topright' }).addTo(map);
+    if (_userLat !== null) updateLocMarker(200);
+    startLocationWatch();
+    buildAndAppendPOIWrap(container, day);
+  } else {
+    _leafletMap.invalidateSize();
+  }
 
-  L.tileLayer(tileUrl, { maxZoom: 19, subdomains: 'abcd' }).addTo(map);
-  L.control.zoom({ position: 'topright' }).addTo(map);
+  const map = _leafletMap;
 
-  // Fit bounds to active (non-skipped) stops — leave room for the POI carousel at bottom
+  // ── Fit bounds to active stops ─────────────────────────────────────
   const boundsStops = activeStops.length >= 2 ? activeStops : stops;
-  const bounds = L.latLngBounds(boundsStops.map(s => [getStopLat(s), getStopLng(s)]));
-  map.fitBounds(bounds, { paddingTopLeft: [32, 48], paddingBottomRight: [32, 160] });
+  map.fitBounds(
+    L.latLngBounds(boundsStops.map(s => [getStopLat(s), getStopLng(s)])),
+    { paddingTopLeft: [32, 48], paddingBottomRight: [32, 160] }
+  );
 
-  // If we already have a user location, add the marker immediately
-  if (_userLat !== null) updateLocMarker(200);
+  // ── Markers: remove old layer, draw fresh ─────────────────────────
+  if (_mapMarkerLayer) { _mapMarkerLayer.remove(); _mapMarkerLayer = null; }
+  const markerGroup = L.layerGroup().addTo(map);
+  _mapMarkerLayer = markerGroup;
 
-  // Determine next unvisited, non-skipped stop
   const now = nowMinutes();
   let nextStopId = null;
   for (const s of activeStops) {
@@ -1793,9 +1800,8 @@ function renderMapView() {
     if (t !== null && t >= now && !state.checked[s.id]) { nextStopId = s.id; break; }
   }
 
-  // Draw stop markers (all stops, skipped ones shown faded)
   let activeIdx = 0;
-  stops.forEach((stop) => {
+  stops.forEach(stop => {
     const visited = !!state.checked[stop.id];
     const skipped = !!state.skipped[stop.id];
     const isNext  = stop.id === nextStopId;
@@ -1809,20 +1815,18 @@ function renderMapView() {
              </div>`,
       iconSize: [36,36], iconAnchor: [18,18], popupAnchor: [0,-20],
     });
-    const m = L.marker([getStopLat(stop), getStopLng(stop)], { icon }).addTo(map);
+    const m = L.marker([getStopLat(stop), getStopLng(stop)], { icon }).addTo(markerGroup);
     m.on('click', () => openDetail(stop));
   });
 
-  // Road route — active stops only (skipped stops excluded from routing)
+  // ── Route: remove old polyline, fetch fresh (active stops only) ───
+  if (_mapRouteLayer) { _mapRouteLayer.remove(); _mapRouteLayer = null; }
+  const routeColor = isDark ? '#38bdf8' : '#0284c7';
   fetchDayRoute(activeStops).then(latlngs => {
     if (!latlngs || _mapDayId !== state.currentDayId) return;
-    L.polyline(latlngs, {
-      color: !document.body.classList.contains('light') ? '#38bdf8' : '#0284c7',
-      weight: 4, opacity: 0.7,
-    }).addTo(map);
+    if (_mapRouteLayer) { _mapRouteLayer.remove(); }
+    _mapRouteLayer = L.polyline(latlngs, { color: routeColor, weight: 4, opacity: 0.7 }).addTo(map);
   });
-
-  buildAndAppendPOIWrap(container, day);
 }
 
 function buildAndAppendPOIWrap(container, day) {
@@ -4224,7 +4228,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.body.classList.toggle('light');
         try { localStorage.setItem('annecy_theme', document.body.classList.contains('light') ? 'light' : 'dark'); } catch {}
         updateDrawerLabels();
-        if (_leafletMap) { _leafletMap.remove(); _leafletMap = null; _locMarker = null; _locCircle = null; document.getElementById('map-container').innerHTML = ''; }
+        if (_leafletMap) { _leafletMap.remove(); _leafletMap = null; _mapMarkerLayer = null; _mapRouteLayer = null; _locMarker = null; _locCircle = null; document.getElementById('map-container').innerHTML = ''; }
         if (state.currentView === 'map') renderMapView();
         closeDrawer();
       }
