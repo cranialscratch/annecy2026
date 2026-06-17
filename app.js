@@ -1,5 +1,5 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v206';
+const APP_VERSION = 'v207';
 const _errorLog = [];
 window.addEventListener('error', e => {
   _errorLog.push({ ts: new Date().toISOString(), msg: e.message || String(e), src: (e.filename||'').split('/').pop() + ':' + (e.lineno||'?') });
@@ -1706,6 +1706,7 @@ function renderMapView() {
     : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
 
   const stops = day.stops.filter(s => s.lat && s.lng);
+  const activeStops = stops.filter(s => !state.skipped[s.id]);
 
   // Countdown day: no route stops, just show user location
   if (!stops.length) {
@@ -1728,31 +1729,35 @@ function renderMapView() {
   L.tileLayer(tileUrl, { maxZoom: 19, subdomains: 'abcd' }).addTo(map);
   L.control.zoom({ position: 'topright' }).addTo(map);
 
-  // Fit bounds — leave room for the POI carousel at bottom
-  const bounds = L.latLngBounds(stops.map(s => [getStopLat(s), getStopLng(s)]));
+  // Fit bounds to active (non-skipped) stops — leave room for the POI carousel at bottom
+  const boundsStops = activeStops.length >= 2 ? activeStops : stops;
+  const bounds = L.latLngBounds(boundsStops.map(s => [getStopLat(s), getStopLng(s)]));
   map.fitBounds(bounds, { paddingTopLeft: [32, 48], paddingBottomRight: [32, 160] });
 
   // If we already have a user location, add the marker immediately
   if (_userLat !== null) updateLocMarker(200);
 
-  // Determine next unvisited stop
+  // Determine next unvisited, non-skipped stop
   const now = nowMinutes();
   let nextStopId = null;
-  for (const s of stops) {
+  for (const s of activeStops) {
     const t = timeToMinutes(getStopTime(s));
     if (t !== null && t >= now && !state.checked[s.id]) { nextStopId = s.id; break; }
   }
 
-  // Draw stop markers
-  stops.forEach((stop, idx) => {
+  // Draw stop markers (all stops, skipped ones shown faded)
+  let activeIdx = 0;
+  stops.forEach((stop) => {
     const visited = !!state.checked[stop.id];
     const skipped = !!state.skipped[stop.id];
     const isNext  = stop.id === nextStopId;
+    if (!skipped) activeIdx++;
+    const seqNum = skipped ? '✕' : activeIdx;
     const icon = L.divIcon({
       className: '',
       html: `<div class="map-marker type-${getStopType(stop)}${visited?' visited':''}${skipped?' skipped':''}${isNext?' next-stop':''}">
                <span>${stopTypeIcon(stop)}</span>
-               <span class="map-marker-seq">${idx + 1}</span>
+               <span class="map-marker-seq">${seqNum}</span>
              </div>`,
       iconSize: [36,36], iconAnchor: [18,18], popupAnchor: [0,-20],
     });
@@ -1760,8 +1765,8 @@ function renderMapView() {
     m.on('click', () => openDetail(stop));
   });
 
-  // Road route
-  fetchDayRoute(stops).then(latlngs => {
+  // Road route — active stops only (skipped stops excluded from routing)
+  fetchDayRoute(activeStops).then(latlngs => {
     if (!latlngs || _mapDayId !== state.currentDayId) return;
     L.polyline(latlngs, {
       color: !document.body.classList.contains('light') ? '#38bdf8' : '#0284c7',
