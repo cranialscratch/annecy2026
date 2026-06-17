@@ -1,5 +1,5 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v189';
+const APP_VERSION = 'v190';
 const _errorLog = [];
 window.addEventListener('error', e => {
   _errorLog.push({ ts: new Date().toISOString(), msg: e.message || String(e), src: (e.filename||'').split('/').pop() + ':' + (e.lineno||'?') });
@@ -2483,13 +2483,11 @@ function buildTimelineItem(stop, isLast, day, nextStop) {
         <div class="tl-depart-from">${getStopName(stop)}</div>
         ${nextName ? `<div class="tl-depart-arrow"><i class="ph ph-arrow-right"></i></div><div class="tl-depart-to">${nextIcon} ${nextName}</div>` : ''}
         <div class="tl-depart-note">${getStopReason(stop)}</div>
-        ${_isToday ? `<button class="travel-action-btn departed-btn" data-stop-id="${stop.id}"><i class="ph ph-flag-checkered"></i> Departed</button>` : ''}
       </div>`;
     if (isEditable) {
       const _d = TRIP_DATA.days.find(d => d.id === state.currentDayId);
       item.querySelector('.tl-time-btn').addEventListener('click', () => openTimeModal(stop, _d));
     }
-    item.querySelector('.departed-btn')?.addEventListener('click', e => { e.stopPropagation(); openTravelAction(stop, 'departed'); });
     return item;
   }
 
@@ -2519,10 +2517,6 @@ function buildTimelineItem(stop, isLast, day, nextStop) {
         <div class="card-reason">${getStopReason(stop)}</div>
         ${buildTags(stop)}
         ${hasExplicitDuration(stop) ? `<div data-leaveby="${stop.id}" class="leave-by-pill" style="display:none"></div>` : ''}
-        ${_isToday ? `<div class="travel-actions-row">
-          ${getStopType(stop) === 'hotel' ? `<button class="travel-action-btn arrived-btn" data-stop-id="${stop.id}"><i class="ph ph-bed"></i> Arrived</button>` : ''}
-          ${hasExplicitDuration(stop) && getStopType(stop) !== 'hotel' ? `<button class="travel-action-btn extend-btn" data-stop-id="${stop.id}"><i class="ph ph-plus"></i> Extend 5m</button>` : ''}
-        </div>` : ''}
         <div class="tl-actions">${buildIconActions(stop)}</div>
       </div>
     </div>`;
@@ -2531,9 +2525,6 @@ function buildTimelineItem(stop, isLast, day, nextStop) {
     const day = TRIP_DATA.days.find(d => d.id === state.currentDayId);
     item.querySelector('.tl-time-btn').addEventListener('click', () => openTimeModal(stop, day));
   }
-  item.querySelector('.departed-btn')?.addEventListener('click', e => { e.stopPropagation(); openTravelAction(stop, 'departed'); });
-  item.querySelector('.arrived-btn')?.addEventListener('click',  e => { e.stopPropagation(); openTravelAction(stop, 'arrived'); });
-  item.querySelector('.extend-btn')?.addEventListener('click',   e => { e.stopPropagation(); extendStop(stop); });
   item.querySelector('.check-btn').addEventListener('click', e => {
     e.stopPropagation();
     toggleCheck(stop.id, item);
@@ -3065,6 +3056,33 @@ function openDetail(stop) {
     parts.push(`<a class="act-btn-full maps" href="${stop.mapsUrl}" target="_blank" rel="noopener"><i class="ph ph-map-trifold"></i> Maps</a>`);
   actEl.innerHTML = parts.join('');
   document.getElementById('detail-edit-btn').onclick = () => openEditSheet(stop);
+
+  // Travel action buttons — only shown for today's stops
+  const travelActEl = document.getElementById('detail-travel-actions');
+  if (travelActEl) {
+    const _todayStr2 = new Date().toISOString().slice(0, 10);
+    const _stopDay = TRIP_DATA.days.find(d => getDayStops(d).some(s => s.id === stop.id));
+    const _stopIsToday = _stopDay && (_stopDay.date === _todayStr2 ||
+      (_stopDay.isFestival && _todayStr2 >= _stopDay.date && _todayStr2 <= (_stopDay.dateEnd || _stopDay.date)));
+    const stopType = getStopType(stop);
+    if (_stopIsToday && stopType !== 'depart') {
+      const tParts = [];
+      if (stopType !== 'hotel')
+        tParts.push(`<button class="travel-action-btn departed-btn" data-stop-id="${stop.id}"><i class="ph ph-flag-checkered"></i> Departed</button>`);
+      if (stopType === 'hotel')
+        tParts.push(`<button class="travel-action-btn arrived-btn" data-stop-id="${stop.id}"><i class="ph ph-bed"></i> Arrived</button>`);
+      if (hasExplicitDuration(stop) && stopType !== 'hotel')
+        tParts.push(`<button class="travel-action-btn extend-btn" data-stop-id="${stop.id}"><i class="ph ph-plus"></i> Extend 5m</button>`);
+      travelActEl.innerHTML = tParts.join('');
+      travelActEl.classList.toggle('hidden', tParts.length === 0);
+      travelActEl.querySelector('.departed-btn')?.addEventListener('click', () => { closeDetail(); openTravelAction(stop, 'departed'); });
+      travelActEl.querySelector('.arrived-btn')?.addEventListener('click',  () => { closeDetail(); openTravelAction(stop, 'arrived'); });
+      travelActEl.querySelector('.extend-btn')?.addEventListener('click',   () => { extendStop(stop); closeDetail(); });
+    } else {
+      travelActEl.innerHTML = '';
+      travelActEl.classList.add('hidden');
+    }
+  }
 
   const poiSection  = document.getElementById('detail-poi-section');
   const poiCarousel = document.getElementById('detail-poi-carousel');
@@ -3639,6 +3657,8 @@ function updateHeaderHeight() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('version-badge').textContent = APP_VERSION;
+  document.getElementById('version-number').textContent = APP_VERSION;
   load();
   loadWikiCache();
   loadPlacesCache();
