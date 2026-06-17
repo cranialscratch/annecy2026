@@ -1,5 +1,5 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v191';
+const APP_VERSION = 'v192';
 const _errorLog = [];
 window.addEventListener('error', e => {
   _errorLog.push({ ts: new Date().toISOString(), msg: e.message || String(e), src: (e.filename||'').split('/').pop() + ':' + (e.lineno||'?') });
@@ -3776,6 +3776,18 @@ document.addEventListener('DOMContentLoaded', () => {
     if (versionClose) versionClose.addEventListener('click', hideVersionPanel);
     const copyDevBtn = document.getElementById('copy-dev-data-btn');
     if (copyDevBtn) copyDevBtn.addEventListener('click', copyDevData);
+    const forceUpdateBtn = document.getElementById('force-update-btn');
+    if (forceUpdateBtn) forceUpdateBtn.addEventListener('click', async () => {
+      forceUpdateBtn.disabled = true;
+      forceUpdateBtn.innerHTML = '<i class="ph ph-spinner"></i> Clearing…';
+      try {
+        const keys = await caches.keys();
+        await Promise.all(keys.map(k => caches.delete(k)));
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map(r => r.unregister()));
+      } catch (e) { /* ignore */ }
+      window.location.reload(true);
+    });
 
     // Units toggle (km / miles)
     function updateUnitsBtn() {
