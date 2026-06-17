@@ -4,16 +4,11 @@ const webpush   = require('web-push');
 
 admin.initializeApp();
 
-// VAPID keys from environment variables (set via .env file at deploy time)
-const vapidPublic  = process.env.VAPID_PUBLIC;
-const vapidPrivate = process.env.VAPID_PRIVATE;
+// VAPID key pair — generated 2026-06-17, matched pair hardcoded for reliability
+const VAPID_PUBLIC  = 'BNvSQJpqlgvQw-dEAH21uUZR-ehcDFYoq77I40RgNMppVbkFmGbOi7QClKANJ51ShZ4FQ5ajncmvPumLLp93K0Q';
+const VAPID_PRIVATE = 'vbNF4h5bCz82Tjpeo1JGB3S-HhaveW-JR1YTCCgYV8I';
 
-try {
-  if (!vapidPublic || !vapidPrivate) throw new Error('VAPID_PUBLIC or VAPID_PRIVATE not set');
-  webpush.setVapidDetails('mailto:matt@uservox.com', vapidPublic, vapidPrivate);
-} catch(e) {
-  console.error('VAPID init failed:', e.message);
-}
+webpush.setVapidDetails('mailto:matt@uservox.com', VAPID_PUBLIC, VAPID_PRIVATE);
 
 // Runs every minute — sends any push notification whose fireAt is now due
 exports.sendPushNotifs = functions

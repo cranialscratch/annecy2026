@@ -1,5 +1,5 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v199';
+const APP_VERSION = 'v200';
 const _errorLog = [];
 window.addEventListener('error', e => {
   _errorLog.push({ ts: new Date().toISOString(), msg: e.message || String(e), src: (e.filename||'').split('/').pop() + ':' + (e.lineno||'?') });
@@ -271,7 +271,7 @@ function notifGranted() {
 }
 
 /* ── Web Push (server-side delivery so notifications fire when backgrounded) */
-const VAPID_PUBLIC_KEY = 'BKmi-0vUYQ0nUypNal5_NwVmkXlLqxVtyxMOGZLVBGDkE4K96Bo5FhiM_0lza3z9-M0wRIOVA5QN7Ou0yo6XvMc';
+const VAPID_PUBLIC_KEY = 'BNvSQJpqlgvQw-dEAH21uUZR-ehcDFYoq77I40RgNMppVbkFmGbOi7QClKANJ51ShZ4FQ5ajncmvPumLLp93K0Q';
 
 function getDeviceId() {
   let id = localStorage.getItem('annecy_device_id');
@@ -3947,10 +3947,7 @@ document.addEventListener('DOMContentLoaded', () => {
       try {
         const keys = await caches.keys();
         await Promise.all(keys.map(k => caches.delete(k)));
-        const regs = await navigator.serviceWorker.getRegistrations();
-        await Promise.all(regs.map(r => r.unregister()));
-        // Clear key version so push re-subscribes fresh after SW reinstalls
-        localStorage.removeItem('vapid_key_ver');
+        // Do NOT unregister the SW — that destroys the push subscription
       } catch (e) { /* ignore */ }
       window.location.reload(true);
     });
