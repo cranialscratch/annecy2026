@@ -1,5 +1,5 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v184';
+const APP_VERSION = 'v185';
 const _errorLog = [];
 window.addEventListener('error', e => {
   _errorLog.push({ ts: new Date().toISOString(), msg: e.message || String(e), src: (e.filename||'').split('/').pop() + ':' + (e.lineno||'?') });
@@ -27,6 +27,7 @@ const state = {
   reasonOverrides: {},  // stopId → string
   veganOverrides: {},   // stopId → bool
   addedStops: {},       // dayId → [stop, ...]
+  crossDayMoves: {},    // stopId → dayId (stops moved to a different day by cascade overflow)
 };
 
 /* ── Helpers ───────────────────────────────────────────────────────── */
@@ -1008,7 +1009,30 @@ function findStop(stopId) {
 
 function getDayStops(day) {
   const added = (state.addedStops || {})[day.id] || [];
-  const all = [...day.stops, ...added];
+  const crossMoves = state.crossDayMoves || {};
+
+  // Base stops for this day, excluding any moved to a different day
+  const baseStops = day.stops.filter(s => {
+    const movedTo = crossMoves[s.id];
+    return !movedTo || movedTo === day.id;
+  });
+  const addedFiltered = added.filter(s => {
+    const movedTo = crossMoves[s.id];
+    return !movedTo || movedTo === day.id;
+  });
+
+  // Stops moved INTO this day from another day
+  const movedIn = [];
+  Object.entries(crossMoves).forEach(([stopId, targetDayId]) => {
+    if (targetDayId !== day.id) return;
+    for (const d of TRIP_DATA.days) {
+      const s = d.stops.find(s => s.id === stopId)
+             || ((state.addedStops || {})[d.id] || []).find(s => s.id === stopId);
+      if (s) { movedIn.push(s); return; }
+    }
+  });
+
+  const all = [...baseStops, ...addedFiltered, ...movedIn];
   return all.sort((a, b) => {
     const ta = timeToMinutes(getStopTime(a)), tb = timeToMinutes(getStopTime(b));
     if (ta === null && tb === null) return 0;
@@ -1288,6 +1312,7 @@ function localSave() {
     localStorage.setItem('annecy_reason_overrides',   JSON.stringify(state.reasonOverrides));
     localStorage.setItem('annecy_vegan_overrides',    JSON.stringify(state.veganOverrides));
     localStorage.setItem('annecy_added_stops',        JSON.stringify(state.addedStops));
+    localStorage.setItem('annecy_cross_day_moves',    JSON.stringify(state.crossDayMoves || {}));
   } catch {}
 }
 function save() {
@@ -1314,6 +1339,8 @@ function load() {
     if (re) state.reasonOverrides   = JSON.parse(re);
     if (ve) state.veganOverrides    = JSON.parse(ve);
     if (as) state.addedStops        = JSON.parse(as);
+    const cdm = localStorage.getItem('annecy_cross_day_moves');
+    if (cdm) state.crossDayMoves = JSON.parse(cdm);
   } catch {}
   try {
     if (localStorage.getItem('annecy_theme') === 'light') document.body.classList.add('light');
@@ -3216,13 +3243,39 @@ function saveModal() {
   const cascade = document.getElementById('modal-cascade').checked;
   const delta = timeToMinutes(newTime) - timeToMinutes(getStopTime(_modalStop));
   state.overrides[_modalStop.id] = newTime;
+
   if (cascade && delta !== 0) {
+    const days = TRIP_DATA.days;
+    const dayIdx = days.findIndex(d => d.id === _modalDay.id);
+    if (!state.crossDayMoves) state.crossDayMoves = {};
+
+    // Collect all stops after the edited stop, across this and subsequent days
     let found = false;
-    _modalDay.stops.forEach(s => {
-      if (s.id === _modalStop.id) { found = true; return; }
-      if (!found) return;
-      const cur = timeToMinutes(getStopTime(s));
-      if (cur !== null) state.overrides[s.id] = minutesToTime(cur + delta);
+    const toUpdate = [];
+    for (let di = dayIdx; di < days.length; di++) {
+      const d = days[di];
+      if (d.isCountdown || d.isFestival) break;
+      getDayStops(d).forEach(s => {
+        if (di === dayIdx && !found) {
+          if (s.id === _modalStop.id) found = true;
+          return;
+        }
+        toUpdate.push({ stop: s, origDayIdx: di });
+      });
+    }
+
+    toUpdate.forEach(({ stop, origDayIdx }) => {
+      const cur = timeToMinutes(getStopTime(stop));
+      if (cur === null) return;
+      const newMins = cur + delta;
+      const overflow = Math.floor(newMins / 1440);
+      state.overrides[stop.id] = minutesToTime(newMins);
+      const targetDayIdx = origDayIdx + overflow;
+      if (overflow !== 0 && targetDayIdx >= 0 && targetDayIdx < days.length) {
+        state.crossDayMoves[stop.id] = days[targetDayIdx].id;
+      } else if (overflow === 0 && state.crossDayMoves[stop.id] === days[origDayIdx].id) {
+        delete state.crossDayMoves[stop.id];
+      }
     });
   }
   save(); closeModal(); renderView(false);
