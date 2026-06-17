@@ -1,5 +1,5 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v207';
+const APP_VERSION = 'v208';
 const _errorLog = [];
 window.addEventListener('error', e => {
   _errorLog.push({ ts: new Date().toISOString(), msg: e.message || String(e), src: (e.filename||'').split('/').pop() + ':' + (e.lineno||'?') });
@@ -1514,6 +1514,7 @@ function renderView(scrollToNow) {
 /* ── Map view ──────────────────────────────────────────────────────── */
 let _leafletMap      = null;
 let _mapDayId        = null;
+let _mapSkipHash     = null;
 let _userLat         = null, _userLng = null;
 let _locMarker       = null, _locCircle = null;
 let _geoWatchId      = null;
@@ -1684,8 +1685,12 @@ function renderMapView() {
 
   const container = document.getElementById('map-container');
 
-  // Destroy old map if day changed
-  if (_leafletMap && _mapDayId !== state.currentDayId) {
+  // Compute a hash of which stops are skipped today so we can detect changes
+  const dayStopIds = (day.stops || []).map(s => s.id);
+  const skipHash = dayStopIds.filter(id => state.skipped[id]).join(',');
+
+  // Destroy old map if day changed or skipped stops changed
+  if (_leafletMap && (_mapDayId !== state.currentDayId || _mapSkipHash !== skipHash)) {
     _leafletMap.remove();
     _leafletMap = null;
     _locMarker = null; _locCircle = null;
@@ -1697,7 +1702,8 @@ function renderMapView() {
     return;
   }
 
-  _mapDayId = state.currentDayId;
+  _mapDayId    = state.currentDayId;
+  _mapSkipHash = skipHash;
   startLocationWatch();
 
   const isDark = !document.body.classList.contains('light');
