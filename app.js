@@ -1,5 +1,5 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v186';
+const APP_VERSION = 'v187';
 const _errorLog = [];
 window.addEventListener('error', e => {
   _errorLog.push({ ts: new Date().toISOString(), msg: e.message || String(e), src: (e.filename||'').split('/').pop() + ':' + (e.lineno||'?') });
@@ -3283,6 +3283,15 @@ function closeModal() {
   document.getElementById('modal-overlay').classList.add('hidden');
   _modalStop = _modalDay = null;
 }
+function getStopHomeDayIdx(stop) {
+  for (let i = 0; i < TRIP_DATA.days.length; i++) {
+    const d = TRIP_DATA.days[i];
+    if (d.stops?.find(s => s.id === stop.id)) return i;
+    if ((state.addedStops?.[d.id] || []).find(s => s.id === stop.id)) return i;
+  }
+  return -1;
+}
+
 function saveModal() {
   if (!_modalStop || !_modalDay) return;
   const newTime = document.getElementById('modal-time-input').value;
@@ -3295,41 +3304,64 @@ function saveModal() {
     const dayIdx = days.findIndex(d => d.id === _modalDay.id);
     if (!state.crossDayMoves) state.crossDayMoves = {};
 
-    // Collect all stops after the edited stop, across this and subsequent days
+    // Only cascade stops that ORIGINATE from _modalDay (not stops independently
+    // scheduled on later days). Include stops previously moved out of _modalDay.
+    const homeDayStops = [
+      ..._modalDay.stops,
+      ...(state.addedStops?.[_modalDay.id] || []),
+    ];
+    const homeDayIds = new Set(homeDayStops.map(s => s.id));
+
+    // Also include stops previously moved from _modalDay into later days
+    const movedFromThisDay = Object.entries(state.crossDayMoves)
+      .filter(([stopId]) => homeDayIds.has(stopId))
+      .map(([stopId]) => homeDayStops.find(s => s.id === stopId))
+      .filter(Boolean);
+
+    // Collect stops after the edited stop (by current time order)
+    const allHomeDayStops = [...homeDayStops];
+    allHomeDayStops.sort((a, b) => {
+      const ta = timeToMinutes(getStopTime(a)) ?? Infinity;
+      const tb = timeToMinutes(getStopTime(b)) ?? Infinity;
+      return ta - tb;
+    });
+
     let found = false;
     const toUpdate = [];
-    for (let di = dayIdx; di < days.length; di++) {
-      const d = days[di];
-      if (d.isCountdown || d.isFestival) break;
-      getDayStops(d).forEach(s => {
-        if (di === dayIdx && !found) {
-          if (s.id === _modalStop.id) found = true;
-          return;
-        }
-        toUpdate.push({ stop: s, origDayIdx: di });
-      });
-    }
+    allHomeDayStops.forEach(s => {
+      if (!found) { if (s.id === _modalStop.id) found = true; return; }
+      toUpdate.push(s);
+    });
+    // Also bring back any that were moved out (they may not be in sorted order above)
+    movedFromThisDay.forEach(s => {
+      if (!toUpdate.find(t => t.id === s.id) && s.id !== _modalStop.id) toUpdate.push(s);
+    });
 
     const changedStops = [];
-    toUpdate.forEach(({ stop, origDayIdx }) => {
+    toUpdate.forEach(stop => {
       const cur = timeToMinutes(getStopTime(stop));
       if (cur === null) return;
-      const newMins = cur + delta;
-      const overflow = Math.floor(newMins / 1440);
-      const newTime = minutesToTime(newMins);
-      state.overrides[stop.id] = newTime;
-      const targetDayIdx = origDayIdx + overflow;
-      if (overflow !== 0 && targetDayIdx >= 0 && targetDayIdx < days.length) {
+
+      // Compute current absolute position: home day * 1440 + time on that day
+      const currentDayIdx = state.crossDayMoves[stop.id]
+        ? days.findIndex(d => d.id === state.crossDayMoves[stop.id])
+        : dayIdx;
+      const absoluteMins = currentDayIdx * 1440 + cur;
+      const newAbsolute  = absoluteMins + delta;
+      const targetDayIdx = Math.min(Math.max(0, Math.floor(newAbsolute / 1440)), days.length - 1);
+      const newTimeStr   = minutesToTime(newAbsolute);
+
+      state.overrides[stop.id] = newTimeStr;
+
+      if (targetDayIdx !== dayIdx) {
         state.crossDayMoves[stop.id] = days[targetDayIdx].id;
-      } else if (overflow === 0 && state.crossDayMoves[stop.id] === days[origDayIdx].id) {
+      } else {
         delete state.crossDayMoves[stop.id];
       }
-      const targetDay = days[Math.min(targetDayIdx, days.length - 1)];
-      changedStops.push({ stop, newTime, dayDate: targetDay?.date || days[origDayIdx].date });
+      changedStops.push({ stop, newTime: newTimeStr, dayDate: days[targetDayIdx]?.date });
     });
 
     if (changedStops.length) {
-      // Group by day date and check the first day's stops (most relevant)
       const firstDate = changedStops[0].dayDate;
       checkCascadedStops(changedStops.filter(s => s.dayDate === firstDate), firstDate);
     }
