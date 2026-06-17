@@ -1,5 +1,5 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v195';
+const APP_VERSION = 'v196';
 const _errorLog = [];
 window.addEventListener('error', e => {
   _errorLog.push({ ts: new Date().toISOString(), msg: e.message || String(e), src: (e.filename||'').split('/').pop() + ':' + (e.lineno||'?') });
@@ -3689,6 +3689,13 @@ if ('serviceWorker' in navigator) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  // One-time reset trigger: open app with ?reset=times to clear all time data
+  if (new URLSearchParams(location.search).get('reset') === 'times') {
+    ['annecy_overrides','annecy_dur_overrides','annecy_cross_day_moves'].forEach(k => localStorage.removeItem(k));
+    // Also clear from Firebase once _db is ready (handled after syncInit)
+    window._pendingResetTimes = true;
+    history.replaceState(null, '', location.pathname);
+  }
   document.getElementById('version-badge').textContent = APP_VERSION;
   document.getElementById('version-number').textContent = APP_VERSION;
   load();

@@ -35,6 +35,12 @@ function syncInit() {
 
     setSyncStatus('connected');
     console.log('[sync] Firebase connected');
+    // One-time reset trigger
+    if (window._pendingResetTimes) {
+      window._pendingResetTimes = false;
+      _db.ref('shared/state').update({ overrides: null, durOverrides: null, crossDayMoves: null })
+        .then(() => { if (typeof renderView === 'function') renderView(false); });
+    }
     // Refresh push subscription now that _db is available
     if (typeof subscribePush === 'function' && typeof state !== 'undefined' && state.notifsEnabled) {
       subscribePush();
