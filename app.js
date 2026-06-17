@@ -1,5 +1,5 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v183';
+const APP_VERSION = 'v184';
 const _errorLog = [];
 window.addEventListener('error', e => {
   _errorLog.push({ ts: new Date().toISOString(), msg: e.message || String(e), src: (e.filename||'').split('/').pop() + ':' + (e.lineno||'?') });
@@ -1085,6 +1085,39 @@ function streetViewUrl(stop) {
 // dayId → { ts: fetchedAt, map: Map<dateString, Map<hour, {tempC, icon, conditionText}>> }
 const _weatherCache = {};
 
+function saveWeatherCache() {
+  try {
+    const serialisable = {};
+    for (const [dayId, entry] of Object.entries(_weatherCache)) {
+      if (!entry.map) continue;
+      const mapObj = {};
+      entry.map.forEach((hourMap, date) => {
+        mapObj[date] = {};
+        hourMap.forEach((w, hour) => { mapObj[date][hour] = w; });
+      });
+      serialisable[dayId] = { ts: entry.ts, map: mapObj };
+    }
+    localStorage.setItem('annecy_weather_v1', JSON.stringify(serialisable));
+  } catch(e) {}
+}
+
+function loadWeatherCache() {
+  try {
+    const saved = localStorage.getItem('annecy_weather_v1');
+    if (!saved) return;
+    const parsed = JSON.parse(saved);
+    for (const [dayId, entry] of Object.entries(parsed)) {
+      const map = new Map();
+      for (const [date, hours] of Object.entries(entry.map)) {
+        const hourMap = new Map();
+        for (const [hour, w] of Object.entries(hours)) hourMap.set(Number(hour), w);
+        map.set(date, hourMap);
+      }
+      _weatherCache[dayId] = { ts: entry.ts, map };
+    }
+  } catch(e) {}
+}
+
 // WMO weather code → Phosphor icon
 // WMO code → {icon (day), icon (night), label}
 function wmoToWeather(code, isNight) {
@@ -1145,6 +1178,7 @@ async function fetchWeatherForDay(day) {
     });
 
     _weatherCache[day.id] = { ts: Date.now(), map };
+    saveWeatherCache();
     return map;
   } catch (e) {
     _weatherCache[day.id] = { ts: Date.now(), map: null };
@@ -3254,6 +3288,7 @@ document.addEventListener('DOMContentLoaded', () => {
   loadWikiCache();
   loadPlacesCache();
   loadGooglePhotos();
+  loadWeatherCache();
   state.currentDayId = findTodayDayId() || TRIP_DATA.days[0].id;
   buildDayStrip();
   renderView(true); // scroll to now only on first load

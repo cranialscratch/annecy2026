@@ -22,6 +22,8 @@ function syncInit() {
   try {
     firebase.initializeApp(FIREBASE_CONFIG);
     _db = firebase.database();
+    // Realtime Database queues writes offline automatically.
+    // State is also persisted to localStorage via localSave() as fallback.
 
     // Listen for remote changes and apply them
     _db.ref(DB_PATH).on('value', snap => {
