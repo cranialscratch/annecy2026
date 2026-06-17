@@ -1,5 +1,5 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v182';
+const APP_VERSION = 'v183';
 const _errorLog = [];
 window.addEventListener('error', e => {
   _errorLog.push({ ts: new Date().toISOString(), msg: e.message || String(e), src: (e.filename||'').split('/').pop() + ':' + (e.lineno||'?') });
@@ -269,7 +269,7 @@ function notifGranted() {
 }
 
 /* ── Web Push (server-side delivery so notifications fire when backgrounded) */
-const VAPID_PUBLIC_KEY = 'BO4iAHni_Sj3kSZdr5x7Zcg755jVTIQ66zKCQT42psEvHCu_ia_8ABg-Z7UT1xPgoUusTVyH5Ftp0D9acj0Zvzg';
+const VAPID_PUBLIC_KEY = 'BKmi-0vUYQ0nUypNal5_NwVmkXlLqxVtyxMOGZLVBGDkE4K96Bo5FhiM_0lza3z9-M0wRIOVA5QN7Ou0yo6XvMc';
 
 function getDeviceId() {
   let id = localStorage.getItem('annecy_device_id');

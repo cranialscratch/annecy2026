@@ -30,7 +30,7 @@ jobs:
         env:
           VAPID_PRIVATE: ${{ secrets.VAPID_PRIVATE_KEY }}
         run: |
-          echo "VAPID_PUBLIC=BO4iAHni_Sj3kSZdr5x7Zcg755jVTIQ66zKCQT42psEvHCu_ia_8ABg-Z7UT1xPgoUusTVyH5Ftp0D9acj0Zvzg" > functions/.env
+          echo "VAPID_PUBLIC=BKmi-0vUYQ0nUypNal5_NwVmkXlLqxVtyxMOGZLVBGDkE4K96Bo5FhiM_0lza3z9-M0wRIOVA5QN7Ou0yo6XvMc" > functions/.env
           echo "VAPID_PRIVATE=${VAPID_PRIVATE}" >> functions/.env
 
       - name: Deploy Cloud Functions
