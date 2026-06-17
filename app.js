@@ -1,5 +1,5 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v208';
+const APP_VERSION = 'v209';
 const _errorLog = [];
 window.addEventListener('error', e => {
   _errorLog.push({ ts: new Date().toISOString(), msg: e.message || String(e), src: (e.filename||'').split('/').pop() + ':' + (e.lineno||'?') });
@@ -409,6 +409,33 @@ async function testServerPush() {
 }
 
 /* ── Version panel ─────────────────────────────────────────────────── */
+let _serverPushStatus = 'warn';
+let _serverPushNote   = 'Checking…';
+async function refreshServerPushStatus() {
+  try {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+      _serverPushStatus = 'error'; _serverPushNote = 'Push not supported'; return;
+    }
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    if (!sub) {
+      _serverPushStatus = 'warn'; _serverPushNote = 'No push subscription — tap "Send test push" to subscribe'; return;
+    }
+    if (_db) {
+      const snap = await _db.ref(`pushSubs/${getDeviceId()}`).once('value');
+      if (snap.exists()) {
+        _serverPushStatus = 'ok'; _serverPushNote = 'Subscribed + registered in Firebase';
+      } else {
+        _serverPushStatus = 'warn'; _serverPushNote = 'Local subscription exists but not in Firebase';
+      }
+    } else {
+      _serverPushStatus = 'warn'; _serverPushNote = 'Subscribed locally — Firebase not connected';
+    }
+  } catch (e) {
+    _serverPushStatus = 'warn'; _serverPushNote = 'Cannot verify — use test push to check';
+  }
+}
+
 function getFeatureStatuses() {
   const placesTotal      = Object.keys(_placesCache).length;
   const placesWithPhotos = Object.values(_placesCache).filter(v => v?.photos?.length).length;
@@ -439,7 +466,7 @@ function getFeatureStatuses() {
     { cat:'Notifications', name:'Notification permission',          status: notifPerm === 'granted' ? 'ok' : notifPerm === 'denied' ? 'error' : 'warn', note: notifPerm },
     { cat:'Notifications', name:'Departure alerts',                 status: state.notifsEnabled && notifPerm === 'granted' ? 'ok' : 'warn', note: state.notifsEnabled ? 'Enabled' : 'Disabled in settings' },
     { cat:'Notifications', name:'Push API (browser support)',       status: hasPush ? 'ok' : 'error',                                   note: hasPush ? 'PushManager available' : 'PushManager not available' },
-    { cat:'Notifications', name:'Server push (Cloud Function)',     status:'warn',                                                       note:'Cannot verify from client — use test push to check' },
+    { cat:'Notifications', name:'Server push (Cloud Function)',     status: _serverPushStatus, note: _serverPushNote },
     { cat:'SW / Cache',    name:'Service Worker support',           status: hasSW ? 'ok' : 'error',                                     note: hasSW ? 'serviceWorker in navigator' : 'Not supported' },
     { cat:'SW / Cache',    name:'Service Worker active',            status: swCtrl ? 'ok' : 'warn',                                     note: swCtrl ? `Active (cache ${APP_VERSION})` : 'Not yet controlling — reload after first install' },
     { cat:'SW / Cache',    name:'Offline / PWA cache',              status: swCtrl ? 'ok' : 'warn',                                     note: swCtrl ? 'Core assets cached' : 'SW not active yet' },
@@ -452,9 +479,21 @@ function showVersionPanel() {
   panel.classList.remove('hidden');
   requestAnimationFrame(() => panel.classList.add('open'));
 
-  // Populate feature list
+  // Populate feature list (refresh push status first, then re-render)
   const body = document.getElementById('version-body');
   if (!body) return;
+  refreshServerPushStatus().then(() => {
+    const statuses = getFeatureStatuses();
+    const cats = [...new Set(statuses.map(f => f.cat))];
+    const iconMap = { ok:'ph-check-circle', warn:'ph-warning', error:'ph-x-circle' };
+    const colMap  = { ok:'vs-ok', warn:'vs-warn', error:'vs-error' };
+    body.innerHTML = cats.map(cat => {
+      const items = statuses.filter(f => f.cat === cat);
+      return `<div class="vs-cat-label">${cat}</div>${items.map(f =>
+        `<div class="vs-row ${colMap[f.status]||'vs-warn'}"><i class="ph ${iconMap[f.status]||'ph-warning'}"></i><div><div class="vs-name">${f.name}</div><div class="vs-note">${f.note}</div></div></div>`
+      ).join('')}`;
+    }).join('');
+  });
   const statuses = getFeatureStatuses();
   const cats = [...new Set(statuses.map(f => f.cat))];
 
@@ -1685,9 +1724,11 @@ function renderMapView() {
 
   const container = document.getElementById('map-container');
 
+  // All stops for this day (base + user-added)
+  const allDayStops = [...(day.stops || []), ...(state.addedStops?.[day.id] || [])];
+
   // Compute a hash of which stops are skipped today so we can detect changes
-  const dayStopIds = (day.stops || []).map(s => s.id);
-  const skipHash = dayStopIds.filter(id => state.skipped[id]).join(',');
+  const skipHash = allDayStops.map(s => s.id).filter(id => state.skipped[id]).join(',');
 
   // Destroy old map if day changed or skipped stops changed
   if (_leafletMap && (_mapDayId !== state.currentDayId || _mapSkipHash !== skipHash)) {
@@ -1711,7 +1752,8 @@ function renderMapView() {
     ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
     : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
 
-  const stops = day.stops.filter(s => s.lat && s.lng);
+  const stops = allDayStops.filter(s => s.lat && s.lng)
+    .sort((a, b) => (a.order ?? 9999) - (b.order ?? 9999));
   const activeStops = stops.filter(s => !state.skipped[s.id]);
 
   // Countdown day: no route stops, just show user location
