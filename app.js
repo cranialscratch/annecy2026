@@ -1,5 +1,5 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v201';
+const APP_VERSION = 'v202';
 const _errorLog = [];
 window.addEventListener('error', e => {
   _errorLog.push({ ts: new Date().toISOString(), msg: e.message || String(e), src: (e.filename||'').split('/').pop() + ':' + (e.lineno||'?') });
@@ -2525,6 +2525,7 @@ function buildTimelineItem(stop, isLast, day, nextStop) {
       ${isLast ? '' : '<div class="tl-line"></div>'}
     </div>
     <div class="tl-swipe-wrap">
+      <div class="tl-swipe-track">
       <div class="tl-card${isVisited ? ' visited' : ''}${isSkipped ? ' skipped' : ''}" data-stop-id="${stop.id}">
         <div class="card-visited-badge">✓</div>
         <div class="card-skipped-badge"><i class="ph ph-x"></i> Skipped</div>
@@ -2548,6 +2549,7 @@ function buildTimelineItem(stop, isLast, day, nextStop) {
       <div class="tl-swipe-actions">
         <button class="swipe-skip-btn">${isSkipped ? '<i class="ph ph-arrow-u-up-left"></i> Restore' : '<i class="ph ph-x-circle"></i> Skip'}</button>
       </div>
+      </div>
     </div>`;
 
   if (isEditable) {
@@ -2568,9 +2570,9 @@ function buildTimelineItem(stop, isLast, day, nextStop) {
   });
 
   // Swipe-left to reveal Skip / Restore button
-  const swipeWrap = item.querySelector('.tl-swipe-wrap');
-  const swipeActions = item.querySelector('.tl-swipe-actions');
-  const SWIPE_REVEAL = 88; // px to reveal
+  const swipeWrap  = item.querySelector('.tl-swipe-wrap');
+  const swipeTrack = item.querySelector('.tl-swipe-track');
+  const SWIPE_REVEAL = 88;
   let _sx = 0, _sy = 0, _sActive = false, _sOpen = false, _sMoved = false;
   swipeWrap.addEventListener('touchstart', e => {
     _sx = e.touches[0].clientX; _sy = e.touches[0].clientY;
@@ -2584,31 +2586,30 @@ function buildTimelineItem(stop, isLast, day, nextStop) {
     _sMoved = true;
     const base = _sOpen ? -SWIPE_REVEAL : 0;
     const tx = Math.min(0, Math.max(-SWIPE_REVEAL, base + dx));
-    card.style.transition = 'none';
-    card.style.transform = `translateX(${tx}px)`;
+    swipeTrack.style.transition = 'none';
+    swipeTrack.style.transform = `translateX(${tx}px)`;
   }, { passive: true });
   swipeWrap.addEventListener('touchend', e => {
     if (!_sActive || !_sMoved) { _sActive = false; return; }
     _sActive = false;
     const dx = e.changedTouches[0].clientX - _sx;
-    const threshold = SWIPE_REVEAL / 2;
-    card.style.transition = 'transform .22s ease';
-    if (!_sOpen && dx < -threshold) {
-      card.style.transform = `translateX(-${SWIPE_REVEAL}px)`;
+    swipeTrack.style.transition = 'transform .22s ease';
+    if (!_sOpen && dx < -SWIPE_REVEAL / 2) {
+      swipeTrack.style.transform = `translateX(-${SWIPE_REVEAL}px)`;
       _sOpen = true;
     } else {
-      card.style.transform = '';
+      swipeTrack.style.transform = '';
       _sOpen = false;
     }
   });
-  // Tap anywhere outside swipe actions closes it
+  // Tap the card while open → close
   card.addEventListener('click', () => {
-    if (_sOpen) { card.style.transition = 'transform .22s ease'; card.style.transform = ''; _sOpen = false; }
+    if (_sOpen) { swipeTrack.style.transition = 'transform .22s ease'; swipeTrack.style.transform = ''; _sOpen = false; }
   }, true);
   // Skip / Restore button
   item.querySelector('.swipe-skip-btn').addEventListener('click', e => {
     e.stopPropagation();
-    card.style.transition = 'transform .22s ease'; card.style.transform = ''; _sOpen = false;
+    swipeTrack.style.transition = 'transform .22s ease'; swipeTrack.style.transform = ''; _sOpen = false;
     if (state.skipped[stop.id]) {
       delete state.skipped[stop.id];
     } else {

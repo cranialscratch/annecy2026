@@ -488,18 +488,20 @@ body.light .tl-depart-row {
 /* ─── Swipe-reveal wrapper ──────────────────────────────────────────── */
 .tl-swipe-wrap {
   flex: 1; min-width: 0;
-  position: relative; overflow: hidden;
+  overflow: hidden;   /* clips the actions when not swiped */
   border-radius: 18px;
 }
-/* Card sits on top covering the actions; translateX reveals them */
-.tl-swipe-wrap .tl-card {
-  position: relative; z-index: 1;
-  width: 100%; box-sizing: border-box;
+/* Track: flex row wider than wrapper; translates left on swipe */
+.tl-swipe-track {
+  display: flex; align-items: stretch;
   will-change: transform;
 }
+.tl-swipe-wrap .tl-card {
+  flex: 0 0 100%; min-width: 0; /* fills wrapper exactly */
+}
 .tl-swipe-actions {
-  position: absolute; top: 0; right: 0; bottom: 0;
-  display: flex; align-items: stretch; z-index: 0;
+  flex: 0 0 88px;   /* same as SWIPE_REVEAL in JS */
+  display: flex; align-items: stretch;
 }
 .swipe-skip-btn {
   background: rgba(217,119,6,.92); color: #fff;
