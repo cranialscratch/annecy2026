@@ -1,5 +1,5 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v203';
+const APP_VERSION = 'v204';
 const _errorLog = [];
 window.addEventListener('error', e => {
   _errorLog.push({ ts: new Date().toISOString(), msg: e.message || String(e), src: (e.filename||'').split('/').pop() + ':' + (e.lineno||'?') });
@@ -2369,9 +2369,10 @@ function renderTimeline(container, scrollToNow) {
       nowLineEl = nowLine;
     }
     const nextStop = _tlStops[idx + 1] || null;
+    const prevStop = _tlStops[idx - 1] || null;
     const item = state.cardView === 'compact'
       ? buildCompactItem(stop, idx === _tlStops.length - 1, day)
-      : buildTimelineItem(stop, idx === _tlStops.length - 1, day, nextStop);
+      : buildTimelineItem(stop, idx === _tlStops.length - 1, day, nextStop, prevStop);
     (compactCard || container).appendChild(item);
   });
 
@@ -2468,7 +2469,7 @@ function buildCompactItem(stop, isLast, day) {
 }
 
 /* ── Build one timeline item ───────────────────────────────────────── */
-function buildTimelineItem(stop, isLast, day, nextStop) {
+function buildTimelineItem(stop, isLast, day, nextStop, prevStop) {
   const item = document.createElement('div');
   item.className = 'tl-item';
   item.dataset.type = getStopType(stop);
@@ -2490,6 +2491,7 @@ function buildTimelineItem(stop, isLast, day, nextStop) {
 
   // Departure stops: slim row showing where you're heading next, no photo
   if (getStopType(stop) === 'depart') {
+    const linkedSkipped = prevStop && !!state.skipped[prevStop.id];
     const nextName = nextStop ? getStopName(nextStop) : null;
     const nextIcon = nextStop ? stopTypeIcon(nextStop) : '';
     item.innerHTML = `
@@ -2499,18 +2501,21 @@ function buildTimelineItem(stop, isLast, day, nextStop) {
         </button>
       </div>
       <div class="tl-line-wrap">
-        <div class="tl-dot tl-dot--depart"></div>
+        <div class="tl-dot tl-dot--depart${linkedSkipped ? ' tl-dot--skipped' : ''}"></div>
         ${isLast ? '' : '<div class="tl-line"></div>'}
       </div>
-      <div class="tl-depart-row" data-stop-id="${stop.id}">
+      <div class="tl-depart-row${linkedSkipped ? ' depart-skipped' : ''}" data-stop-id="${stop.id}">
+        ${linkedSkipped ? '<span class="depart-skipped-badge"><i class="ph ph-x-circle"></i> Skipped</span>' : ''}
         <div class="tl-depart-from">${getStopName(stop)}</div>
         ${nextName ? `<div class="tl-depart-arrow"><i class="ph ph-arrow-right"></i></div><div class="tl-depart-to">${nextIcon} ${nextName}</div>` : ''}
         <div class="tl-depart-note">${getStopReason(stop)}</div>
+        <div class="depart-edit-hint"><i class="ph ph-pencil"></i> Tap to edit</div>
       </div>`;
-    if (isEditable) {
-      const _d = TRIP_DATA.days.find(d => d.id === state.currentDayId);
-      item.querySelector('.tl-time-btn').addEventListener('click', () => openTimeModal(stop, _d));
-    }
+    const _d = TRIP_DATA.days.find(d => d.id === state.currentDayId);
+    item.querySelector('.tl-time-btn').addEventListener('click', () => openTimeModal(stop, _d));
+    // Tap the depart row to edit departure time
+    item.querySelector('.tl-depart-row').addEventListener('click', () => openTimeModal(stop, _d));
+    item.querySelector('.tl-depart-row').style.cursor = 'pointer';
     return item;
   }
 
@@ -3577,6 +3582,12 @@ async function skipStop(stop) {
   const idx = dayStops.findIndex(s => s.id === stop.id);
   const prevStop = idx > 0 ? dayStops[idx - 1] : null;
   const nextStop = idx < dayStops.length - 1 ? dayStops[idx + 1] : null;
+
+  // Auto-skip the immediately following depart stop (it's linked to this stop)
+  const departAfter = dayStops[idx + 1];
+  if (departAfter && getStopType(departAfter) === 'depart') {
+    state.skipped[departAfter.id] = true;
+  }
 
   if (!nextStop) { save(); renderView(false); return; }
 
