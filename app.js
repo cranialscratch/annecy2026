@@ -1,5 +1,5 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v185';
+const APP_VERSION = 'v186';
 const _errorLog = [];
 window.addEventListener('error', e => {
   _errorLog.push({ ts: new Date().toISOString(), msg: e.message || String(e), src: (e.filename||'').split('/').pop() + ':' + (e.lineno||'?') });
@@ -852,13 +852,14 @@ async function fetchPlacesPhotos(stop) {
     }
     const placeId = best.id;
 
-    // Step 2: Place Details to get photo references
+    // Step 2: Place Details to get photo references + opening hours
     const detailRes = await fetch(`https://places.googleapis.com/v1/places/${placeId}`, {
-      headers: { 'X-Goog-Api-Key': GKEY, 'X-Goog-FieldMask': 'photos' },
+      headers: { 'X-Goog-Api-Key': GKEY, 'X-Goog-FieldMask': 'photos,regularOpeningHours' },
     });
     if (!detailRes.ok) return [];
     const detailData = await detailRes.json();
     const refs = detailData.photos || [];
+    const openingHours = detailData.regularOpeningHours?.periods || null;
     if (!refs.length) return [];
 
     // Step 3: Score, sort, cap at 20
@@ -874,10 +875,55 @@ async function fetchPlacesPhotos(stop) {
       (ref.authorAttributions || []).map(a => a.displayName).filter(Boolean).join(', ')
     );
 
-    _placesCache[stop.id] = { placeId, photos, attributions, ts: Date.now() };
+    _placesCache[stop.id] = { placeId, photos, attributions, openingHours, ts: Date.now() };
     savePlacesCache();
     return photos;
   } catch { return []; }
+}
+
+/* Returns 'open'|'closed'|'unknown' for a stop at a given "HH:MM" time on a given JS Date */
+function isStopOpenAt(stop, timeStr, date) {
+  const periods = _placesCache[stop.id]?.openingHours;
+  if (!periods) return 'unknown';
+  const mins = timeToMinutes(timeStr);
+  if (mins === null) return 'unknown';
+  const dayOfWeek = date.getDay(); // 0=Sun
+  const h = Math.floor(mins / 60), m = mins % 60;
+  const nowTotal = h * 60 + m;
+
+  for (const p of periods) {
+    const openDay  = p.open?.day  ?? -1;
+    const openH    = p.open?.hour ?? 0;
+    const openM    = p.open?.minute ?? 0;
+    const closeDay = p.close?.day ?? p.open?.day ?? -1;
+    const closeH   = p.close?.hour ?? 23;
+    const closeM   = p.close?.minute ?? 59;
+
+    if (openDay !== dayOfWeek) continue;
+    const openTotal  = openH  * 60 + openM;
+    const closeTotal = closeH * 60 + closeM + (closeDay !== openDay ? 1440 : 0);
+    if (nowTotal >= openTotal && nowTotal <= closeTotal) return 'open';
+  }
+  // No period matched
+  return 'closed';
+}
+
+/* Fetch opening hours for a stop that already has a placeId but no hours cached */
+async function fetchOpeningHours(stop) {
+  const cached = _placesCache[stop.id];
+  if (!cached?.placeId) return null;
+  if (cached.openingHours !== undefined) return cached.openingHours;
+  try {
+    const res = await fetch(`https://places.googleapis.com/v1/places/${cached.placeId}`, {
+      headers: { 'X-Goog-Api-Key': GKEY, 'X-Goog-FieldMask': 'regularOpeningHours' },
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const periods = data.regularOpeningHours?.periods || null;
+    _placesCache[stop.id] = { ...cached, openingHours: periods };
+    savePlacesCache();
+    return periods;
+  } catch { return null; }
 }
 
 function getPlacesAttribution(stop, idx) {
@@ -3264,21 +3310,70 @@ function saveModal() {
       });
     }
 
+    const changedStops = [];
     toUpdate.forEach(({ stop, origDayIdx }) => {
       const cur = timeToMinutes(getStopTime(stop));
       if (cur === null) return;
       const newMins = cur + delta;
       const overflow = Math.floor(newMins / 1440);
-      state.overrides[stop.id] = minutesToTime(newMins);
+      const newTime = minutesToTime(newMins);
+      state.overrides[stop.id] = newTime;
       const targetDayIdx = origDayIdx + overflow;
       if (overflow !== 0 && targetDayIdx >= 0 && targetDayIdx < days.length) {
         state.crossDayMoves[stop.id] = days[targetDayIdx].id;
       } else if (overflow === 0 && state.crossDayMoves[stop.id] === days[origDayIdx].id) {
         delete state.crossDayMoves[stop.id];
       }
+      const targetDay = days[Math.min(targetDayIdx, days.length - 1)];
+      changedStops.push({ stop, newTime, dayDate: targetDay?.date || days[origDayIdx].date });
     });
+
+    if (changedStops.length) {
+      // Group by day date and check the first day's stops (most relevant)
+      const firstDate = changedStops[0].dayDate;
+      checkCascadedStops(changedStops.filter(s => s.dayDate === firstDate), firstDate);
+    }
   }
   save(); closeModal(); renderView(false);
+}
+
+/* ── Opening hours check after cascade ─────────────────────────────── */
+async function checkCascadedStops(changedStops, dayDate) {
+  const date = new Date(dayDate + 'T12:00:00');
+  const toCheck = changedStops.filter(({ stop }) => {
+    const type = getStopType(stop);
+    return type !== 'depart' && type !== 'charging' && type !== 'sleep';
+  });
+  if (!toCheck.length) return;
+
+  // Fetch opening hours for any stops that don't have them cached yet
+  await Promise.allSettled(toCheck.map(({ stop }) => fetchOpeningHours(stop)));
+
+  // Only prompt for stops that are definitively closed
+  const closed = toCheck.filter(({ stop, newTime }) => {
+    const status = isStopOpenAt(stop, newTime, date);
+    return status === 'closed';
+  });
+  if (!closed.length) return;
+
+  // Show the skip prompt
+  const list = document.getElementById('skip-prompt-list');
+  list.innerHTML = '';
+  closed.forEach(({ stop, newTime }) => {
+    const row = document.createElement('div');
+    row.className = 'skip-stop-row';
+    row.innerHTML = `
+      <input type="checkbox" id="skip-${stop.id}" value="${stop.id}" checked>
+      <label for="skip-${stop.id}">${stopTypeIcon(stop)} ${getStopName(stop)}</label>
+      <span class="skip-time">${newTime}</span>
+      <span class="closed-badge">Closed</span>`;
+    list.appendChild(row);
+  });
+  document.getElementById('skip-prompt-overlay').classList.remove('hidden');
+}
+
+function closeSkipPrompt() {
+  document.getElementById('skip-prompt-overlay').classList.add('hidden');
 }
 
 /* ── Day swipe (edge swipe left/right to change day) ───────────────── */
@@ -3601,6 +3696,16 @@ document.addEventListener('DOMContentLoaded', () => {
       const cur = timeToMinutes(input.value || '00:00');
       if (cur !== null) input.value = minutesToTime(cur + parseInt(btn.dataset.delta, 10));
     }));
+
+  /* Skip prompt */
+  document.getElementById('skip-prompt-close').addEventListener('click', closeSkipPrompt);
+  document.getElementById('skip-prompt-cancel').addEventListener('click', closeSkipPrompt);
+  document.getElementById('skip-prompt-confirm').addEventListener('click', () => {
+    document.querySelectorAll('#skip-prompt-list input[type=checkbox]:checked').forEach(cb => {
+      state.checked[cb.value] = true;
+    });
+    save(); renderView(false); closeSkipPrompt();
+  });
 
   /* Detail page */
   document.getElementById('detail-back').addEventListener('click', closeDetail);

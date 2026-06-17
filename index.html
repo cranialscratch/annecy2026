@@ -136,6 +136,22 @@
     </div>
   </div>
 
+  <!-- Skip-prompt sheet -->
+  <div id="skip-prompt-overlay" class="hidden">
+    <div id="skip-prompt-sheet">
+      <div class="modal-header">
+        <h3>⏰ Stops may be closed</h3>
+        <button id="skip-prompt-close" class="icon-btn"><i class="ph ph-x"></i></button>
+      </div>
+      <p style="padding: 0 20px 10px; font-size:14px; color:var(--text2)">These stops may be closed at their new times. Tick any you want to skip.</p>
+      <div id="skip-prompt-list"></div>
+      <div class="modal-footer">
+        <button id="skip-prompt-cancel" class="pill-btn secondary">Keep all</button>
+        <button id="skip-prompt-confirm" class="pill-btn primary">Skip selected</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Detail page -->
   <div id="detail-overlay" class="hidden">
     <div id="detail-page">
@@ -286,8 +302,8 @@
   <!-- Firebase (compat SDK — no bundler needed) -->
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
-  <script src="data.js?v=185"></script>
-  <script src="sync.js?v=185"></script>
-  <script src="app.js?v=185"></script>
+  <script src="data.js?v=186"></script>
+  <script src="sync.js?v=186"></script>
+  <script src="app.js?v=186"></script>
 </body>
 </html>
