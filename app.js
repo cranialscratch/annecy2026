@@ -1,5 +1,5 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v192';
+const APP_VERSION = 'v193';
 const _errorLog = [];
 window.addEventListener('error', e => {
   _errorLog.push({ ts: new Date().toISOString(), msg: e.message || String(e), src: (e.filename||'').split('/').pop() + ':' + (e.lineno||'?') });
@@ -3086,17 +3086,25 @@ function openDetail(stop) {
       if (stopType === 'hotel')
         tParts.push(`<button class="travel-action-btn arrived-btn" data-stop-id="${stop.id}"><i class="ph ph-bed"></i> Arrived</button>`);
       if (hasExplicitDuration(stop) && stopType !== 'hotel')
-        tParts.push(`<button class="travel-action-btn extend-btn" data-stop-id="${stop.id}"><i class="ph ph-plus"></i> Extend 5m</button>`);
+        tParts.push(`
+          <div class="dur-adjust-row">
+            <button class="travel-action-btn dur-minus-btn" data-stop-id="${stop.id}"><i class="ph ph-minus"></i> 5m</button>
+            <button class="travel-action-btn dur-plus-btn"  data-stop-id="${stop.id}"><i class="ph ph-plus"></i> 5m</button>
+            <button class="travel-action-btn dur-reset-btn" data-stop-id="${stop.id}"><i class="ph ph-arrow-counter-clockwise"></i> Reset</button>
+          </div>`);
       travelActEl.innerHTML = tParts.join('');
       travelActEl.classList.toggle('hidden', tParts.length === 0);
       travelActEl.querySelector('.departed-btn')?.addEventListener('click', () => { closeDetail(); openTravelAction(stop, 'departed'); });
       travelActEl.querySelector('.arrived-btn')?.addEventListener('click',  () => { closeDetail(); openTravelAction(stop, 'arrived'); });
-      travelActEl.querySelector('.extend-btn')?.addEventListener('click', () => {
-        extendStop(stop);
-        // Update the time label in the detail header to reflect the new time
+      const refreshDetail = (msg) => {
         document.getElementById('detail-time').textContent = getStopTime(stop) + (stop.tz ? ' ' + stop.tz : '');
-        showDetailConfirm(travelActEl, '+5 min added');
-      });
+        const dlb = document.getElementById('detail-leaveby');
+        if (dlb) renderLeaveByEl(dlb, stop);
+        showDetailConfirm(travelActEl, msg);
+      };
+      travelActEl.querySelector('.dur-plus-btn')?.addEventListener('click',  () => { extendStop(stop,  5); refreshDetail('+5 min'); });
+      travelActEl.querySelector('.dur-minus-btn')?.addEventListener('click', () => { extendStop(stop, -5); refreshDetail('−5 min'); });
+      travelActEl.querySelector('.dur-reset-btn')?.addEventListener('click', () => { resetStopDuration(stop); refreshDetail('Reset'); });
     } else {
       travelActEl.innerHTML = '';
       travelActEl.classList.add('hidden');
@@ -3468,22 +3476,48 @@ function showUndoToast(msg) {
   });
 }
 
-function extendStop(stop) {
+function extendStop(stop, deltaMins) {
   saveUndoSnapshot();
   const day = TRIP_DATA.days.find(d => d.id === state.currentDayId);
   if (!day) return;
   const cur = state.durOverrides[stop.id] ?? stop.duration ?? 30;
-  state.durOverrides[stop.id] = cur + 5;
-  // Cascade the 5 minute extension to following stops
-  const stops = getDayStops(day);
-  let found = false;
-  stops.forEach(s => {
-    if (!found) { if (s.id === stop.id) found = true; return; }
-    const t = timeToMinutes(getStopTime(s));
-    if (t !== null) state.overrides[s.id] = minutesToTime(t + 5);
-  });
+  const next = Math.max(5, cur + deltaMins); // never below 5 mins
+  const actual = next - cur; // real delta after floor
+  state.durOverrides[stop.id] = next;
+  // Cascade the delta to following stops
+  if (actual !== 0) {
+    const stops = getDayStops(day);
+    let found = false;
+    stops.forEach(s => {
+      if (!found) { if (s.id === stop.id) found = true; return; }
+      const t = timeToMinutes(getStopTime(s));
+      if (t !== null) state.overrides[s.id] = minutesToTime(t + actual);
+    });
+  }
   save(); renderView(false);
-  showUndoToast('+5 min added');
+  showUndoToast(`${deltaMins > 0 ? '+' : ''}${deltaMins} min`);
+}
+
+function resetStopDuration(stop) {
+  saveUndoSnapshot();
+  const day = TRIP_DATA.days.find(d => d.id === state.currentDayId);
+  if (!day) return;
+  const cur  = state.durOverrides[stop.id] ?? stop.duration ?? 30;
+  const orig = stop.duration ?? 30;
+  const delta = orig - cur; // negative if we extended, positive if shrunk
+  delete state.durOverrides[stop.id];
+  // Cascade delta to following stops
+  if (delta !== 0) {
+    const stops = getDayStops(day);
+    let found = false;
+    stops.forEach(s => {
+      if (!found) { if (s.id === stop.id) found = true; return; }
+      const t = timeToMinutes(getStopTime(s));
+      if (t !== null) state.overrides[s.id] = minutesToTime(t + delta);
+    });
+  }
+  save(); renderView(false);
+  showUndoToast('Duration reset');
 }
 
 let _travelActionStop = null;

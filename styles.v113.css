@@ -893,6 +893,7 @@ body.light .nav-btn.active::before { background: rgba(0,122,255,0.1); }
 /* ── Travel action buttons (Departed / Arrived / Extend) ────────────── */
 .travel-actions-row { display: flex; gap: 8px; margin: 8px 0 4px; flex-wrap: wrap; }
 .detail-travel-actions { display: flex; align-items: center; gap: 10px; margin: 12px 0 4px; flex-wrap: wrap; }
+.dur-adjust-row { display: flex; align-items: center; gap: 8px; }
 .detail-confirm-msg { font-size: .8rem; color: #a78bfa; opacity: 0; transition: opacity .2s; pointer-events: none; }
 .detail-confirm-msg.visible { opacity: 1; }
 .travel-action-btn {
