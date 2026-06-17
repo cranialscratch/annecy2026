@@ -1,5 +1,5 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v196';
+const APP_VERSION = 'v197';
 const _errorLog = [];
 window.addEventListener('error', e => {
   _errorLog.push({ ts: new Date().toISOString(), msg: e.message || String(e), src: (e.filename||'').split('/').pop() + ':' + (e.lineno||'?') });
@@ -3675,6 +3675,71 @@ function initDaySwipe() {
   });
 }
 
+/* ── Pull-to-refresh ───────────────────────────────────────────────── */
+function initPullToRefresh() {
+  const mc      = document.getElementById('main-content');
+  const THRESHOLD = 72; // px pulled before release triggers refresh
+  let startY = 0, pulling = false, triggered = false;
+
+  // Spinner element
+  const spinner = document.createElement('div');
+  spinner.id = 'ptr-spinner';
+  spinner.innerHTML = '<i class="ph ph-arrow-clockwise"></i>';
+  document.getElementById('app').appendChild(spinner);
+
+  mc.addEventListener('touchstart', e => {
+    if (mc.scrollTop !== 0) return;
+    if (!document.getElementById('detail-overlay').classList.contains('hidden')) return;
+    startY   = e.touches[0].clientY;
+    pulling  = true;
+    triggered = false;
+  }, { passive: true });
+
+  mc.addEventListener('touchmove', e => {
+    if (!pulling) return;
+    const dy = e.touches[0].clientY - startY;
+    if (dy <= 0) { spinner.style.transform = ''; spinner.classList.remove('visible'); return; }
+    const progress = Math.min(dy / THRESHOLD, 1);
+    spinner.style.transform = `translateY(${Math.min(dy * 0.4, THRESHOLD * 0.5)}px) rotate(${progress * 360}deg)`;
+    spinner.classList.toggle('visible', dy > 16);
+    spinner.classList.toggle('ready', dy >= THRESHOLD);
+  }, { passive: true });
+
+  mc.addEventListener('touchend', async () => {
+    if (!pulling) return;
+    pulling = false;
+    if (!spinner.classList.contains('ready')) {
+      spinner.style.transform = '';
+      spinner.classList.remove('visible', 'ready');
+      return;
+    }
+    // Triggered — spin and refresh
+    spinner.classList.add('spinning');
+    spinner.classList.remove('ready');
+    try {
+      const day = TRIP_DATA.days.find(d => d.id === state.currentDayId);
+      if (day) {
+        _weatherCache.delete(day.id);
+        await fetchWeatherForDay(day);
+      }
+      if (typeof syncInit === 'undefined' && typeof _db !== 'undefined' && _db) {
+        // Re-read remote state
+        _db.ref('shared/state').once('value').then(snap => {
+          const remote = snap.val();
+          if (remote) applyRemoteState(remote);
+        });
+      }
+      renderView(false);
+      showToast('Refreshed');
+    } finally {
+      setTimeout(() => {
+        spinner.style.transform = '';
+        spinner.classList.remove('visible', 'spinning');
+      }, 400);
+    }
+  });
+}
+
 /* ── Init ──────────────────────────────────────────────────────────── */
 function updateHeaderHeight() {
   const h = document.getElementById('app-header');
@@ -3997,6 +4062,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('detail-back').addEventListener('click', closeDetail);
   initDetailNavSwipe();
   initDaySwipe();
+  initPullToRefresh();
 
   /* Edit sheet */
   document.getElementById('edit-sheet-close').addEventListener('click', closeEditSheet);

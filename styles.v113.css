@@ -1664,6 +1664,24 @@ body.light .detail-weather-row a.weather-link {
 .detail-weather-row.hidden { display: none; }
 
 
+/* ── Pull-to-refresh spinner ────────────────────────────────────────── */
+#ptr-spinner {
+  position: fixed; top: calc(var(--header-h, 110px) - 20px); left: 50%;
+  transform: translateX(-50%) translateY(-48px);
+  width: 36px; height: 36px; border-radius: 50%;
+  background: var(--glass-bg-strong); border: 1px solid var(--glass-border);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px; color: var(--accent);
+  opacity: 0; pointer-events: none;
+  transition: opacity .15s;
+  z-index: 500;
+  will-change: transform;
+}
+#ptr-spinner.visible { opacity: 1; }
+#ptr-spinner.ready { color: #34d399; }
+#ptr-spinner.spinning i { animation: ptr-spin .6s linear infinite; }
+@keyframes ptr-spin { to { transform: rotate(360deg); } }
+
 /* ── Toast ──────────────────────────────────────────────────────────── */
 #app-toast {
   z-index: 9000;
