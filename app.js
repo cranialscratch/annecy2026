@@ -1,5 +1,5 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v210';
+const APP_VERSION = 'v211';
 const _errorLog = [];
 window.addEventListener('error', e => {
   _errorLog.push({ ts: new Date().toISOString(), msg: e.message || String(e), src: (e.filename||'').split('/').pop() + ':' + (e.lineno||'?') });
@@ -1788,7 +1788,7 @@ function renderMapView() {
     { paddingTopLeft: [32, 48], paddingBottomRight: [32, 160] }
   );
 
-  // ── Markers: remove old layer, draw fresh ─────────────────────────
+  // ── Markers: remove old layer, draw fresh (active stops only) ───────
   if (_mapMarkerLayer) { _mapMarkerLayer.remove(); _mapMarkerLayer = null; }
   const markerGroup = L.layerGroup().addTo(map);
   _mapMarkerLayer = markerGroup;
@@ -1800,18 +1800,14 @@ function renderMapView() {
     if (t !== null && t >= now && !state.checked[s.id]) { nextStopId = s.id; break; }
   }
 
-  let activeIdx = 0;
-  stops.forEach(stop => {
+  activeStops.forEach((stop, idx) => {
     const visited = !!state.checked[stop.id];
-    const skipped = !!state.skipped[stop.id];
     const isNext  = stop.id === nextStopId;
-    if (!skipped) activeIdx++;
-    const seqNum = skipped ? '✕' : activeIdx;
     const icon = L.divIcon({
       className: '',
-      html: `<div class="map-marker type-${getStopType(stop)}${visited?' visited':''}${skipped?' skipped':''}${isNext?' next-stop':''}">
+      html: `<div class="map-marker type-${getStopType(stop)}${visited?' visited':''}${isNext?' next-stop':''}">
                <span>${stopTypeIcon(stop)}</span>
-               <span class="map-marker-seq">${seqNum}</span>
+               <span class="map-marker-seq">${idx + 1}</span>
              </div>`,
       iconSize: [36,36], iconAnchor: [18,18], popupAnchor: [0,-20],
     });
