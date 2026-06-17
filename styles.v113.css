@@ -485,6 +485,27 @@ body.light .tl-depart-row {
 }
 .tl-dot--depart { opacity: 0.4; }
 
+/* ─── Swipe-reveal wrapper ──────────────────────────────────────────── */
+.tl-swipe-wrap {
+  flex: 1; min-width: 0;
+  position: relative; overflow: hidden;
+  border-radius: 18px; /* clip the revealed button to card radius */
+}
+.tl-swipe-actions {
+  position: absolute; top: 0; right: 0; bottom: 0;
+  display: flex; align-items: stretch;
+}
+.swipe-skip-btn {
+  background: rgba(217,119,6,.92); color: #fff;
+  border: none; padding: 0 22px;
+  font-size: 14px; font-weight: 600;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  cursor: pointer; -webkit-tap-highlight-color: transparent;
+  white-space: nowrap;
+}
+.swipe-skip-btn i { font-size: 20px; }
+.swipe-skip-btn:active { filter: brightness(.85); }
+
 /* ─── Card ──────────────────────────────────────────────────────────── */
 .tl-card {
   flex: 1; min-width: 0;
@@ -907,6 +928,8 @@ body.light .nav-btn.active::before { background: rgba(0,122,255,0.1); }
 .travel-actions-row { display: flex; gap: 8px; margin: 8px 0 4px; flex-wrap: wrap; }
 .detail-travel-actions { display: flex; align-items: center; gap: 10px; margin: 12px 0 4px; flex-wrap: wrap; }
 .dur-adjust-row { display: flex; align-items: center; gap: 8px; }
+.detail-skip-btn { border-color: rgba(217,119,6,.5) !important; color: #fb923c !important; }
+.detail-skip-btn.active { border-color: rgba(52,211,153,.5) !important; color: #34d399 !important; }
 .detail-confirm-msg { font-size: .8rem; color: #a78bfa; opacity: 0; transition: opacity .2s; pointer-events: none; }
 .detail-confirm-msg.visible { opacity: 1; }
 .travel-action-btn {

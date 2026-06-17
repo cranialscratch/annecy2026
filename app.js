@@ -1,5 +1,5 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v198';
+const APP_VERSION = 'v199';
 const _errorLog = [];
 window.addEventListener('error', e => {
   _errorLog.push({ ts: new Date().toISOString(), msg: e.message || String(e), src: (e.filename||'').split('/').pop() + ':' + (e.lineno||'?') });
@@ -2524,24 +2524,29 @@ function buildTimelineItem(stop, isLast, day, nextStop) {
       <div class="tl-dot"></div>
       ${isLast ? '' : '<div class="tl-line"></div>'}
     </div>
-    <div class="tl-card${isVisited ? ' visited' : ''}${isSkipped ? ' skipped' : ''}" data-stop-id="${stop.id}">
-      <div class="card-visited-badge">✓</div>
-      <div class="card-skipped-badge"><i class="ph ph-x"></i> Skipped</div>
-      ${buildSlider(stop, 'card')}
-      <div class="card-body">
-        <div class="card-top-row">
-          <div class="card-name">${stopTypeIcon(stop)} ${getStopName(stop)}</div>
-          <button class="check-btn${isVisited ? ' checked' : ''}" data-stop-id="${stop.id}" aria-label="Mark visited"><i class="ph ${isVisited ? 'ph-check-circle' : 'ph-circle'}"></i></button>
+    <div class="tl-swipe-wrap">
+      <div class="tl-card${isVisited ? ' visited' : ''}${isSkipped ? ' skipped' : ''}" data-stop-id="${stop.id}">
+        <div class="card-visited-badge">✓</div>
+        <div class="card-skipped-badge"><i class="ph ph-x"></i> Skipped</div>
+        ${buildSlider(stop, 'card')}
+        <div class="card-body">
+          <div class="card-top-row">
+            <div class="card-name">${stopTypeIcon(stop)} ${getStopName(stop)}</div>
+            <button class="check-btn${isVisited ? ' checked' : ''}" data-stop-id="${stop.id}" aria-label="Mark visited"><i class="ph ${isVisited ? 'ph-check-circle' : 'ph-circle'}"></i></button>
+          </div>
+          <div class="card-meta-row">
+            <span class="tl-card-badge">${typeLabel(getStopType(stop))}</span>
+            ${getStopPriority(stop) > 0 ? `<span class="priority-stars">${priorityStars(getStopPriority(stop))}</span>` : ''}
+            <a class="weather-pill" data-stop-id="${stop.id}" data-lat="${getStopLat(stop)||''}" data-lng="${getStopLng(stop)||''}" href="#" onclick="return false;"></a>
+          </div>
+          <div class="card-reason">${getStopReason(stop)}</div>
+          ${buildTags(stop)}
+          ${hasExplicitDuration(stop) ? `<div data-leaveby="${stop.id}" class="leave-by-pill" style="display:none"></div>` : ''}
+          <div class="tl-actions">${buildIconActions(stop)}</div>
         </div>
-        <div class="card-meta-row">
-          <span class="tl-card-badge">${typeLabel(getStopType(stop))}</span>
-          ${getStopPriority(stop) > 0 ? `<span class="priority-stars">${priorityStars(getStopPriority(stop))}</span>` : ''}
-          <a class="weather-pill" data-stop-id="${stop.id}" data-lat="${getStopLat(stop)||''}" data-lng="${getStopLng(stop)||''}" href="#" onclick="return false;"></a>
-        </div>
-        <div class="card-reason">${getStopReason(stop)}</div>
-        ${buildTags(stop)}
-        ${hasExplicitDuration(stop) ? `<div data-leaveby="${stop.id}" class="leave-by-pill" style="display:none"></div>` : ''}
-        <div class="tl-actions">${buildIconActions(stop)}</div>
+      </div>
+      <div class="tl-swipe-actions">
+        <button class="swipe-skip-btn">${isSkipped ? '<i class="ph ph-arrow-u-up-left"></i> Restore' : '<i class="ph ph-x-circle"></i> Skip'}</button>
       </div>
     </div>`;
 
@@ -2558,9 +2563,59 @@ function buildTimelineItem(stop, isLast, day, nextStop) {
   const card = item.querySelector('.tl-card');
   card.style.cursor = 'pointer';
   card.addEventListener('click', e => {
-    // Let act-btn links and check-btn handle themselves
     if (e.target.closest('.act-btn, .check-btn')) return;
     openDetail(stop);
+  });
+
+  // Swipe-left to reveal Skip / Restore button
+  const swipeWrap = item.querySelector('.tl-swipe-wrap');
+  const swipeActions = item.querySelector('.tl-swipe-actions');
+  const SWIPE_REVEAL = 88; // px to reveal
+  let _sx = 0, _sy = 0, _sActive = false, _sOpen = false, _sMoved = false;
+  swipeWrap.addEventListener('touchstart', e => {
+    _sx = e.touches[0].clientX; _sy = e.touches[0].clientY;
+    _sActive = true; _sMoved = false;
+  }, { passive: true });
+  swipeWrap.addEventListener('touchmove', e => {
+    if (!_sActive) return;
+    const dx = e.touches[0].clientX - _sx;
+    const dy = e.touches[0].clientY - _sy;
+    if (!_sMoved && Math.abs(dy) > Math.abs(dx) + 4) { _sActive = false; return; }
+    _sMoved = true;
+    const base = _sOpen ? -SWIPE_REVEAL : 0;
+    const tx = Math.min(0, Math.max(-SWIPE_REVEAL, base + dx));
+    card.style.transition = 'none';
+    card.style.transform = `translateX(${tx}px)`;
+  }, { passive: true });
+  swipeWrap.addEventListener('touchend', e => {
+    if (!_sActive || !_sMoved) { _sActive = false; return; }
+    _sActive = false;
+    const dx = e.changedTouches[0].clientX - _sx;
+    const threshold = SWIPE_REVEAL / 2;
+    card.style.transition = 'transform .22s ease';
+    if (!_sOpen && dx < -threshold) {
+      card.style.transform = `translateX(-${SWIPE_REVEAL}px)`;
+      _sOpen = true;
+    } else {
+      card.style.transform = '';
+      _sOpen = false;
+    }
+  });
+  // Tap anywhere outside swipe actions closes it
+  card.addEventListener('click', () => {
+    if (_sOpen) { card.style.transition = 'transform .22s ease'; card.style.transform = ''; _sOpen = false; }
+  }, true);
+  // Skip / Restore button
+  item.querySelector('.swipe-skip-btn').addEventListener('click', e => {
+    e.stopPropagation();
+    card.style.transition = 'transform .22s ease'; card.style.transform = ''; _sOpen = false;
+    if (state.skipped[stop.id]) {
+      delete state.skipped[stop.id];
+    } else {
+      state.skipped[stop.id] = true;
+      delete state.checked[stop.id];
+    }
+    save(); renderView(false);
   });
 
   // Photo slider still handles its own swipe; tap on slider already calls openDetail,
@@ -3089,21 +3144,25 @@ function openDetail(stop) {
     const _stopIsToday = _stopDay && (_stopDay.date === _todayStr2 ||
       (_stopDay.isFestival && _todayStr2 >= _stopDay.date && _todayStr2 <= (_stopDay.dateEnd || _stopDay.date)));
     const stopType = getStopType(stop);
-    if (_stopIsToday && stopType !== 'depart') {
+    if (stopType !== 'depart') {
+      const isSkippedNow = !!state.skipped[stop.id];
       const tParts = [];
-      if (stopType !== 'hotel')
+      if (_stopIsToday && stopType !== 'hotel')
         tParts.push(`<button class="travel-action-btn departed-btn" data-stop-id="${stop.id}"><i class="ph ph-flag-checkered"></i> Departed</button>`);
-      if (stopType === 'hotel')
+      if (_stopIsToday && stopType === 'hotel')
         tParts.push(`<button class="travel-action-btn arrived-btn" data-stop-id="${stop.id}"><i class="ph ph-bed"></i> Arrived</button>`);
-      if (hasExplicitDuration(stop) && stopType !== 'hotel')
+      if (_stopIsToday && hasExplicitDuration(stop) && stopType !== 'hotel')
         tParts.push(`
           <div class="dur-adjust-row">
             <button class="travel-action-btn dur-minus-btn" data-stop-id="${stop.id}"><i class="ph ph-minus"></i> 5m</button>
             <button class="travel-action-btn dur-plus-btn"  data-stop-id="${stop.id}"><i class="ph ph-plus"></i> 5m</button>
             <button class="travel-action-btn dur-reset-btn" data-stop-id="${stop.id}"><i class="ph ph-arrow-counter-clockwise"></i> Reset</button>
           </div>`);
+      tParts.push(`<button class="travel-action-btn detail-skip-btn${isSkippedNow ? ' active' : ''}" data-stop-id="${stop.id}">
+        <i class="ph ${isSkippedNow ? 'ph-arrow-u-up-left' : 'ph-x-circle'}"></i> ${isSkippedNow ? 'Restore stop' : 'Skip stop'}
+      </button>`);
       travelActEl.innerHTML = tParts.join('');
-      travelActEl.classList.toggle('hidden', tParts.length === 0);
+      travelActEl.classList.remove('hidden');
       travelActEl.querySelector('.departed-btn')?.addEventListener('click', () => { closeDetail(); openTravelAction(stop, 'departed'); });
       travelActEl.querySelector('.arrived-btn')?.addEventListener('click',  () => { closeDetail(); openTravelAction(stop, 'arrived'); });
       const refreshDetail = (msg) => {
@@ -3115,6 +3174,15 @@ function openDetail(stop) {
       travelActEl.querySelector('.dur-plus-btn')?.addEventListener('click',  () => { extendStop(stop,  5); refreshDetail('+5 min'); });
       travelActEl.querySelector('.dur-minus-btn')?.addEventListener('click', () => { extendStop(stop, -5); refreshDetail('−5 min'); });
       travelActEl.querySelector('.dur-reset-btn')?.addEventListener('click', () => { resetStopDuration(stop); refreshDetail('Reset'); });
+      travelActEl.querySelector('.detail-skip-btn')?.addEventListener('click', () => {
+        if (state.skipped[stop.id]) {
+          delete state.skipped[stop.id];
+        } else {
+          state.skipped[stop.id] = true;
+          delete state.checked[stop.id];
+        }
+        save(); renderView(false); closeDetail();
+      });
     } else {
       travelActEl.innerHTML = '';
       travelActEl.classList.add('hidden');
