@@ -1,5 +1,5 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v181';
+const APP_VERSION = 'v182';
 const _errorLog = [];
 window.addEventListener('error', e => {
   _errorLog.push({ ts: new Date().toISOString(), msg: e.message || String(e), src: (e.filename||'').split('/').pop() + ':' + (e.lineno||'?') });
@@ -290,9 +290,9 @@ async function subscribePush() {
   if (!('PushManager' in window) || !_db) return;
   try {
     const reg = await navigator.serviceWorker.ready;
-    // Re-subscribe if VAPID key changed (stored key version tracks this)
+    // Re-subscribe whenever VAPID key changes — track by full key hash
     const storedKeyVer = localStorage.getItem('vapid_key_ver');
-    const currentKeyVer = VAPID_PUBLIC_KEY.slice(-12);
+    const currentKeyVer = 'v2-' + VAPID_PUBLIC_KEY.slice(-8);
     let sub = await reg.pushManager.getSubscription();
     if (sub && storedKeyVer !== currentKeyVer) {
       await sub.unsubscribe();
@@ -2454,7 +2454,7 @@ function buildTimelineItem(stop, isLast, day, nextStop) {
       const lat   = _weatherPill.dataset.lat;
       const lng   = _weatherPill.dataset.lng;
       _weatherPill.innerHTML = `<i class="ph ${icon}"></i> ${tempC}°C`;
-      _weatherPill.title = entry.conditionText;
+      _weatherPill.title = w.conditionText;
       if (lat && lng) {
         _weatherPill.addEventListener('click', e => {
           e.stopPropagation();
