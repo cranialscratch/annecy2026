@@ -1,5 +1,5 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v202';
+const APP_VERSION = 'v203';
 const _errorLog = [];
 window.addEventListener('error', e => {
   _errorLog.push({ ts: new Date().toISOString(), msg: e.message || String(e), src: (e.filename||'').split('/').pop() + ':' + (e.lineno||'?') });
@@ -2612,11 +2612,10 @@ function buildTimelineItem(stop, isLast, day, nextStop) {
     swipeTrack.style.transition = 'transform .22s ease'; swipeTrack.style.transform = ''; _sOpen = false;
     if (state.skipped[stop.id]) {
       delete state.skipped[stop.id];
+      save(); renderView(false);
     } else {
-      state.skipped[stop.id] = true;
-      delete state.checked[stop.id];
+      skipStop(stop);
     }
-    save(); renderView(false);
   });
 
   // Photo slider still handles its own swipe; tap on slider already calls openDetail,
@@ -3178,11 +3177,11 @@ function openDetail(stop) {
       travelActEl.querySelector('.detail-skip-btn')?.addEventListener('click', () => {
         if (state.skipped[stop.id]) {
           delete state.skipped[stop.id];
+          save(); renderView(false); closeDetail();
         } else {
-          state.skipped[stop.id] = true;
-          delete state.checked[stop.id];
+          closeDetail();
+          skipStop(stop);
         }
-        save(); renderView(false); closeDetail();
       });
     } else {
       travelActEl.innerHTML = '';
@@ -3565,6 +3564,65 @@ function extendStop(stop, deltaMins) {
   save(); renderView(false);
 }
 
+async function skipStop(stop) {
+  saveUndoSnapshot();
+  state.skipped[stop.id] = true;
+  delete state.checked[stop.id];
+
+  // Find the day and surrounding stops to calculate time saving
+  const day = TRIP_DATA.days.find(d => getDayStops(d).some(s => s.id === stop.id));
+  if (!day) { save(); renderView(false); return; }
+
+  const dayStops = getDayStops(day).filter(s => getStopType(s) !== 'depart');
+  const idx = dayStops.findIndex(s => s.id === stop.id);
+  const prevStop = idx > 0 ? dayStops[idx - 1] : null;
+  const nextStop = idx < dayStops.length - 1 ? dayStops[idx + 1] : null;
+
+  if (!nextStop) { save(); renderView(false); return; }
+
+  // Time freed = duration of skipped stop
+  const freedMins = getStopDuration(stop);
+
+  // Routing delta: (prev→skip→next) vs (prev→next) if we have coords
+  let routingDelta = 0;
+  if (prevStop && getStopLat(prevStop) && getStopLng(prevStop) &&
+      getStopLat(stop) && getStopLng(stop) &&
+      getStopLat(nextStop) && getStopLng(nextStop)) {
+    const [viaTime, directTime] = await Promise.all([
+      fetchTravelMins(getStopLat(prevStop), getStopLng(prevStop), getStopLat(stop),    getStopLng(stop)),
+      fetchTravelMins(getStopLat(stop),     getStopLng(stop),     getStopLat(nextStop), getStopLng(nextStop)),
+    ]).then(([a, b]) => [
+      // via skip: prev→skip + skip→next
+      (a ?? 0) + (b ?? 0),
+      // direct: just fetch prev→next
+      null,
+    ]);
+    const directOnlyTime = await fetchTravelMins(
+      getStopLat(prevStop), getStopLng(prevStop),
+      getStopLat(nextStop), getStopLng(nextStop)
+    );
+    if (directOnlyTime !== null) routingDelta = viaTime - directOnlyTime; // positive = time saved by skipping
+  }
+
+  const totalSaving = freedMins + routingDelta;
+
+  if (totalSaving > 0) {
+    // Shift all following non-skipped stops on this day earlier
+    let found = false;
+    dayStops.forEach(s => {
+      if (!found) { if (s.id === stop.id) found = true; return; }
+      if (state.skipped[s.id]) return;
+      const t = timeToMinutes(getStopTime(s));
+      if (t !== null) state.overrides[s.id] = minutesToTime(t - totalSaving);
+    });
+    showToast(`Skipped · ${totalSaving}m saved · stops brought forward`);
+  } else {
+    showToast('Stop skipped');
+  }
+
+  save(); renderView(false);
+}
+
 function resetStopDuration(stop) {
   saveUndoSnapshot();
   delete state.durOverrides[stop.id];
@@ -3599,9 +3657,10 @@ function openTravelAction(stop, type) {
           && !['depart','transport','hotel','charging'].includes(getStopType(s));
       });
       remaining.forEach(s => {
+        const alreadySkipped = !!state.skipped[s.id];
         const row = document.createElement('label');
-        row.className = 'skip-stop-row';
-        row.innerHTML = `<input type="checkbox" value="${s.id}"><span style="flex:1">${stopTypeIcon(s)} ${getStopName(s)}</span><span class="skip-time">${getStopTime(s)}</span>`;
+        row.className = 'skip-stop-row' + (alreadySkipped ? ' already-skipped' : '');
+        row.innerHTML = `<input type="checkbox" value="${s.id}"${alreadySkipped ? '' : ' checked'}><span style="flex:1">${stopTypeIcon(s)} ${getStopName(s)}${alreadySkipped ? ' <em style="opacity:.5;font-style:normal;font-size:.8em">skipped</em>' : ''}</span><span class="skip-time">${getStopTime(s)}</span>`;
         skipList.appendChild(row);
       });
     }
