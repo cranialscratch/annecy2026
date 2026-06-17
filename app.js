@@ -1,5 +1,5 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v190';
+const APP_VERSION = 'v191';
 const _errorLog = [];
 window.addEventListener('error', e => {
   _errorLog.push({ ts: new Date().toISOString(), msg: e.message || String(e), src: (e.filename||'').split('/').pop() + ':' + (e.lineno||'?') });
@@ -577,6 +577,20 @@ function showToast(msg, durationMs = 2800) {
   el.classList.add('visible');
   clearTimeout(el._t);
   el._t = setTimeout(() => el.classList.remove('visible'), durationMs);
+}
+
+let _detailConfirmTimer = null;
+function showDetailConfirm(container, msg) {
+  let el = container.querySelector('.detail-confirm-msg');
+  if (!el) {
+    el = document.createElement('span');
+    el.className = 'detail-confirm-msg';
+    container.appendChild(el);
+  }
+  el.textContent = msg;
+  el.classList.add('visible');
+  clearTimeout(_detailConfirmTimer);
+  _detailConfirmTimer = setTimeout(() => el.classList.remove('visible'), 2000);
 }
 
 async function enableNotifs() {
@@ -3077,7 +3091,12 @@ function openDetail(stop) {
       travelActEl.classList.toggle('hidden', tParts.length === 0);
       travelActEl.querySelector('.departed-btn')?.addEventListener('click', () => { closeDetail(); openTravelAction(stop, 'departed'); });
       travelActEl.querySelector('.arrived-btn')?.addEventListener('click',  () => { closeDetail(); openTravelAction(stop, 'arrived'); });
-      travelActEl.querySelector('.extend-btn')?.addEventListener('click',   () => { extendStop(stop); closeDetail(); });
+      travelActEl.querySelector('.extend-btn')?.addEventListener('click', () => {
+        extendStop(stop);
+        // Update the time label in the detail header to reflect the new time
+        document.getElementById('detail-time').textContent = getStopTime(stop) + (stop.tz ? ' ' + stop.tz : '');
+        showDetailConfirm(travelActEl, '+5 min added');
+      });
     } else {
       travelActEl.innerHTML = '';
       travelActEl.classList.add('hidden');
