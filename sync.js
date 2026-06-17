@@ -35,6 +35,10 @@ function syncInit() {
 
     setSyncStatus('connected');
     console.log('[sync] Firebase connected');
+    // Refresh push subscription now that _db is available
+    if (typeof subscribePush === 'function' && typeof state !== 'undefined' && state.notifsEnabled) {
+      subscribePush();
+    }
   } catch (e) {
     console.warn('[sync] Firebase init failed:', e);
     setSyncStatus('error');

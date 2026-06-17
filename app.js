@@ -1,5 +1,5 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v194';
+const APP_VERSION = 'v195';
 const _errorLog = [];
 window.addEventListener('error', e => {
   _errorLog.push({ ts: new Date().toISOString(), msg: e.message || String(e), src: (e.filename||'').split('/').pop() + ':' + (e.lineno||'?') });
@@ -3681,6 +3681,13 @@ function updateHeaderHeight() {
   if (h) document.documentElement.style.setProperty('--header-h', h.offsetHeight + 'px');
 }
 
+// Auto-reload when a new service worker activates
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('message', e => {
+    if (e.data?.type === 'SW_UPDATED') window.location.reload(true);
+  });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('version-badge').textContent = APP_VERSION;
   document.getElementById('version-number').textContent = APP_VERSION;
@@ -3791,6 +3798,8 @@ document.addEventListener('DOMContentLoaded', () => {
         await Promise.all(keys.map(k => caches.delete(k)));
         const regs = await navigator.serviceWorker.getRegistrations();
         await Promise.all(regs.map(r => r.unregister()));
+        // Clear key version so push re-subscribes fresh after SW reinstalls
+        localStorage.removeItem('vapid_key_ver');
       } catch (e) { /* ignore */ }
       window.location.reload(true);
     });
