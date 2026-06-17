@@ -1,5 +1,5 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v187';
+const APP_VERSION = 'v188';
 const _errorLog = [];
 window.addEventListener('error', e => {
   _errorLog.push({ ts: new Date().toISOString(), msg: e.message || String(e), src: (e.filename||'').split('/').pop() + ':' + (e.lineno||'?') });
@@ -3279,6 +3279,21 @@ function openTimeModal(stop, day) {
   document.getElementById('modal-cascade').checked = state.cascadeEnabled;
   document.getElementById('modal-overlay').classList.remove('hidden');
 }
+function resetDayTimes() {
+  if (!_modalDay) return;
+  // Clear time overrides and cross-day moves for all stops originating from this day
+  const stops = [
+    ..._modalDay.stops,
+    ...(state.addedStops?.[_modalDay.id] || []),
+  ];
+  stops.forEach(s => {
+    delete state.overrides[s.id];
+    delete state.crossDayMoves[s.id];
+  });
+  save(); closeModal(); renderView(false);
+  showToast('Day times reset to defaults');
+}
+
 function closeModal() {
   document.getElementById('modal-overlay').classList.add('hidden');
   _modalStop = _modalDay = null;
@@ -3720,6 +3735,7 @@ document.addEventListener('DOMContentLoaded', () => {
   /* Time modal */
   document.getElementById('modal-close').addEventListener('click', closeModal);
   document.getElementById('modal-cancel').addEventListener('click', closeModal);
+  document.getElementById('modal-reset-day').addEventListener('click', resetDayTimes);
   document.getElementById('modal-overlay').addEventListener('click', e => { if (e.target.id === 'modal-overlay') closeModal(); });
   document.getElementById('modal-save').addEventListener('click', saveModal);
   document.querySelectorAll('.time-adj').forEach(btn =>
