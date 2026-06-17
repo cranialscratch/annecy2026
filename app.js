@@ -1,5 +1,5 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v205';
+const APP_VERSION = 'v206';
 const _errorLog = [];
 window.addEventListener('error', e => {
   _errorLog.push({ ts: new Date().toISOString(), msg: e.message || String(e), src: (e.filename||'').split('/').pop() + ':' + (e.lineno||'?') });
@@ -3717,7 +3717,7 @@ function applyTravelAction(ripple) {
         .filter(([stopId]) => homeDayIds.has(stopId))
         .map(([stopId]) => homeDayStops.find(s => s.id === stopId)).filter(Boolean);
       const sorted = [...homeDayStops, ...movedFromThisDay.filter(s => !homeDayIds.has(s.id))];
-      sorted.sort((a, b) => (timeToMinutes(getStopTime(a)) ?? 9999) - (timeToMinutes(getStopTime(b)) ?? 9999));
+      sorted.sort((a, b) => (a.order ?? 9999) - (b.order ?? 9999));
       let found = false;
       sorted.forEach(s => {
         if (!found) { if (s.id === _travelActionStop.id) found = true; return; }
