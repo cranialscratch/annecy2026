@@ -1,5 +1,5 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v204';
+const APP_VERSION = 'v205';
 const _errorLog = [];
 window.addEventListener('error', e => {
   _errorLog.push({ ts: new Date().toISOString(), msg: e.message || String(e), src: (e.filename||'').split('/').pop() + ':' + (e.lineno||'?') });
@@ -3413,7 +3413,8 @@ function openTimeModal(stop, day) {
   _modalStop = stop; _modalDay = day;
   document.getElementById('modal-location').innerHTML = stopTypeIcon(stop) + ' ' + stop.location;
   document.getElementById('modal-time-input').value = getStopTime(stop);
-  document.getElementById('modal-cascade').checked = false;
+  const stopType = getStopType(stop);
+  document.getElementById('modal-cascade').checked = (stopType === 'depart' || stopType === 'transport');
   document.getElementById('modal-overlay').classList.remove('hidden');
 }
 function resetDayTimes() {
