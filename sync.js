@@ -57,7 +57,7 @@ function applyRemoteState(remote) {
   if (remote._ts && state._localTs && remote._ts < state._localTs) return;
 
   let changed = false;
-  const keys = ['overrides','checked','locOverrides','durOverrides',
+  const keys = ['overrides','checked','skipped','locOverrides','durOverrides',
                  'typeOverrides','priorityOverrides','reasonOverrides','veganOverrides','addedStops','crossDayMoves'];
   keys.forEach(k => {
     const incoming = remote[k] || {};
@@ -82,6 +82,7 @@ function syncSave() {
   const payload = {
     overrides:         state.overrides,
     checked:           state.checked,
+    skipped:           state.skipped,
     locOverrides:      state.locOverrides,
     durOverrides:      state.durOverrides,
     typeOverrides:     state.typeOverrides,

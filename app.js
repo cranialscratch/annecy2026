@@ -1,5 +1,5 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v197';
+const APP_VERSION = 'v198';
 const _errorLog = [];
 window.addEventListener('error', e => {
   _errorLog.push({ ts: new Date().toISOString(), msg: e.message || String(e), src: (e.filename||'').split('/').pop() + ':' + (e.lineno||'?') });
@@ -19,7 +19,8 @@ const state = {
   notifsEnabled: false,
   useMetric: true,
   overrides: {},        // stopId → time string
-  checked: {},          // stopId → bool
+  checked: {},          // stopId → bool (visited)
+  skipped: {},          // stopId → bool (deliberately skipped)
   locOverrides: {},     // stopId → { name, lat, lng }
   durOverrides: {},     // stopId → minutes
   typeOverrides: {},    // stopId → type string
@@ -1365,6 +1366,7 @@ function localSave() {
   try {
     localStorage.setItem('annecy_overrides',          JSON.stringify(state.overrides));
     localStorage.setItem('annecy_checked',            JSON.stringify(state.checked));
+    localStorage.setItem('annecy_skipped',            JSON.stringify(state.skipped));
     localStorage.setItem('annecy_loc_overrides',      JSON.stringify(state.locOverrides));
     localStorage.setItem('annecy_dur_overrides',      JSON.stringify(state.durOverrides));
     localStorage.setItem('annecy_type_overrides',     JSON.stringify(state.typeOverrides));
@@ -1392,6 +1394,7 @@ function load() {
     const as = localStorage.getItem('annecy_added_stops');
     if (o)  state.overrides         = JSON.parse(o);
     if (c)  state.checked           = JSON.parse(c);
+    const sk = localStorage.getItem('annecy_skipped'); if (sk) state.skipped = JSON.parse(sk);
     if (lo) state.locOverrides      = JSON.parse(lo);
     if (du) state.durOverrides      = JSON.parse(du);
     if (ty) state.typeOverrides     = JSON.parse(ty);
@@ -1743,10 +1746,11 @@ function renderMapView() {
   // Draw stop markers
   stops.forEach((stop, idx) => {
     const visited = !!state.checked[stop.id];
+    const skipped = !!state.skipped[stop.id];
     const isNext  = stop.id === nextStopId;
     const icon = L.divIcon({
       className: '',
-      html: `<div class="map-marker type-${getStopType(stop)}${visited?' visited':''}${isNext?' next-stop':''}">
+      html: `<div class="map-marker type-${getStopType(stop)}${visited?' visited':''}${skipped?' skipped':''}${isNext?' next-stop':''}">
                <span>${stopTypeIcon(stop)}</span>
                <span class="map-marker-seq">${idx + 1}</span>
              </div>`,
@@ -2208,8 +2212,10 @@ function renderCalView(container) {
     card.id = `cal-${stop.id}`;
     card.style.cssText = `top:${top}px;height:${h}px;border-left-color:${col};`;
     const isVisited = !!state.checked[stop.id];
+    const isSkipped = !!state.skipped[stop.id];
     if (isVisited) card.classList.add('visited');
-    if (!isVisited) {
+    if (isSkipped) card.classList.add('skipped');
+    if (!isVisited && !isSkipped) {
       const depMins = t !== null ? t + dur : null;
       if (isToday && depMins !== null && depMins < nowMinutes())
         card.classList.add('cal-card--past');
@@ -2423,6 +2429,7 @@ function buildCompactItem(stop, isLast, day) {
 
   const time      = getStopTime(stop);
   const isVisited = !!state.checked[stop.id];
+  const isSkipped = !!state.skipped[stop.id];
   const info      = leaveByInfo(stop);
   const _cTodayStr = new Date().toISOString().slice(0, 10);
   const _cDay = day || TRIP_DATA.days.find(d => d.stops.some(s => s.id === stop.id));
@@ -2447,11 +2454,12 @@ function buildCompactItem(stop, isLast, day) {
       <div class="tl-dot"></div>
       ${isLast ? '' : '<div class="tl-line"></div>'}
     </div>
-    <div class="compact-body${isVisited ? ' visited' : ''}">
+    <div class="compact-body${isVisited ? ' visited' : ''}${isSkipped ? ' skipped' : ''}">
       <div class="compact-name">${stopTypeIcon(stop)} ${getStopName(stop)}</div>
       <div class="compact-meta">
         ${metaHtml}
         ${isVisited ? '<div class="compact-visited-dot"><i class="ph ph-check"></i></div>' : ''}
+        ${isSkipped ? '<div class="compact-visited-dot skipped-dot"><i class="ph ph-x"></i></div>' : ''}
       </div>
     </div>`;
 
@@ -2468,7 +2476,8 @@ function buildTimelineItem(stop, isLast, day, nextStop) {
 
   const time = getStopTime(stop);
   const isEditable = timeToMinutes(time) !== null;
-  const isVisited = !!state.checked[stop.id];
+  const isVisited  = !!state.checked[stop.id];
+  const isSkipped  = !!state.skipped[stop.id];
 
   const _todayStr = new Date().toISOString().slice(0, 10);
   const _currentDay = day || TRIP_DATA.days.find(d => d.id === state.currentDayId);
@@ -2515,8 +2524,9 @@ function buildTimelineItem(stop, isLast, day, nextStop) {
       <div class="tl-dot"></div>
       ${isLast ? '' : '<div class="tl-line"></div>'}
     </div>
-    <div class="tl-card${isVisited ? ' visited' : ''}" data-stop-id="${stop.id}">
+    <div class="tl-card${isVisited ? ' visited' : ''}${isSkipped ? ' skipped' : ''}" data-stop-id="${stop.id}">
       <div class="card-visited-badge">✓</div>
+      <div class="card-skipped-badge"><i class="ph ph-x"></i> Skipped</div>
       ${buildSlider(stop, 'card')}
       <div class="card-body">
         <div class="card-top-row">
@@ -3547,7 +3557,8 @@ function applyTravelAction(ripple) {
 
   // Mark skipped stops
   document.querySelectorAll('#travel-action-skip-list input:checked').forEach(cb => {
-    state.checked[cb.value] = true;
+    state.skipped[cb.value] = true;
+    delete state.checked[cb.value];
   });
 
   // Record actual time
@@ -4053,7 +4064,8 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('skip-prompt-cancel').addEventListener('click', closeSkipPrompt);
   document.getElementById('skip-prompt-confirm').addEventListener('click', () => {
     document.querySelectorAll('#skip-prompt-list input[type=checkbox]:checked').forEach(cb => {
-      state.checked[cb.value] = true;
+      state.skipped[cb.value] = true;
+      delete state.checked[cb.value];
     });
     save(); renderView(false); closeSkipPrompt();
   });
