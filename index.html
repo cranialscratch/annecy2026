@@ -209,6 +209,53 @@
     </div>
   </div>
 
+  <!-- Vegan place detail overlay -->
+  <div id="vd-overlay" class="hidden">
+    <div id="vd-page">
+      <div class="vd-topbar">
+        <button id="vd-back" class="icon-btn glass-btn"><i class="ph ph-arrow-left"></i></button>
+        <div class="vd-topbar-right">
+          <a id="vd-maps-link" class="icon-btn glass-btn" target="_blank" rel="noopener" title="Open in Google Maps"><i class="ph ph-google-logo"></i></a>
+        </div>
+      </div>
+      <div id="vd-hero"></div>
+      <div id="vd-body">
+        <div id="vd-meta-row"></div>
+        <h2 id="vd-name"></h2>
+        <div id="vd-hours-row"></div>
+        <div id="vd-address"></div>
+        <div id="vd-info-rows"></div>
+        <div id="vd-links-row"></div>
+      </div>
+      <div id="vd-toolbar"></div>
+    </div>
+  </div>
+
+  <!-- Vegan add-to-trip sheet -->
+  <div id="vd-add-overlay" class="hidden">
+    <div id="vd-add-sheet">
+      <div class="edit-sheet-handle"></div>
+      <div class="edit-sheet-header">
+        <h3 class="edit-sheet-title">Add to trip</h3>
+        <button id="vd-add-close" class="icon-btn"><i class="ph ph-x"></i></button>
+      </div>
+      <div class="vd-add-body">
+        <div class="edit-section-label">Day</div>
+        <div id="vd-add-days" class="vd-add-days"></div>
+        <div class="edit-section-label" style="margin-top:16px">Time</div>
+        <input type="time" id="vd-add-time" class="edit-input" value="12:00">
+        <label class="edit-toggle-row" style="margin-top:12px">
+          <div><div class="edit-toggle-label">Ripple times forward</div><div class="edit-toggle-sub">Shift later stops to make room</div></div>
+          <input type="checkbox" id="vd-add-ripple" class="edit-toggle-cb" checked>
+        </label>
+      </div>
+      <div class="modal-footer">
+        <button id="vd-add-cancel" class="pill-btn secondary">Cancel</button>
+        <button id="vd-add-confirm" class="pill-btn primary">Add stop</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Edit stop sheet -->
   <div id="edit-sheet-overlay" class="hidden">
     <div id="edit-sheet">

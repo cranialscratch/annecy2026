@@ -1,5 +1,5 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v217';
+const APP_VERSION = 'v218';
 const _errorLog = [];
 window.addEventListener('error', e => {
   _errorLog.push({ ts: new Date().toISOString(), msg: e.message || String(e), src: (e.filename||'').split('/').pop() + ':' + (e.lineno||'?') });
@@ -1998,36 +1998,342 @@ async function fetchVeganNearby(lat, lng, radiusM) {
     const elLat = el.lat ?? el.center?.lat;
     const elLng = el.lon ?? el.center?.lon;
     if (!elLat || !elLng) return null;
+    const t = el.tags || {};
     return {
-      name: el.tags?.name || 'Unnamed place',
-      type: el.tags?.amenity || 'place',
-      veganLevel: el.tags?.['diet:vegan'] || 'yes',
-      address: [el.tags?.['addr:street'], el.tags?.['addr:city']].filter(Boolean).join(', '),
+      osmId:        el.id,
+      osmType:      el.type,
+      name:         t.name || 'Unnamed place',
+      type:         t.amenity || 'place',
+      veganLevel:   t['diet:vegan'] || 'yes',
+      vegetarian:   t['diet:vegetarian'],
+      cuisine:      t.cuisine ? t.cuisine.replace(/_/g,' ').replace(/;/g, ', ') : '',
+      address:      [t['addr:housenumber'], t['addr:street'], t['addr:city']].filter(Boolean).join(' '),
+      phone:        t.phone || t['contact:phone'] || '',
+      website:      t.website || t['contact:website'] || '',
+      openingHours: t.opening_hours || '',
+      image:        t.image || t['wikimedia_commons'] || '',
       lat: elLat, lng: elLng,
       dist: haversineM(lat, lng, elLat, elLng),
     };
   }).filter(Boolean).sort((a, b) => a.dist - b.dist).slice(0, 30);
 }
 
+/* ── Opening hours parser ───────────────────────────────────────────── */
+function parseOpeningHours(str) {
+  if (!str) return { open: null, todayStr: '' };
+  const dayNames = ['Su','Mo','Tu','We','Th','Fr','Sa'];
+  const now = new Date();
+  const todayIdx = now.getDay(); // 0=Sun
+  const todayAbbr = dayNames[todayIdx];
+  const nowMins = now.getHours() * 60 + now.getMinutes();
+
+  // Normalise: replace — with -, trim
+  const norm = str.replace(/–/g, '-').replace(/\s+/g, ' ').trim();
+
+  // Split by ; into rules
+  const rules = norm.split(/\s*;\s*/);
+
+  let todayHours = '';
+  let isOpen = null;
+
+  for (const rule of rules) {
+    // "24/7"
+    if (rule === '24/7') { return { open: true, todayStr: 'Open 24/7' }; }
+
+    // Match "DAY_RANGE TIME_RANGE[, TIME_RANGE]" or "DAY TIME" or "off/closed"
+    const m = rule.match(/^([A-Za-z,\-]+)?\s*(.*)$/);
+    if (!m) continue;
+    let [, dayPart, timePart] = m;
+
+    // Check if this rule applies to today
+    let appliesToToday = false;
+    if (!dayPart || dayPart === '') {
+      appliesToToday = true;
+    } else {
+      // Parse day part e.g. "Mo-Fr", "Mo,We,Fr", "Mo-Fr,Su"
+      const segments = dayPart.split(',');
+      for (const seg of segments) {
+        if (seg.includes('-')) {
+          const [start, end] = seg.split('-');
+          const si = dayNames.indexOf(start.trim());
+          const ei = dayNames.indexOf(end.trim());
+          if (si !== -1 && ei !== -1) {
+            if (si <= ei ? (todayIdx >= si && todayIdx <= ei) : (todayIdx >= si || todayIdx <= ei))
+              appliesToToday = true;
+          }
+        } else if (dayNames.indexOf(seg.trim()) === todayIdx) {
+          appliesToToday = true;
+        }
+      }
+    }
+
+    if (!appliesToToday) continue;
+
+    timePart = timePart.trim().toLowerCase();
+    if (timePart === 'off' || timePart === 'closed') {
+      todayHours = 'Closed today';
+      isOpen = false;
+      continue;
+    }
+
+    // Parse time ranges e.g. "08:00-18:00" or "08:00-12:00,14:00-18:00"
+    const timeSegs = timePart.split(',');
+    const ranges = [];
+    let openNow = false;
+    for (const ts of timeSegs) {
+      const tm = ts.trim().match(/(\d{1,2}:\d{2})\s*-\s*(\d{1,2}:\d{2})/);
+      if (!tm) continue;
+      const toMins = s => { const [h,min] = s.split(':').map(Number); return h*60+min; };
+      const start = toMins(tm[1]), end = toMins(tm[2]);
+      ranges.push(`${tm[1]}–${tm[2]}`);
+      if (nowMins >= start && nowMins < end) openNow = true;
+    }
+    if (ranges.length) {
+      todayHours = ranges.join(', ');
+      isOpen = openNow;
+    }
+  }
+
+  return { open: isOpen, todayStr: todayHours };
+}
+
+/* ── Find matching planned stop by proximity ────────────────────────── */
+function findMatchingPlannedStop(place) {
+  for (const day of TRIP_DATA.days) {
+    for (const stop of getDayStops(day)) {
+      if (!stop.lat || !stop.lng) continue;
+      if (haversineM(place.lat, place.lng, stop.lat, stop.lng) < 150) return { stop, day };
+      // Also match by name similarity
+      const sn = stop.location?.toLowerCase() || '';
+      const pn = place.name?.toLowerCase() || '';
+      if (sn && pn && (sn.includes(pn) || pn.includes(sn))) return { stop, day };
+    }
+  }
+  return null;
+}
+
 function buildVeganCard(place) {
   const card = document.createElement('div');
   card.className = 'vegan-place-card';
   const distStr = place.dist < 1000 ? `${Math.round(place.dist)}m` : `${(place.dist / 1000).toFixed(1)}km`;
-  const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${place.lat},${place.lng}`;
   const typeLabel = { restaurant:'Restaurant', cafe:'Café', bar:'Bar', fast_food:'Takeaway', bakery:'Bakery', pub:'Pub' }[place.type] || place.type;
   const levelLabel = place.veganLevel === 'only' ? 'Fully vegan' : 'Vegan options';
   const levelClass = place.veganLevel === 'only' ? 'full' : '';
+  const { open, todayStr } = parseOpeningHours(place.openingHours);
+  const openBadge = open === true ? '<span class="vp-open-badge open">Open</span>'
+                  : open === false ? '<span class="vp-open-badge closed">Closed</span>' : '';
+  const planned = findMatchingPlannedStop(place);
   card.innerHTML = `
     <div class="vegan-place-main">
-      <div class="vegan-place-name">${place.name}</div>
-      <div class="vegan-place-meta"><span class="vegan-place-type">${typeLabel}</span><span class="alt-card-vegan ${levelClass}">${levelLabel}</span></div>
-      ${place.address ? `<div class="vegan-place-addr">${place.address}</div>` : ''}
+      <div class="vegan-place-name">${place.name}${planned ? ' <span class="vp-planned-badge"><i class="ph ph-calendar-check"></i> On itinerary</span>' : ''}</div>
+      <div class="vegan-place-meta">
+        <span class="vegan-place-type">${typeLabel}</span>
+        <span class="alt-card-vegan ${levelClass}">${levelLabel}</span>
+        ${openBadge}
+      </div>
+      ${todayStr ? `<div class="vegan-place-hours-mini">${todayStr}</div>` : ''}
     </div>
     <div class="vegan-place-right">
       <div class="vegan-place-dist">${distStr}</div>
-      <a class="vegan-place-nav" href="${mapsUrl}" target="_blank" rel="noopener"><i class="ph ph-navigation-arrow"></i></a>
+      <div class="vegan-place-chevron"><i class="ph ph-caret-right"></i></div>
     </div>`;
+  card.addEventListener('click', () => openVeganDetail(place));
   return card;
+}
+
+/* ── Vegan place detail overlay ─────────────────────────────────────── */
+let _vdPlace = null;
+
+function openVeganDetail(place) {
+  _vdPlace = place;
+  const overlay = document.getElementById('vd-overlay');
+  if (!overlay) return;
+
+  const typeLabel = { restaurant:'Restaurant', cafe:'Café', bar:'Bar', fast_food:'Takeaway', bakery:'Bakery', pub:'Pub' }[place.type] || 'Place';
+  const typeIcon  = { restaurant:'🍽', cafe:'☕', bar:'🍷', fast_food:'🥡', bakery:'🥐', pub:'🍺' }[place.type] || '🌿';
+  const levelLabel = place.veganLevel === 'only' ? 'Fully vegan' : 'Vegan options';
+  const levelClass = place.veganLevel === 'only' ? 'full' : '';
+  const distStr = place.dist < 1000 ? `${Math.round(place.dist)}m away` : `${(place.dist / 1000).toFixed(1)}km away`;
+  const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${place.lat},${place.lng}`;
+  const happycowUrl = `https://www.happycow.net/searchmap?lat=${place.lat}&lng=${place.lng}&zoom=16`;
+  const planned = findMatchingPlannedStop(place);
+  const { open, todayStr } = parseOpeningHours(place.openingHours);
+
+  // Hero
+  const hero = document.getElementById('vd-hero');
+  const typeColors = { restaurant:'#ea580c', cafe:'#d97706', bar:'#7c3aed', fast_food:'#dc2626', bakery:'#b45309', pub:'#4f46e5' };
+  const heroColor = typeColors[place.type] || '#16a34a';
+  if (place.image && place.image.startsWith('http')) {
+    hero.style.background = `url(${place.image}) center/cover no-repeat`;
+    hero.innerHTML = '<div class="vd-hero-scrim"></div>';
+  } else {
+    hero.style.background = `linear-gradient(135deg, ${heroColor}33 0%, ${heroColor}11 100%)`;
+    hero.innerHTML = `<div class="vd-hero-icon">${typeIcon}</div>`;
+  }
+
+  // Meta row
+  document.getElementById('vd-meta-row').innerHTML =
+    `<span class="tl-card-badge" style="background:${heroColor}22;color:${heroColor}">${typeLabel}</span>` +
+    `<span class="alt-card-vegan ${levelClass}" style="margin-left:8px">${levelLabel}</span>` +
+    (planned ? `<span class="vp-planned-badge" style="margin-left:8px"><i class="ph ph-calendar-check"></i> On itinerary</span>` : '') +
+    `<span class="vd-dist-label">${distStr}</span>`;
+
+  // Name
+  document.getElementById('vd-name').textContent = place.name;
+
+  // Hours
+  const hoursEl = document.getElementById('vd-hours-row');
+  if (place.openingHours) {
+    const statusClass = open === true ? 'open' : open === false ? 'closed' : '';
+    const statusText  = open === true ? 'Open now' : open === false ? 'Closed now' : '';
+    hoursEl.className = 'vd-hours-row';
+    hoursEl.innerHTML =
+      `<i class="ph ph-clock"></i>` +
+      (statusText ? `<span class="vp-open-badge ${statusClass}" style="margin-right:6px">${statusText}</span>` : '') +
+      `<span class="vd-hours-text">${todayStr || place.openingHours}</span>`;
+    if (place.openingHours && todayStr !== place.openingHours) {
+      hoursEl.innerHTML += `<button class="vd-hours-expand" id="vd-hours-toggle"><i class="ph ph-caret-down"></i></button>
+        <div class="vd-full-hours hidden" id="vd-full-hours">${place.openingHours}</div>`;
+      hoursEl.querySelector('#vd-hours-toggle')?.addEventListener('click', () => {
+        const fh = document.getElementById('vd-full-hours');
+        const btn = document.getElementById('vd-hours-toggle');
+        fh.classList.toggle('hidden');
+        btn.innerHTML = fh.classList.contains('hidden') ? '<i class="ph ph-caret-down"></i>' : '<i class="ph ph-caret-up"></i>';
+      });
+    }
+    hoursEl.classList.remove('hidden');
+  } else {
+    hoursEl.className = 'hidden';
+  }
+
+  // Address
+  const addrEl = document.getElementById('vd-address');
+  addrEl.innerHTML = place.address ? `<i class="ph ph-map-pin"></i> ${place.address}` : '';
+  addrEl.className = place.address ? 'vd-info-line' : 'hidden';
+
+  // Info rows (phone, website, cuisine)
+  const infoEl = document.getElementById('vd-info-rows');
+  const rows = [];
+  if (place.cuisine) rows.push(`<div class="vd-info-line"><i class="ph ph-fork-knife"></i> ${place.cuisine}</div>`);
+  if (place.phone)   rows.push(`<a class="vd-info-line vd-info-link" href="tel:${place.phone}"><i class="ph ph-phone"></i> ${place.phone}</a>`);
+  if (place.website) rows.push(`<a class="vd-info-line vd-info-link" href="${place.website}" target="_blank" rel="noopener"><i class="ph ph-globe"></i> Website</a>`);
+  infoEl.innerHTML = rows.join('');
+
+  // Links row (reviews/photos)
+  document.getElementById('vd-links-row').innerHTML =
+    `<div class="vd-links-label">Reviews &amp; photos</div>
+     <div class="vd-links-btns">
+       <a class="vd-link-btn gmaps" href="${mapsUrl}" target="_blank" rel="noopener"><i class="ph ph-google-logo"></i><span>Google Maps</span></a>
+       <a class="vd-link-btn happycow" href="${happycowUrl}" target="_blank" rel="noopener"><i class="ph ph-leaf"></i><span>HappyCow</span></a>
+     </div>`;
+
+  // Maps link in topbar
+  document.getElementById('vd-maps-link').href = mapsUrl;
+
+  // Toolbar
+  const addLabel = planned ? 'Already on itinerary' : 'Add to trip';
+  const addDisabled = planned ? 'disabled' : '';
+  document.getElementById('vd-toolbar').innerHTML =
+    `<a class="detail-tool-btn nav-tool" href="${mapsUrl}" target="_blank" rel="noopener"><i class="ph ph-navigation-arrow"></i>Navigate</a>` +
+    `<button class="detail-tool-btn vd-add-tool" id="vd-add-btn" ${addDisabled}><i class="ph ph-calendar-plus"></i>${addLabel}</button>`;
+
+  document.getElementById('vd-add-btn')?.addEventListener('click', () => {
+    if (!planned) openVeganAddSheet();
+  });
+
+  // Back button
+  document.getElementById('vd-back').onclick = () => {
+    overlay.classList.add('hidden');
+    _vdPlace = null;
+  };
+
+  overlay.classList.remove('hidden');
+}
+
+/* ── Add vegan place to trip ────────────────────────────────────────── */
+function openVeganAddSheet() {
+  const sheet = document.getElementById('vd-add-overlay');
+  if (!sheet) return;
+
+  // Populate day buttons
+  const daysEl = document.getElementById('vd-add-days');
+  daysEl.innerHTML = '';
+  let selectedDayId = state.currentDayId;
+  TRIP_DATA.days.filter(d => !d.isCountdown).forEach(day => {
+    const btn = document.createElement('button');
+    btn.className = 'vd-day-btn' + (day.id === selectedDayId ? ' selected' : '');
+    btn.dataset.dayId = day.id;
+    btn.innerHTML = `<span class="vd-day-btn-name">${getDayLabel(day)}</span><span class="vd-day-btn-date">${formatDate(day.date)}</span>`;
+    btn.addEventListener('click', () => {
+      daysEl.querySelectorAll('.vd-day-btn').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+      selectedDayId = day.id;
+    });
+    daysEl.appendChild(btn);
+  });
+
+  // Scroll selected day into view
+  setTimeout(() => daysEl.querySelector('.selected')?.scrollIntoView({ block:'nearest', behavior:'smooth' }), 50);
+
+  document.getElementById('vd-add-close').onclick = () => sheet.classList.add('hidden');
+  document.getElementById('vd-add-cancel').onclick = () => sheet.classList.add('hidden');
+  document.getElementById('vd-add-confirm').onclick = () => {
+    const time    = document.getElementById('vd-add-time').value || '12:00';
+    const ripple  = document.getElementById('vd-add-ripple').checked;
+    const day     = TRIP_DATA.days.find(d => d.id === selectedDayId);
+    if (!day || !_vdPlace) return;
+
+    saveUndoSnapshot();
+    const newStop = {
+      id:       'vegan_' + Date.now(),
+      time,
+      location: _vdPlace.name,
+      type:     _vdPlace.type === 'bakery' ? 'food' : (_vdPlace.type === 'cafe' ? 'food' : 'food'),
+      duration: 45,
+      reason:   (_vdPlace.cuisine ? _vdPlace.cuisine + ' — ' : '') + 'Vegan ' + (_vdPlace.veganLevel === 'only' ? '(fully vegan)' : 'options'),
+      lat:      _vdPlace.lat,
+      lng:      _vdPlace.lng,
+      mapsUrl:  `https://www.google.com/maps/search/?api=1&query=${_vdPlace.lat},${_vdPlace.lng}`,
+      veganFriendly: true,
+      order:    999,
+    };
+
+    if (!state.addedStops[day.id]) state.addedStops[day.id] = [];
+    state.addedStops[day.id].push(newStop);
+
+    if (ripple) {
+      // Shift stops that come after the new time
+      const allStops = getDayStops(day);
+      allStops.forEach(s => {
+        if (s.id === newStop.id) return;
+        const st = getStopTime(s);
+        if (st && st >= time) {
+          const dur = _vdPlace.type === 'fast_food' ? 30 : 45;
+          const [h, m] = time.split(':').map(Number);
+          const shiftedMs = (h * 60 + m + dur) * 60000;
+          const d = new Date(day.date + 'T00:00:00');
+          d.setTime(d.getTime() + shiftedMs);
+          // Simple: just leave ripple to the existing cascade — set newStop order to insert before first later stop
+          const laterStops = allStops.filter(ls => ls.id !== newStop.id && getStopTime(ls) >= time);
+          if (laterStops.length) newStop.order = (laterStops[0].order ?? 999) - 0.5;
+        }
+      });
+      applyTravelAction(day, newStop, time, true);
+    }
+
+    save();
+    sheet.classList.add('hidden');
+    document.getElementById('vd-overlay').classList.add('hidden');
+    _vdPlace = null;
+
+    // Switch to day view for that day
+    state.currentDayId = day.id;
+    state.currentView = 'day';
+    renderView(false);
+    showToast(`${newStop.location} added to ${getDayLabel(day)}`);
+  };
+
+  sheet.classList.remove('hidden');
 }
 
 function renderFilterList(container, kind) {

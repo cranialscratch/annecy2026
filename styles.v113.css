@@ -2174,3 +2174,108 @@ body.light .vegan-place-card { background: rgba(255,255,255,.7); }
   background: rgba(10,132,255,.12); color: var(--accent);
   font-size: 18px; text-decoration: none;
 }
+
+/* ── Vegan place card enhancements ──────────────────────────────────── */
+.vegan-place-card { cursor: pointer; }
+.vegan-place-chevron { color: var(--text3); font-size: 18px; }
+.vegan-place-hours-mini { font-size: 11px; color: var(--text3); margin-top: 3px; }
+.vp-open-badge { font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 20px; }
+.vp-open-badge.open   { background: rgba(48,209,88,.18); color: var(--green); }
+.vp-open-badge.closed { background: rgba(255,55,95,.15); color: var(--rose); }
+.vp-planned-badge { font-size: 11px; font-weight: 600; color: var(--accent); background: rgba(10,132,255,.12); padding: 2px 8px; border-radius: 20px; white-space: nowrap; }
+.vp-planned-badge i { vertical-align: -2px; }
+
+/* ── Vegan detail overlay ───────────────────────────────────────────── */
+#vd-overlay {
+  position: fixed; inset: 0; z-index: 400;
+  background: var(--bg);
+  transform: translateY(100%); transition: transform .32s cubic-bezier(.32,0,.25,1);
+  overflow-y: auto; -webkit-overflow-scrolling: touch;
+}
+#vd-overlay:not(.hidden) { transform: translateY(0); }
+#vd-overlay.hidden { display: none; }
+#vd-page { min-height: 100%; display: flex; flex-direction: column; position: relative; }
+
+.vd-topbar {
+  position: absolute; top: calc(var(--safe-top) + 14px); left: 16px; right: 16px;
+  display: flex; align-items: center; justify-content: space-between; z-index: 10;
+}
+.vd-topbar-right { display: flex; align-items: center; gap: 8px; }
+
+#vd-hero {
+  width: 100%; height: 220px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  position: relative; overflow: hidden;
+}
+.vd-hero-scrim { position: absolute; inset: 0; background: linear-gradient(to bottom, rgba(0,0,0,.25), rgba(0,0,0,.5)); }
+.vd-hero-icon { font-size: 64px; opacity: .6; }
+
+#vd-body { padding: 22px 22px calc(var(--safe-bot) + 100px); flex: 1; }
+#vd-meta-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+.vd-dist-label { font-size: 13px; font-weight: 600; color: var(--text3); margin-left: auto; }
+#vd-name { font-size: 28px; font-weight: 800; line-height: 1.15; letter-spacing: -.8px; margin-bottom: 14px; }
+
+.vd-hours-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; font-size: 14px; color: var(--text2); }
+.vd-hours-row i { font-size: 16px; flex-shrink: 0; }
+.vd-hours-text { flex: 1; }
+.vd-hours-expand { background: none; border: none; cursor: pointer; color: var(--text3); font-size: 18px; padding: 2px; }
+.vd-full-hours { font-size: 12px; color: var(--text3); padding: 8px 0 4px; width: 100%; line-height: 1.6; }
+.vd-full-hours.hidden { display: none; }
+
+.vd-info-line { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--text2); margin-bottom: 8px; text-decoration: none; }
+.vd-info-line i { font-size: 16px; color: var(--text3); flex-shrink: 0; }
+a.vd-info-link { color: var(--accent); }
+
+.vd-links-label { font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--text3); margin: 18px 0 10px; }
+.vd-links-btns { display: flex; gap: 8px; }
+.vd-link-btn {
+  flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 12px 14px; border-radius: 14px; text-decoration: none;
+  font-size: 14px; font-weight: 700; border: 1px solid var(--glass-border);
+  background: var(--glass-bg);
+}
+.vd-link-btn.gmaps   { color: var(--accent); background: rgba(10,132,255,.1); border-color: rgba(10,132,255,.2); }
+.vd-link-btn.happycow { color: var(--green); background: rgba(48,209,88,.1); border-color: rgba(48,209,88,.2); }
+
+#vd-toolbar {
+  position: absolute;
+  bottom: max(12px, env(safe-area-inset-bottom));
+  left: 16px; right: 16px;
+  display: flex; gap: 0;
+  background: var(--glass-bg-strong);
+  backdrop-filter: saturate(200%) brightness(1.4) blur(40px);
+  -webkit-backdrop-filter: saturate(200%) brightness(1.4) blur(40px);
+  border: 1px solid var(--glass-border);
+  box-shadow: inset 0 1px 0 var(--glass-hi), 0 8px 40px rgba(0,0,0,0.5);
+  border-radius: 100px; padding: 4px 6px; z-index: 10;
+}
+.vd-add-tool { flex: 1; background: none; border: none; cursor: pointer; text-decoration: none; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 10px 4px; color: var(--green); font-size: 11px; font-weight: 600; -webkit-tap-highlight-color: transparent; border-radius: 100px; }
+.vd-add-tool i { font-size: 22px; line-height: 1; }
+.vd-add-tool:disabled { opacity: .35; cursor: default; }
+
+/* ── Vegan add-to-trip sheet ────────────────────────────────────────── */
+#vd-add-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 500;
+  display: flex; align-items: flex-end; justify-content: center;
+}
+#vd-add-overlay.hidden { display: none; }
+#vd-add-sheet {
+  background: var(--glass-bg-strong); backdrop-filter: var(--glass); -webkit-backdrop-filter: var(--glass);
+  border: 1px solid var(--glass-border); box-shadow: inset 0 1px 0 var(--glass-hi), var(--shadow);
+  border-radius: 28px 28px 0 0; width: 100%; max-width: 500px;
+  padding-bottom: var(--safe-bot); max-height: 80vh; overflow-y: auto;
+}
+.vd-add-body { padding: 0 20px 8px; }
+.vd-add-days {
+  display: flex; gap: 8px; overflow-x: auto; padding: 4px 0 8px;
+  scrollbar-width: none; -ms-overflow-style: none;
+}
+.vd-add-days::-webkit-scrollbar { display: none; }
+.vd-day-btn {
+  flex-shrink: 0; background: var(--glass-bg); border: 1px solid var(--glass-border);
+  border-radius: 12px; padding: 10px 14px; cursor: pointer; text-align: center;
+  color: var(--text2); -webkit-tap-highlight-color: transparent;
+}
+.vd-day-btn.selected { background: rgba(10,132,255,.18); border-color: var(--accent); color: var(--accent); }
+.vd-day-btn-name { display: block; font-size: 13px; font-weight: 700; }
+.vd-day-btn-date { display: block; font-size: 11px; opacity: .7; margin-top: 2px; }
