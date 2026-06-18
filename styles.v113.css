@@ -1946,3 +1946,140 @@ body.light #devdata-ta { background: #f1f5f9; color: #1e293b; }
   border-top: 1px solid rgba(255,255,255,0.08);
 }
 body.light #devdata-footer { border-color: rgba(0,0,0,0.08); }
+
+/* ── Plan status badges on timeline cards ──────────────────────────── */
+.card-plan-badge {
+  display: none;
+  position: absolute; top: 8px; right: 8px;
+  padding: 2px 7px; border-radius: 20px;
+  font-size: 10px; font-weight: 600; letter-spacing: .02em;
+  pointer-events: none; white-space: nowrap; z-index: 2;
+}
+.tl-card.plan-conditional .card-plan-badge {
+  display: flex; align-items: center; gap: 3px;
+  background: rgba(251,146,60,.18); color: #fb923c;
+  border: 1px solid rgba(251,146,60,.35);
+}
+.tl-card.plan-weak-vegan .card-plan-badge {
+  display: flex; align-items: center; gap: 3px;
+  background: rgba(251,146,60,.18); color: #fb923c;
+  border: 1px solid rgba(251,146,60,.35);
+}
+.tl-card.plan-anchor .card-plan-badge {
+  display: flex; align-items: center; gap: 3px;
+  background: rgba(99,102,241,.18); color: #818cf8;
+  border: 1px solid rgba(99,102,241,.3);
+}
+body.light .tl-card.plan-conditional .card-plan-badge,
+body.light .tl-card.plan-weak-vegan .card-plan-badge { color: #c2410c; background: rgba(251,146,60,.12); }
+body.light .tl-card.plan-anchor .card-plan-badge { color: #4338ca; background: rgba(99,102,241,.1); }
+
+/* ── Plan status section inside detail overlay ─────────────────────── */
+#detail-plan-section {
+  margin: 0 0 16px;
+  border-radius: 14px;
+  overflow: hidden;
+}
+#detail-plan-section.hidden { display: none; }
+
+.plan-status-banner {
+  display: flex; align-items: center; gap: 8px;
+  padding: 9px 14px;
+  font-size: 13px; font-weight: 600;
+}
+.plan-status-banner.status-conditional {
+  background: rgba(251,146,60,.15); color: #fb923c;
+}
+.plan-status-banner.status-weak-vegan {
+  background: rgba(251,146,60,.12); color: #fb923c;
+}
+.plan-status-banner.status-anchor {
+  background: rgba(99,102,241,.15); color: #818cf8;
+}
+.plan-status-banner.status-booked {
+  background: rgba(52,211,153,.12); color: #34d399;
+}
+body.light .plan-status-banner.status-conditional,
+body.light .plan-status-banner.status-weak-vegan { color: #c2410c; background: rgba(251,146,60,.1); }
+body.light .plan-status-banner.status-anchor { color: #3730a3; background: rgba(99,102,241,.08); }
+body.light .plan-status-banner.status-booked { color: #047857; background: rgba(52,211,153,.1); }
+
+.plan-info-rows {
+  padding: 10px 14px 12px;
+  background: rgba(255,255,255,.04);
+  display: flex; flex-direction: column; gap: 8px;
+}
+body.light .plan-info-rows { background: rgba(0,0,0,.03); }
+
+.plan-info-row {
+  display: flex; gap: 8px; align-items: flex-start;
+  font-size: 13px; line-height: 1.4;
+}
+.plan-info-label {
+  flex: 0 0 80px; font-size: 11px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: .05em;
+  opacity: .6; padding-top: 2px;
+}
+.plan-info-value { flex: 1; opacity: .9; }
+.plan-info-value.deadline { color: #fb923c; font-weight: 600; }
+
+/* ── Alternatives section ─────────────────────────────────────────── */
+#detail-alts-section {
+  margin: 0 0 16px;
+}
+#detail-alts-section.hidden { display: none; }
+
+.detail-alts-title {
+  font-size: 12px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .06em; opacity: .55; margin-bottom: 8px;
+  display: flex; align-items: center; gap: 6px;
+}
+.alt-card {
+  background: rgba(255,255,255,.05);
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin-bottom: 8px;
+}
+body.light .alt-card { background: rgba(0,0,0,.03); border-color: rgba(0,0,0,.1); }
+.alt-card-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 6px;
+}
+.alt-card-name {
+  font-size: 14px; font-weight: 600;
+}
+.alt-card-vegan {
+  font-size: 11px; padding: 2px 7px; border-radius: 20px;
+  background: rgba(48,209,88,.2); color: #34d399;
+  font-weight: 600;
+}
+body.light .alt-card-vegan { color: #15803d; background: rgba(48,209,88,.15); }
+.alt-card-vegan.limited {
+  background: rgba(251,146,60,.15); color: #fb923c;
+}
+.alt-card-vegan.full {
+  background: rgba(48,209,88,.3); color: #34d399;
+}
+.alt-card-reason { font-size: 12px; opacity: .75; margin-bottom: 8px; line-height: 1.45; }
+.alt-card-trigger {
+  font-size: 11px; padding: 4px 9px; border-radius: 8px;
+  background: rgba(99,102,241,.12); color: #a5b4fc;
+  margin-bottom: 6px; display: inline-block; line-height: 1.4;
+}
+body.light .alt-card-trigger { background: rgba(99,102,241,.08); color: #4338ca; }
+.alt-card-actions {
+  display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap;
+}
+.alt-card-btn {
+  flex: 1; min-width: 0;
+  padding: 7px 10px; border-radius: 10px;
+  font-size: 12px; font-weight: 600;
+  border: 1px solid rgba(255,255,255,.15);
+  background: transparent; color: var(--text1);
+  cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 5px;
+  text-decoration: none;
+}
+body.light .alt-card-btn { border-color: rgba(0,0,0,.15); }
+.alt-card-btn.maps-btn { border-color: rgba(59,130,246,.4); color: #60a5fa; }
+body.light .alt-card-btn.maps-btn { color: #1d4ed8; }

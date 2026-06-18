@@ -1,5 +1,5 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v211';
+const APP_VERSION = 'v212';
 const _errorLog = [];
 window.addEventListener('error', e => {
   _errorLog.push({ ts: new Date().toISOString(), msg: e.message || String(e), src: (e.filename||'').split('/').pop() + ':' + (e.lineno||'?') });
@@ -2584,9 +2584,10 @@ function buildTimelineItem(stop, isLast, day, nextStop, prevStop) {
     </div>
     <div class="tl-swipe-wrap">
       <div class="tl-swipe-track">
-      <div class="tl-card${isVisited ? ' visited' : ''}${isSkipped ? ' skipped' : ''}" data-stop-id="${stop.id}">
+      <div class="tl-card${isVisited ? ' visited' : ''}${isSkipped ? ' skipped' : ''}${ (() => { const ps = stop.planStatus; return (ps === 'conditional' || ps === 'weak-vegan' || ps === 'anchor') ? ' plan-' + ps : ''; })() }" data-stop-id="${stop.id}">
         <div class="card-visited-badge">✓</div>
         <div class="card-skipped-badge"><i class="ph ph-x"></i> Skipped</div>
+        ${ (() => { const ps = stop.planStatus; const badges = { 'conditional': '<div class="card-plan-badge"><i class="ph ph-warning"></i> Check</div>', 'weak-vegan': '<div class="card-plan-badge"><i class="ph ph-leaf"></i> Weak vegan</div>', 'anchor': '<div class="card-plan-badge"><i class="ph ph-anchor-simple"></i> Fixed</div>' }; return badges[ps] || ''; })() }
         ${buildSlider(stop, 'card')}
         <div class="card-body">
           <div class="card-top-row">
@@ -3155,6 +3156,74 @@ function setDetailSlides(photos, stop) {
   initDetailSlider();
 }
 
+function renderDetailPlanSection(stop) {
+  const planEl = document.getElementById('detail-plan-section');
+  const altsEl = document.getElementById('detail-alts-section');
+  if (!planEl || !altsEl) return;
+
+  const ps = stop.planStatus;
+  const statusLabels = {
+    'conditional': '<i class="ph ph-warning"></i> Conditional stop — check before visiting',
+    'weak-vegan':  '<i class="ph ph-leaf"></i> Weak vegan fit — limited plant-based options',
+    'anchor':      '<i class="ph ph-anchor-simple"></i> Fixed commitment — do not skip',
+    'booked':      '<i class="ph ph-check-circle"></i> Booked — confirmed reservation',
+  };
+
+  if (ps && statusLabels[ps]) {
+    planEl.classList.remove('hidden');
+    let html = `<div class="plan-status-banner status-${ps}">${statusLabels[ps]}</div>`;
+    const rows = [];
+    if (stop.trigger)           rows.push(['When', stop.trigger]);
+    if (stop.sameDayAction)     rows.push(['Today', stop.sameDayAction]);
+    if (stop.decisionDeadline)  rows.push(['Decide by', `<span class="plan-info-value deadline">${stop.decisionDeadline}</span>`]);
+    if (rows.length) {
+      html += '<div class="plan-info-rows">' + rows.map(([label, val]) =>
+        `<div class="plan-info-row"><span class="plan-info-label">${label}</span><span class="plan-info-value">${val}</span></div>`
+      ).join('') + '</div>';
+    }
+    planEl.innerHTML = html;
+  } else if (ps === 'primary' && (stop.trigger || stop.sameDayAction || stop.decisionDeadline)) {
+    planEl.classList.remove('hidden');
+    const rows = [];
+    if (stop.trigger)           rows.push(['Note', stop.trigger]);
+    if (stop.sameDayAction)     rows.push(['Today', stop.sameDayAction]);
+    if (stop.decisionDeadline)  rows.push(['By', `<span class="plan-info-value deadline">${stop.decisionDeadline}</span>`]);
+    planEl.innerHTML = '<div class="plan-info-rows">' + rows.map(([label, val]) =>
+      `<div class="plan-info-row"><span class="plan-info-label">${label}</span><span class="plan-info-value">${val}</span></div>`
+    ).join('') + '</div>';
+  } else {
+    planEl.classList.add('hidden');
+    planEl.innerHTML = '';
+  }
+
+  const alts = stop.alternatives || [];
+  if (alts.length) {
+    altsEl.classList.remove('hidden');
+    const veganLabel = { full:'Fully vegan', wide:'Wide vegan choice', limited:'Limited vegan', single:'One vegan dish' };
+    altsEl.innerHTML = `<div class="detail-alts-title"><i class="ph ph-shuffle"></i> Alternatives</div>` +
+      alts.map(alt => {
+        const vLabel = alt.veganFit ? veganLabel[alt.veganFit] || alt.veganFit : (alt.veganFriendly ? 'Vegan-friendly' : '');
+        const vClass = { full:'full', wide:'', limited:'limited', single:'limited' }[alt.veganFit] || '';
+        return `<div class="alt-card">
+          <div class="alt-card-header">
+            <div class="alt-card-name">${stopTypeIcon(alt)} ${alt.location}</div>
+            ${vLabel ? `<span class="alt-card-vegan ${vClass}">${vLabel}</span>` : ''}
+          </div>
+          <div class="alt-card-reason">${alt.reason}</div>
+          ${alt.trigger ? `<div class="alt-card-trigger">Use when: ${alt.trigger}</div>` : ''}
+          ${alt.sameDayAction ? `<div class="plan-info-row" style="margin:4px 0 0;font-size:12px"><span class="plan-info-label">Today</span><span class="plan-info-value">${alt.sameDayAction}</span></div>` : ''}
+          <div class="alt-card-actions">
+            <a class="alt-card-btn maps-btn" href="${alt.mapsUrl}" target="_blank" rel="noopener"><i class="ph ph-map-trifold"></i> Maps</a>
+            ${alt.veganFriendly || alt.veganFit ? `<a class="alt-card-btn" href="${veganNearbyUrl(alt)}" target="_blank" rel="noopener"><i class="ph ph-leaf"></i> Vegan nearby</a>` : ''}
+          </div>
+        </div>`;
+      }).join('');
+  } else {
+    altsEl.classList.add('hidden');
+    altsEl.innerHTML = '';
+  }
+}
+
 function openDetail(stop) {
   _detailStop = stop;
   _detailCurrent = 0;
@@ -3183,6 +3252,9 @@ function openDetail(stop) {
   if (getStopVegan(stop))                    tagsEl.innerHTML += '<span class="tl-tag vegan"><i class="ph ph-leaf"></i> Vegan-friendly</span>';
   if (getStopType(stop) === 'charging')      tagsEl.innerHTML += '<span class="tl-tag charge"><i class="ph ph-lightning"></i> Supercharger</span>';
   if (getStopPriority(stop) >= 3)            tagsEl.innerHTML += '<span class="tl-tag poi">★ Must-see</span>';
+
+  // ── Plan status + alternatives ──────────────────────────────────────
+  renderDetailPlanSection(stop);
 
   const actEl = document.getElementById('detail-actions');
   const parts = [`<a class="act-btn-full tesla" href="${teslaNavUrl(stop)}" target="_blank" rel="noopener"><i class="ph ph-navigation-arrow"></i> Navigate</a>`];

@@ -30,8 +30,8 @@ const TRIP_DATA = {
         { id:"d1s6", order:6, time:"18:35", tz:"FR", location:"Saint-Valery-sur-Somme Harbour and Old Town", type:"wander", priority:2, lat:50.1833, lng:1.6333, mapsUrl:"https://maps.google.com/?q=Saint-Valery-sur-Somme+France", reason:"Open-air wander around the harbour, medieval streets and bay views; no vegan food is relied on here.", duration:55 },
         { id:"d1s8", order:7, time:"19:30", tz:"FR", location:"Depart Saint-Valery-sur-Somme", type:"depart", priority:0, lat:50.1833, lng:1.6333, mapsUrl:"https://maps.google.com/?q=Saint-Valery-sur-Somme+France", reason:"Continue to Amiens." },
         { id:"d1s9", order:8, time:"20:45", tz:"FR", location:"Tesla Supercharger Amiens Dury", type:"charging", priority:0, lat:49.8390, lng:2.2870, mapsUrl:"https://maps.google.com/?q=Auchan+Amiens+Route+de+Paris+-+Dury+80000+Amiens+France", reason:"Exact Tesla location. Open 24/7; top up before hotel and Day 2.", duration:30 },
-        { id:"d1s10", order:9, time:"21:15", tz:"FR", location:"Mian Miam, Amiens", type:"food", priority:2, lat:49.8934, lng:2.2975, mapsUrl:"https://maps.google.com/?q=Mian+Miam+12+Place+Parmentier+80000+Amiens+France", reason:"Vegan options listed; current hours show evening service until 22:30, so this timing works.", veganFriendly:true, duration:75 },
-        { id:"d1s11", order:10, time:"22:30", tz:"FR", location:"Moxy Amiens", type:"hotel", priority:0, lat:49.8941, lng:2.2958, mapsUrl:"https://maps.google.com/?q=Moxy+Amiens+29-33+Rue+Paul+Tellier+80000+Amiens+France", reason:"Overnight stay." }
+        { id:"d1s10", order:9, time:"21:15", tz:"FR", location:"Mian Miam, Amiens", type:"food", priority:2, lat:49.8934, lng:2.2975, mapsUrl:"https://maps.google.com/?q=Mian+Miam+12+Place+Parmentier+80000+Amiens+France", reason:"Vegan options listed; current hours show evening service until 22:30, so this timing works.", veganFriendly:true, duration:75, planStatus:'primary', veganFit:'wide', openingFit:'ok' },
+        { id:"d1s11", order:10, time:"22:30", tz:"FR", location:"Moxy Amiens", type:"hotel", priority:0, lat:49.8941, lng:2.2958, mapsUrl:"https://maps.google.com/?q=Moxy+Amiens+29-33+Rue+Paul+Tellier+80000+Amiens+France", reason:"Overnight stay.", planStatus:'booked' }
       ]
     },
     /* ── Day 2 — Thu 18 Jun — Amiens to Troyes ────────────────────── */
@@ -43,14 +43,84 @@ const TRIP_DATA = {
       subtitle: "Floating gardens, medieval roses & half-timbered streets",
       stops: [
         { id:"d2s1", order:1, time:"10:30", tz:"FR", location:"Moxy Amiens", type:"depart", priority:0, lat:49.8941, lng:2.2958, mapsUrl:"https://maps.google.com/?q=Moxy+Amiens+29-33+Rue+Paul+Tellier+80000+Amiens+France", reason:"Breakfast and checkout." },
-        { id:"d2s2", order:2, time:"10:45", tz:"FR", location:"Hortillonnages d'Amiens Boat Tour and Walk", type:"experience", priority:3, lat:49.8978, lng:2.3138, mapsUrl:"https://maps.google.com/?q=Hortillonnages+d%27Amiens+54+Boulevard+de+Beauvill%C3%A9+80000+Amiens+France", reason:"Must-visit floating gardens; allow around 45 minutes for the boat and a little time around the site.", duration:60 },
-        { id:"d2s4", order:3, time:"12:00", tz:"FR", location:"Le Colibri, Amiens", type:"food", priority:2, lat:49.8952, lng:2.2978, mapsUrl:"https://maps.google.com/?q=Le+Colibri+Amiens+13+Rue+Dusevel+80000+Amiens+France", reason:"HappyCow lists veganisable dishes and vegan cakes; current Thursday hours cover 12:00–13:00.", veganFriendly:true, duration:75 },
+        { id:"d2s2", order:2, time:"10:45", tz:"FR", location:"Hortillonnages d'Amiens Boat Tour and Walk", type:"experience", priority:3, lat:49.8978, lng:2.3138, mapsUrl:"https://maps.google.com/?q=Hortillonnages+d%27Amiens+54+Boulevard+de+Beauvill%C3%A9+80000+Amiens+France", reason:"Must-visit floating gardens; allow around 45 minutes for the boat and a little time around the site.", duration:60, planStatus:'conditional', openingFit:'risk', bookingRequired:true, risk:'medium', trigger:'Boat tours need advance booking and last tours may be full. Only worthwhile if the boat is available.', sameDayAction:'Call +33 3 22 92 12 18 before leaving hotel to confirm boat availability', decisionDeadline:'10:45 FR',
+          alternatives: [
+            {
+              id:'alt_d2s2_cathedral',
+              location:'Amiens Cathedral (Notre-Dame)',
+              type:'architecture',
+              lat:49.8955, lng:2.3018,
+              mapsUrl:'https://maps.google.com/?q=Cath%C3%A9drale+Notre-Dame+d%27Amiens+30+Place+Notre+Dame+80000+Amiens+France',
+              reason:'Largest Gothic cathedral in France by volume — UNESCO World Heritage. Free entry, no booking needed, open 08:30–18:30 daily. Guaranteed alternative if Hortillonnages falls through.',
+              duration:60,
+              veganFit:null,
+              openingFit:'ok',
+              trigger:'If Hortillonnages boat tour is unavailable, fully booked, or closed',
+              sameDayAction:'Walk 15 minutes south from the hotel to the cathedral entrance',
+              decisionDeadline:'10:45 FR',
+            }
+          ]
+        },
+        { id:"d2s4", order:3, time:"12:00", tz:"FR", location:"Le Colibri, Amiens", type:"food", priority:2, lat:49.8952, lng:2.2978, mapsUrl:"https://maps.google.com/?q=Le+Colibri+Amiens+13+Rue+Dusevel+80000+Amiens+France", reason:"HappyCow lists veganisable dishes and vegan cakes; current Thursday hours cover 12:00–13:00.", veganFriendly:true, duration:75, planStatus:'primary', veganFit:'wide', openingFit:'ok', risk:'low',
+          alternatives: [
+            {
+              id:'alt_d2s4_pokawa',
+              location:'Pokawa, Amiens',
+              type:'food',
+              lat:49.8940, lng:2.3010,
+              mapsUrl:'https://maps.google.com/?q=Pokawa+Amiens+France',
+              reason:'HappyCow-listed poke bowl chain with wide vegan options. Open daily 11:00–00:00 — reliable backup if Le Colibri is closed or full.',
+              duration:60,
+              veganFriendly:true,
+              veganFit:'wide',
+              openingFit:'ok',
+              trigger:'If Le Colibri is closed, fully booked, or cannot accommodate the group',
+              sameDayAction:'Walk to Pokawa — no booking needed',
+              decisionDeadline:'11:45 FR',
+            }
+          ]
+        },
         { id:"d2s5", order:4, time:"13:15", tz:"FR", location:"Depart Amiens", type:"depart", priority:0, lat:49.8942, lng:2.3020, mapsUrl:"https://maps.google.com/?q=Amiens+France", reason:"Head towards Gerberoy." },
-        { id:"d2s6", order:5, time:"14:30", tz:"FR", location:"Gerberoy Village Walk", type:"wander", priority:3, lat:49.4853, lng:1.8239, mapsUrl:"https://maps.google.com/?q=Gerberoy+France", reason:"Must-visit rose-covered medieval village — one of the most beautiful in France. Wander the lanes, gardens and viewpoints.", duration:60 },
+        { id:"d2s6", order:5, time:"14:30", tz:"FR", location:"Gerberoy Village Walk", type:"wander", priority:3, lat:49.4853, lng:1.8239, mapsUrl:"https://maps.google.com/?q=Gerberoy+France", reason:"Must-visit rose-covered medieval village — one of the most beautiful in France. Wander the lanes, gardens and viewpoints.", duration:60, planStatus:'conditional', openingFit:'risk', risk:'medium', trigger:'The Le Sidaner rose garden has seasonal opening variations — beautiful in June but check same morning that the gardens are open', sameDayAction:'Check gerberoy.fr or call the village tourist office before setting off from Amiens', decisionDeadline:'12:00 FR',
+          alternatives: [
+            {
+              id:'alt_d2s6_beauvais',
+              location:'Beauvais Cathedral (Saint-Pierre)',
+              type:'architecture',
+              lat:49.4330, lng:2.0817,
+              mapsUrl:'https://maps.google.com/?q=Cath%C3%A9drale+Saint-Pierre+de+Beauvais+Rue+Saint-Pierre+60000+Beauvais+France',
+              reason:'Highest Gothic choir in the world — open April–October daily 10:00–18:15. On the direct route from Amiens to Troyes, no detour needed.',
+              duration:60,
+              veganFit:null,
+              openingFit:'ok',
+              trigger:'If Gerberoy rose gardens are closed or the detour is not worth it given timing',
+              sameDayAction:'Beauvais is on the main route — just stop en route to Troyes without doubling back',
+              decisionDeadline:'12:00 FR',
+            }
+          ]
+        },
         { id:"d2s8", order:6, time:"15:30", tz:"FR", location:"Depart Gerberoy", type:"depart", priority:0, lat:49.4853, lng:1.8239, mapsUrl:"https://maps.google.com/?q=Gerberoy+France", reason:"Continue towards Troyes." },
         { id:"d2s9", order:7, time:"17:45", tz:"FR", location:"Tesla Supercharger Troyes Saint-Parres", type:"charging", priority:0, lat:48.3265, lng:4.0920, mapsUrl:"https://maps.google.com/?q=Centre+Commercial+Be+Green+Zone+commerciale+de+Saint-Parres-aux-Tertres+10410+Saint-Parres-aux-Tertres+France", reason:"Exact Tesla location. Open 24/7; charge before entering Troyes.", duration:35 },
         { id:"d2s10", order:8, time:"18:20", tz:"FR", location:"Troyes Old Town & Ruelle des Chats", type:"architecture", priority:3, lat:48.2968, lng:4.0735, mapsUrl:"https://maps.google.com/?q=Ruelle+des+Chats+Troyes+France", reason:"Must-visit half-timbered streets and medieval lanes.", placesQuery:"Ruelle des Chats Troyes" },
-        { id:"d2s11", order:9, time:"19:00", tz:"FR", location:"Papillon, Troyes", type:"food", priority:2, lat:48.2968, lng:4.0735, mapsUrl:"https://maps.google.com/?q=Papillon+9+Ruelle+des+Chats+10000+Troyes+France", reason:"HappyCow says the vegetarian tasting menu can be made vegan with advance booking; current Thursday dinner hours are 19:00–21:00.", veganFriendly:true, duration:120 },
+        { id:"d2s11", order:9, time:"19:00", tz:"FR", location:"Papillon, Troyes", type:"food", priority:2, lat:48.2968, lng:4.0735, mapsUrl:"https://maps.google.com/?q=Papillon+9+Ruelle+des+Chats+10000+Troyes+France", reason:"HappyCow says the vegetarian tasting menu can be made vegan with advance booking; current Thursday dinner hours are 19:00–21:00.", veganFriendly:true, duration:120, planStatus:'conditional', veganFit:'limited', openingFit:'ok', bookingRequired:true, risk:'medium', trigger:'The vegan tasting menu requires advance booking and confirmation — without it you may only get the standard menu with limited adaptation', sameDayAction:'Call Papillon on arrival day (morning) to confirm vegan tasting menu for your party', decisionDeadline:'17:00 FR',
+          alternatives: [
+            {
+              id:'alt_d2s11_libanais',
+              location:'Au Libanais, Troyes',
+              type:'food',
+              lat:48.2968, lng:4.0750,
+              mapsUrl:'https://maps.google.com/?q=Au+Libanais+Troyes+France',
+              reason:'HappyCow confirms many vegan options on the Lebanese menu. No booking required, good location near the old town. Reliable vegan choice.',
+              duration:90,
+              veganFriendly:true,
+              veganFit:'wide',
+              openingFit:'ok',
+              trigger:'If Papillon cannot confirm a vegan tasting menu or is fully booked',
+              sameDayAction:'Walk to Au Libanais — no booking needed',
+              decisionDeadline:'17:00 FR',
+            }
+          ]
+        },
         { id:"d2s12", order:10, time:"21:00", tz:"FR", location:"B&B HOTEL Troyes Centre", type:"hotel", priority:0, lat:48.2990, lng:4.0760, mapsUrl:"https://maps.google.com/?q=B%26B+HOTEL+Troyes+Centre+51+Boulevard+du+14+Juillet+10000+Troyes+France", reason:"Overnight stay." }
       ]
     },
@@ -63,14 +133,62 @@ const TRIP_DATA = {
       subtitle: "Burgundy villages, UNESCO abbey & Teams meeting",
       stops: [
         { id:"d3s1", order:1, time:"10:30", tz:"FR", location:"B&B HOTEL Troyes Centre", type:"depart", priority:0, lat:48.2990, lng:4.0760, mapsUrl:"https://maps.google.com/?q=B%26B+HOTEL+Troyes+Centre+51+Boulevard+du+14+Juillet+10000+Troyes+France", reason:"Breakfast and checkout." },
-        { id:"d3s2", order:2, time:"12:00", tz:"FR", location:"Flavigny-sur-Ozerain Village Walk", type:"village", priority:3, lat:47.5167, lng:4.5333, mapsUrl:"https://maps.google.com/?q=Flavigny-sur-Ozerain+France", reason:"Must-visit medieval village and anise sweet heritage; open-air wander through lanes and viewpoints.", duration:60 },
-        { id:"d3s4", order:3, time:"13:30", tz:"FR", location:"Abbey of Fontenay Visit", type:"architecture", priority:3, lat:47.6378, lng:4.3992, mapsUrl:"https://maps.google.com/?q=Abbaye+de+Fontenay+21500+Marmagne+France", reason:"Must-visit UNESCO abbey; visit the buildings, gardens and exhibitions within published opening hours.", duration:90 },
+        { id:"d3s2", order:2, time:"12:00", tz:"FR", location:"Flavigny-sur-Ozerain Village Walk", type:"village", priority:3, lat:47.5167, lng:4.5333, mapsUrl:"https://maps.google.com/?q=Flavigny-sur-Ozerain+France", reason:"Must-visit medieval village and anise sweet heritage; open-air wander through lanes and viewpoints.", duration:60, planStatus:'primary', openingFit:'ok', risk:'low' },
+        { id:"d3s4", order:3, time:"13:30", tz:"FR", location:"Abbey of Fontenay Visit", type:"architecture", priority:3, lat:47.6378, lng:4.3992, mapsUrl:"https://maps.google.com/?q=Abbaye+de+Fontenay+21500+Marmagne+France", reason:"Must-visit UNESCO abbey; visit the buildings, gardens and exhibitions within published opening hours.", duration:90, planStatus:'conditional', openingFit:'ok', risk:'medium', trigger:'If the day is running 30+ minutes late after Flavigny, skipping Fontenay protects the 16:00 FR Teams presentation — a hard commitment', sameDayAction:'Check your departure time from Troyes — if already late, treat Fontenay as optional today', decisionDeadline:'11:00 FR',
+          alternatives: [
+            {
+              id:'alt_d3s4_direct',
+              location:'Direct to Beaune Nord Supercharger',
+              type:'charging',
+              lat:47.0300, lng:4.8550,
+              mapsUrl:'https://maps.google.com/?q=13+Rue+Gustave+Eiffel+21200+Beaune+France',
+              reason:'Skip the abbey detour and go directly to Beaune Nord Supercharger. Arrive earlier, charge longer, more buffer before the 16:00 Teams call.',
+              openingFit:'ok',
+              trigger:'If running 30+ minutes late or the abbey visit would risk the Teams presentation',
+              sameDayAction:'Navigate directly to Beaune Nord — 13 Rue Gustave Eiffel, 21200 Beaune',
+              decisionDeadline:'11:00 FR',
+            }
+          ]
+        },
         { id:"d3s6", order:4, time:"15:15", tz:"FR", location:"Tesla Supercharger Beaune Nord", type:"charging", priority:0, lat:47.0300, lng:4.8550, mapsUrl:"https://maps.google.com/?q=13+Rue+Gustave+Eiffel+21200+Beaune+France", reason:"Reliable location for the Teams presentation — charging, stable connectivity and nearby coffee." },
-        { id:"d3s7", order:5, time:"16:00", tz:"FR", location:"Teams Presentation", type:"work", priority:0, lat:47.0300, lng:4.8550, mapsUrl:"https://maps.google.com/?q=13+Rue+Gustave+Eiffel+21200+Beaune+France", reason:"Present from the Tesla using stable mobile connectivity while charging.", duration:60, photos:["./images/teams-call.jpeg"] },
-        { id:"d3s8", order:6, time:"17:00", tz:"FR", location:"Magazzino, Beaune Nord", type:"food", priority:0, lat:47.0300, lng:4.8550, mapsUrl:"https://maps.google.com/?q=Magazzino+88+Route+de+Savigny+21200+Beaune+France", reason:"Italian deli-restaurant right next to the Supercharger — coffee, antipasti and vegan-friendly dishes. Good contingency if the meeting overruns.", veganFriendly:true, duration:30 },
+        { id:"d3s7", order:5, time:"16:00", tz:"FR", location:"Teams Presentation", type:"work", priority:0, lat:47.0300, lng:4.8550, mapsUrl:"https://maps.google.com/?q=13+Rue+Gustave+Eiffel+21200+Beaune+France", reason:"Present from the Tesla using stable mobile connectivity while charging.", duration:60, photos:["./images/teams-call.jpeg"], planStatus:'anchor', risk:'low' },
+        { id:"d3s8", order:6, time:"17:00", tz:"FR", location:"Magazzino, Beaune Nord", type:"food", priority:0, lat:47.0300, lng:4.8550, mapsUrl:"https://maps.google.com/?q=Magazzino+88+Route+de+Savigny+21200+Beaune+France", reason:"Italian deli-restaurant right next to the Supercharger — coffee, antipasti and vegan-friendly dishes. Good contingency if the meeting overruns.", veganFriendly:true, duration:30, planStatus:'primary', veganFit:'wide', openingFit:'ok', risk:'low' },
         { id:"d3s9", order:7, time:"17:45", tz:"FR", location:"ibis Styles Beaune Centre", type:"hotel", priority:0, lat:47.0230, lng:4.8370, mapsUrl:"https://maps.google.com/?q=ibis+Styles+Beaune+Centre+7+Boulevard+Perpreuil+21200+Beaune+France", reason:"Check in and freshen up." },
         { id:"d3s10", order:8, time:"18:30", tz:"FR", location:"Beaune Old Town", type:"architecture", priority:2, lat:47.0200, lng:4.8380, mapsUrl:"https://maps.google.com/?q=Hospices+de+Beaune+France", reason:"Evening wander around the historic centre.", placesQuery:"Hospices de Beaune" },
-        { id:"d3s11", order:9, time:"19:30", tz:"FR", location:"Brasserie Le Carnot, Beaune", type:"food", priority:2, lat:47.0213, lng:4.8395, mapsUrl:"https://maps.google.com/?q=Brasserie+Le+Carnot+18+Rue+Carnot+21200+Beaune+France", reason:"HappyCow lists a clearly marked vegan dish; current Friday opening covers dinner.", veganFriendly:true, duration:90 },
+        { id:"d3s11", order:9, time:"19:30", tz:"FR", location:"Brasserie Le Carnot, Beaune", type:"food", priority:2, lat:47.0213, lng:4.8395, mapsUrl:"https://maps.google.com/?q=Brasserie+Le+Carnot+18+Rue+Carnot+21200+Beaune+France", reason:"HappyCow lists a clearly marked vegan dish; current Friday opening covers dinner.", veganFriendly:true, duration:90, planStatus:'weak-vegan', veganFit:'single', openingFit:'ok', risk:'low', trigger:'Only one clearly marked vegan dish — acceptable if no better option but worth trying the alternatives first',
+          alternatives: [
+            {
+              id:'alt_d3s11_toma',
+              location:'TOMA Restaurant, Beaune',
+              type:'food',
+              lat:47.0215, lng:4.8390,
+              mapsUrl:'https://maps.google.com/?q=TOMA+Restaurant+Beaune+France',
+              reason:'HappyCow-listed with wide vegan choice. Open Friday–Sunday 12:00–22:00 — directly applicable on a Friday evening.',
+              duration:90,
+              veganFriendly:true,
+              veganFit:'wide',
+              openingFit:'ok',
+              trigger:'Preferred over Le Carnot — better vegan range, open Friday evening',
+              sameDayAction:'Check TOMA for a table — better vegan choice for a Friday dinner',
+              decisionDeadline:'17:30 FR',
+            },
+            {
+              id:'alt_d3s11_m7',
+              location:'M7 Restaurant, Beaune',
+              type:'food',
+              lat:47.0200, lng:4.8385,
+              mapsUrl:'https://maps.google.com/?q=M7+Restaurant+Beaune+France',
+              reason:'Open every day for lunch and dinner — reliable daily option with vegan dishes available.',
+              duration:90,
+              veganFriendly:true,
+              veganFit:'wide',
+              openingFit:'ok',
+              trigger:'If TOMA is full or unavailable — M7 is open daily and a solid backup',
+              sameDayAction:'Walk to M7 — no booking needed',
+              decisionDeadline:'18:00 FR',
+            }
+          ]
+        },
         { id:"d3s12", order:10, time:"21:00", tz:"FR", location:"ibis Styles Beaune Centre", type:"hotel", priority:0, lat:47.0230, lng:4.8370, mapsUrl:"https://maps.google.com/?q=ibis+Styles+Beaune+Centre+7+Boulevard+Perpreuil+21200+Beaune+France", reason:"Overnight stay." }
       ]
     },
@@ -85,8 +203,8 @@ const TRIP_DATA = {
         { id:"d4s1", order:1, time:"10:30", tz:"FR", location:"ibis Styles Beaune Centre", type:"depart", priority:0, lat:47.0230, lng:4.8370, mapsUrl:"https://maps.google.com/?q=ibis+Styles+Beaune+Centre+7+Boulevard+Perpreuil+21200+Beaune+France", reason:"Breakfast and checkout. Today is the big day — Annecy!" },
         { id:"d4s2", order:2, time:"13:30", tz:"FR", location:"Tesla Supercharger Annecy-Seynod", type:"charging", priority:0, lat:45.8833, lng:6.1000, mapsUrl:"https://maps.google.com/?q=G+La+Galerie+Val+Semnoz+Avenue+d%27Aix-les-Bains+74600+Seynod+France", reason:"Exact Tesla location. Open 24/7; charge to 95–100% for the festival week and the Geneva airport pickup.", duration:45 },
         { id:"d4s3", order:3, time:"14:15", tz:"FR", location:"Depart Annecy-Seynod Supercharger", type:"depart", priority:0, lat:45.8833, lng:6.1000, mapsUrl:"https://maps.google.com/?q=G+La+Galerie+Val+Semnoz+Avenue+d%27Aix-les-Bains+74600+Seynod+France", reason:"Final short drive to the accommodation." },
-        { id:"d4s4", order:4, time:"14:45", tz:"FR", location:"Chalet de Charme avec Vue Splendide", type:"hotel", priority:0, lat:45.8533, lng:6.2050, mapsUrl:"https://maps.google.com/?q=195+Chemin+de+l%27Arete+74290+Menthon-Saint-Bernard+France", reason:"Arrive and unpack. Spectacular views over Lake Annecy from the terrace." },
-        { id:"d4s5", order:5, time:"20:00", tz:"FR", location:"Geneva Airport — French Side", type:"transport", priority:0, lat:46.2380, lng:6.1090, mapsUrl:"https://maps.google.com/?q=Route+Douaniere+01210+Ferney-Voltaire+France", reason:"Navigate to the French sector only; family should follow France or Secteur Francais signs. Family lands at 20:20." }
+        { id:"d4s4", order:4, time:"14:45", tz:"FR", location:"Chalet de Charme avec Vue Splendide", type:"hotel", priority:0, lat:45.8533, lng:6.2050, mapsUrl:"https://maps.google.com/?q=195+Chemin+de+l%27Arete+74290+Menthon-Saint-Bernard+France", reason:"Arrive and unpack. Spectacular views over Lake Annecy from the terrace.", planStatus:'booked', risk:'low' },
+        { id:"d4s5", order:5, time:"20:00", tz:"FR", location:"Geneva Airport — French Side", type:"transport", priority:0, lat:46.2380, lng:6.1090, mapsUrl:"https://maps.google.com/?q=Route+Douaniere+01210+Ferney-Voltaire+France", reason:"Navigate to the French sector only; family should follow France or Secteur Francais signs. Family lands at 20:20.", planStatus:'anchor', risk:'low' }
       ]
     },
     /* ── Festival Week — Sat 20 Jun to Sat 27 Jun ───────────────────── */
@@ -125,10 +243,58 @@ const TRIP_DATA = {
       subtitle: "UNESCO salt works & riverside city",
       stops: [
         { id:"d5s1", order:1, time:"10:30", tz:"FR", location:"Chalet, Menthon-Saint-Bernard", type:"depart", priority:0, lat:45.8533, lng:6.2050, mapsUrl:"https://maps.google.com/?q=195+Chemin+de+l%27Arete+74290+Menthon-Saint-Bernard+France", reason:"Leave after breakfast and begin the return journey north." },
-        { id:"d5s2", order:2, time:"13:45", tz:"FR", location:"Saline Royale d'Arc-et-Senans Visit", type:"architecture", priority:3, lat:47.0333, lng:5.7833, mapsUrl:"https://maps.google.com/?q=Saline+Royale+d%27Arc-et-Senans+Grande+Rue+25610+Arc-et-Senans+France", reason:"Must-visit UNESCO industrial architecture; visit the buildings, gardens and exhibitions within published opening hours.", duration:105 },
+        { id:"d5s2", order:2, time:"13:45", tz:"FR", location:"Saline Royale d'Arc-et-Senans Visit", type:"architecture", priority:3, lat:47.0333, lng:5.7833, mapsUrl:"https://maps.google.com/?q=Saline+Royale+d%27Arc-et-Senans+Grande+Rue+25610+Arc-et-Senans+France", reason:"Must-visit UNESCO industrial architecture; visit the buildings, gardens and exhibitions within published opening hours.", duration:105, planStatus:'primary', openingFit:'ok', risk:'low',
+          alternatives: [
+            {
+              id:'alt_d5s2_direct',
+              location:'Direct to Besançon Old Town',
+              type:'architecture',
+              lat:47.2378, lng:6.0241,
+              mapsUrl:'https://maps.google.com/?q=Besancon+Old+Town+France',
+              reason:'Skip the UNESCO detour and head straight to Besançon for more time in the city and a less rushed evening.',
+              openingFit:'ok',
+              trigger:'If time is tight, weather is poor, or Saline Royale is closed',
+              sameDayAction:'Skip the Saline detour and drive direct to Besançon Supercharger',
+              decisionDeadline:'12:00 FR',
+            }
+          ]
+        },
         { id:"d5s4", order:3, time:"16:15", tz:"FR", location:"Tesla Supercharger Besançon Châteaufarine", type:"charging", priority:0, lat:47.2500, lng:6.0200, mapsUrl:"https://maps.google.com/?q=Centre+Commercial+Besan%C3%A7on+Ch%C3%A2teaufarine+Rue+Andr%C3%A9+Breton+25000+Besan%C3%A7on+France", reason:"Exact Tesla location. Open 24/7; practical charge before the evening.", duration:30 },
         { id:"d5s5", order:4, time:"16:45", tz:"FR", location:"Besançon Old Town", type:"architecture", priority:2, lat:47.2378, lng:6.0241, mapsUrl:"https://maps.google.com/?q=Besancon+Old+Town+France", reason:"Riverside city walk with arcades, old streets and views.", placesQuery:"Citadelle de Besançon" },
-        { id:"d5s6", order:5, time:"19:00", tz:"FR", location:"L'Alsacien, Besançon", type:"food", priority:2, lat:47.2350, lng:6.0175, mapsUrl:"https://maps.google.com/?q=L%27Alsacien+Besancon+2+Quai+Vauban+25000+Besancon+France", reason:"HappyCow lists vegan flammkuchen; current Saturday opening runs late enough for dinner.", veganFriendly:true, duration:120 },
+        { id:"d5s6", order:5, time:"19:00", tz:"FR", location:"L'Alsacien, Besançon", type:"food", priority:2, lat:47.2350, lng:6.0175, mapsUrl:"https://maps.google.com/?q=L%27Alsacien+Besancon+2+Quai+Vauban+25000+Besancon+France", reason:"HappyCow lists vegan flammkuchen; current Saturday opening runs late enough for dinner.", veganFriendly:true, duration:120, planStatus:'primary', veganFit:'limited', openingFit:'ok', risk:'low', trigger:'Vegan flammkuchen confirmed but limited vegan range — check if the full party is happy with limited choice',
+          alternatives: [
+            {
+              id:'alt_d5s6_veggies',
+              location:"Veggie's Corner, Besançon",
+              type:'food',
+              lat:47.2360, lng:6.0200,
+              mapsUrl:"https://maps.google.com/?q=Veggie%27s+Corner+Besancon+France",
+              reason:"Fully vegan restaurant confirmed on HappyCow. Open Saturday evening — the best vegan option for this night.",
+              duration:90,
+              veganFriendly:true,
+              veganFit:'full',
+              openingFit:'ok',
+              trigger:"Preferred over L'Alsacien if the whole party wants a fully vegan menu",
+              sameDayAction:"Check Veggie's Corner opening times and book if required",
+              decisionDeadline:'17:00 FR',
+            },
+            {
+              id:'alt_d5s6_cocelle',
+              location:'Maison Cocoëlle, Besançon',
+              type:'food',
+              lat:47.2378, lng:6.0250,
+              mapsUrl:'https://maps.google.com/?q=Maison+Cocoelle+Besancon+France',
+              reason:"All-vegan patisserie open Saturday 12:00–18:30. Good for an afternoon cake and coffee stop rather than dinner.",
+              duration:30,
+              veganFriendly:true,
+              veganFit:'full',
+              openingFit:'ok',
+              trigger:'Good supplement for an afternoon sweet stop before dinner, not a dinner replacement',
+              sameDayAction:'Stop at Cocoëlle on the way from the Supercharger to the old town',
+              decisionDeadline:'16:00 FR',
+            }
+          ]
+        },
         { id:"d5s7", order:6, time:"21:00", tz:"FR", location:"B&B HOTEL Besançon Valentin", type:"hotel", priority:0, lat:47.2500, lng:6.0100, mapsUrl:"https://maps.google.com/?q=B%26B+HOTEL+Besan%C3%A7on+Valentin+3+Chemin+des+Trois+Croix+25480+Besan%C3%A7on+France", reason:"Overnight stay." }
       ]
     },
@@ -142,9 +308,27 @@ const TRIP_DATA = {
       stops: [
         { id:"d6s1", order:1, time:"10:30", tz:"FR", location:"B&B HOTEL Besançon Valentin", type:"depart", priority:0, lat:47.2500, lng:6.0100, mapsUrl:"https://maps.google.com/?q=B%26B+HOTEL+Besan%C3%A7on+Valentin+3+Chemin+des+Trois+Croix+25480+Besan%C3%A7on+France", reason:"Breakfast and checkout. Long drive day — Rouen via Giverny." },
         { id:"d6s2", order:2, time:"14:30", tz:"FR", location:"Tesla Supercharger Chartres", type:"charging", priority:0, lat:48.4497, lng:1.4803, mapsUrl:"https://maps.google.com/?q=24+Avenue+Gustave+Eiffel+28000+Chartres+France", reason:"Exact Tesla location. Open 24/7; mid-route charge towards Normandy.", duration:30 },
-        { id:"d6s3", order:3, time:"16:30", tz:"FR", location:"Fondation Claude Monet, Giverny Visit", type:"experience", priority:3, lat:49.0762, lng:1.5345, mapsUrl:"https://maps.google.com/?q=Fondation+Claude+Monet+Giverny+84+Rue+Claude+Monet+27620+Giverny+France", reason:"Must-visit gardens; current 2026 hours are 10:00–18:00 with last admission at 17:30. Visit duration sits inside opening hours before 18:00 close.", duration:80 },
+        { id:"d6s3", order:3, time:"16:30", tz:"FR", location:"Fondation Claude Monet, Giverny Visit", type:"experience", priority:3, lat:49.0762, lng:1.5345, mapsUrl:"https://maps.google.com/?q=Fondation+Claude+Monet+Giverny+84+Rue+Claude+Monet+27620+Giverny+France", reason:"Must-visit gardens; current 2026 hours are 10:00–18:00 with last admission at 17:30. Visit duration sits inside opening hours before 18:00 close.", duration:80, planStatus:'primary', openingFit:'ok', risk:'low', sameDayAction:'Last admission is 17:30 — current planned arrival 16:30 is safe. Do not delay the Chartres charge stop.', decisionDeadline:'15:30 FR' },
         { id:"d6s5", order:4, time:"19:00", tz:"FR", location:"Rouen Old Town", type:"architecture", priority:3, lat:49.4431, lng:1.0993, mapsUrl:"https://maps.google.com/?q=Rouen+Old+Town+France", reason:"Must-visit half-timbered streets and cathedral area.", placesQuery:"Cathédrale Notre-Dame de Rouen" },
-        { id:"d6s6", order:5, time:"19:30", tz:"FR", location:"Le Joubeil, Rouen", type:"food", priority:2, lat:49.4431, lng:1.0993, mapsUrl:"https://maps.google.com/?q=Le+Joubeil+52+Rue+des+Augustins+76000+Rouen+France", reason:"HappyCow lists vegan mezze and TheFork identifies it as open Sunday; book ahead.", veganFriendly:true, duration:120 },
+        { id:"d6s6", order:5, time:"19:30", tz:"FR", location:"Le Joubeil, Rouen", type:"food", priority:2, lat:49.4431, lng:1.0993, mapsUrl:"https://maps.google.com/?q=Le+Joubeil+52+Rue+des+Augustins+76000+Rouen+France", reason:"HappyCow lists vegan mezze and TheFork identifies it as open Sunday; book ahead.", veganFriendly:true, duration:120, planStatus:'primary', veganFit:'wide', openingFit:'check', bookingRequired:true, risk:'medium', trigger:'TheFork confirms Sunday opening but restaurant hours can change — recheck and book same day', sameDayAction:'Book via TheFork or call ahead for Sunday evening before leaving Giverny', decisionDeadline:'17:00 FR',
+          alternatives: [
+            {
+              id:'alt_d6s6_cancan',
+              location:'Cancan, Rouen',
+              type:'food',
+              lat:49.4430, lng:1.0985,
+              mapsUrl:'https://maps.google.com/?q=Cancan+Rouen+France',
+              reason:'Full vegan menu confirmed. Open daily 19:00–00:00 — no booking needed, guaranteed vegan choice in Rouen.',
+              duration:120,
+              veganFriendly:true,
+              veganFit:'full',
+              openingFit:'ok',
+              trigger:'If Le Joubeil is closed Sunday, fully booked, or cannot confirm vegan mezze availability',
+              sameDayAction:'Walk to Cancan — no booking needed, opens 19:00',
+              decisionDeadline:'17:30 FR',
+            }
+          ]
+        },
         { id:"d6s7", order:6, time:"21:30", tz:"FR", location:"B&B HOTEL Rouen Centre Rive Droite", type:"hotel", priority:0, lat:49.4431, lng:1.0993, mapsUrl:"https://maps.google.com/?q=B%26B+HOTEL+Rouen+Centre+Rive+Droite+56+Quai+Gaston+Boulet+76000+Rouen+France", reason:"Overnight stay." }
       ]
     },
@@ -159,7 +343,7 @@ const TRIP_DATA = {
         { id:"d7s1", order:1, time:"10:30", tz:"FR", location:"B&B HOTEL Rouen Centre Rive Droite", type:"depart", priority:0, lat:49.4431, lng:1.0993, mapsUrl:"https://maps.google.com/?q=B%26B+HOTEL+Rouen+Centre+Rive+Droite+56+Quai+Gaston+Boulet+76000+Rouen+France", reason:"Breakfast and checkout. Final morning in France." },
         { id:"d7s2", order:2, time:"13:00", tz:"FR", location:"Tesla Supercharger Calais Coquelles", type:"charging", priority:0, lat:50.9283, lng:1.8167, mapsUrl:"https://maps.google.com/?q=L%27Haut%27Aile+ZAC+Les+Terrasses+Avenue+des+Longues+Pieces+62231+Coquelles+France", reason:"Exact Tesla location. Open 24/7; charge and take a short break before check-in.", duration:75 },
         { id:"d7s3", order:3, time:"14:20", tz:"FR", location:"LeShuttle Check-In, Calais", type:"transport", priority:0, lat:50.9513, lng:1.8587, mapsUrl:"https://maps.google.com/?q=LeShuttle+Calais+Terminal", reason:"Arrive with margin for the booked return crossing." },
-        { id:"d7s4", order:4, time:"15:36", tz:"FR", location:"LeShuttle Departure", type:"transport", priority:0, lat:50.9513, lng:1.8587, mapsUrl:"https://maps.google.com/?q=LeShuttle+Calais+Terminal", reason:"Booked return crossing — approximately 35 minutes through the tunnel." },
+        { id:"d7s4", order:4, time:"15:36", tz:"FR", location:"LeShuttle Departure", type:"transport", priority:0, lat:50.9513, lng:1.8587, mapsUrl:"https://maps.google.com/?q=LeShuttle+Calais+Terminal", reason:"Booked return crossing — approximately 35 minutes through the tunnel.", planStatus:'anchor', risk:'low' },
         { id:"d7s5", order:5, time:"15:11", tz:"UK", location:"LeShuttle Folkestone Arrival", type:"transport", priority:0, lat:51.0940, lng:1.1430, mapsUrl:"https://maps.google.com/?q=LeShuttle+Folkestone+Terminal", reason:"Back in the UK. Nearly home." },
         { id:"d7s6", order:6, time:"18:30", tz:"UK", location:"North Cadbury — Home", type:"hotel", priority:0, lat:51.0333, lng:-2.5333, mapsUrl:"https://maps.google.com/?q=North+Cadbury+Somerset", reason:"Arrive home. Holiday complete." }
       ]
