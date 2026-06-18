@@ -2108,3 +2108,69 @@ body.light .detail-alts-toggle-count { background: rgba(0,0,0,.08); }
 .detail-alts-toggle.open .detail-alts-chevron { transform: rotate(180deg); }
 #detail-alts-list { display: none; padding-top: 4px; }
 #detail-alts-list.open { display: block; }
+#detail-alts-list.open { display: block; }
+
+/* ── GPS nearest stop chip ─────────────────────────────────────────── */
+.gps-nearest-chip {
+  display: flex; align-items: center; gap: 6px;
+  margin: 0 16px 12px; padding: 10px 14px;
+  background: rgba(56,189,248,.12); border: 1px solid rgba(56,189,248,.25);
+  border-radius: 14px; font-size: 13px; font-weight: 600; color: var(--teal);
+  cursor: pointer; -webkit-tap-highlight-color: transparent;
+}
+.gps-nearest-chip.hidden { display: none; }
+.gps-nearest-chip i { font-size: 15px; flex-shrink: 0; }
+
+/* ── Vegan view ─────────────────────────────────────────────────────── */
+.vegan-view-header {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 22px; font-weight: 800; letter-spacing: -.5px;
+  padding: 20px 16px 4px; color: var(--green);
+}
+.vegan-view-header i { font-size: 24px; }
+.vegan-nearby-section { padding: 4px 0 8px; }
+.vegan-nearby-subtitle {
+  font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--text3); padding: 0 16px 10px;
+}
+.vegan-plan-header {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--text3); padding: 20px 16px 10px;
+  border-top: 1px solid var(--glass-border); margin-top: 8px;
+}
+.vegan-no-gps, .vegan-searching, .vegan-empty {
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
+  padding: 28px 24px; text-align: center;
+  font-size: 15px; color: var(--text3); line-height: 1.5;
+}
+.vegan-no-gps i, .vegan-searching i, .vegan-empty i { font-size: 32px; opacity: .6; }
+@keyframes vegan-spin { to { transform: rotate(360deg); } }
+.vegan-spin { animation: vegan-spin .9s linear infinite; display: inline-block; }
+.vegan-happycow-btn {
+  display: flex; align-items: center; gap: 8px; justify-content: center;
+  margin: 8px 16px; padding: 13px 16px; border-radius: 14px;
+  background: rgba(48,209,88,.12); color: var(--green);
+  font-size: 15px; font-weight: 700; text-decoration: none;
+  border: 1px solid rgba(48,209,88,.2);
+}
+.vegan-place-card {
+  display: flex; align-items: center; gap: 12px;
+  margin: 0 16px 10px; padding: 14px 16px;
+  background: var(--glass-bg); border: 1px solid var(--glass-border);
+  border-radius: 16px; box-shadow: inset 0 1px 0 var(--glass-hi);
+}
+body.light .vegan-place-card { background: rgba(255,255,255,.7); }
+.vegan-place-main { flex: 1; min-width: 0; }
+.vegan-place-name { font-size: 15px; font-weight: 700; margin-bottom: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vegan-place-meta { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-bottom: 2px; }
+.vegan-place-type { font-size: 11px; color: var(--text3); font-weight: 600; text-transform: capitalize; }
+.vegan-place-addr { font-size: 11px; color: var(--text3); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vegan-place-right { display: flex; flex-direction: column; align-items: center; gap: 8px; flex-shrink: 0; }
+.vegan-place-dist { font-size: 12px; font-weight: 700; color: var(--text2); white-space: nowrap; }
+.vegan-place-nav {
+  display: flex; align-items: center; justify-content: center;
+  width: 36px; height: 36px; border-radius: 10px;
+  background: rgba(10,132,255,.12); color: var(--accent);
+  font-size: 18px; text-decoration: none;
+}

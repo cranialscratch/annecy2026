@@ -1,5 +1,5 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v215';
+const APP_VERSION = 'v216';
 const _errorLog = [];
 window.addEventListener('error', e => {
   _errorLog.push({ ts: new Date().toISOString(), msg: e.message || String(e), src: (e.filename||'').split('/').pop() + ':' + (e.lineno||'?') });
@@ -1543,10 +1543,21 @@ function renderView(scrollToNow) {
     mainEl.classList.remove('map-active');
     tl.classList.remove('hidden');
     if (state.currentView === 'overview')      { setBgClass(null); renderOverview(tl); }
-    else if (state.currentView === 'vegan')    { setBgClass(null); renderFilterList(tl, 'vegan'); }
+    else if (state.currentView === 'vegan')    { setBgClass(null); renderVeganView(tl); }
     else if (state.currentView === 'charging') { setBgClass(null); renderFilterList(tl, 'charging'); }
     else if (state.cardView === 'calendar') renderCalView(tl);
-    else renderTimeline(tl, scrollToNow);
+    else {
+      // Inject GPS chip before timeline if not present
+      let _gpsChip = document.getElementById('gps-nearest-chip');
+      if (!_gpsChip) {
+        _gpsChip = document.createElement('div');
+        _gpsChip.id = 'gps-nearest-chip';
+        _gpsChip.className = 'gps-nearest-chip hidden';
+        tl.parentElement.insertBefore(_gpsChip, tl);
+      }
+      renderNearestStopChip();
+      renderTimeline(tl, scrollToNow);
+    }
   }
 }
 
@@ -1571,6 +1582,7 @@ function startLocationWatch() {
     _userLng = pos.coords.longitude;
     updateLocMarker(pos.coords.accuracy);
     refreshMapCarouselOrder();
+    renderNearestStopChip();
     // On first fix: re-fetch countdown POIs (which used fallback coords)
     if (firstFix && _leafletMap) {
       const day = TRIP_DATA.days.find(d => d.id === state.currentDayId);
@@ -1587,6 +1599,25 @@ function startLocationWatch() {
       }
     }
   }, null, { enableHighAccuracy: true, maximumAge: 20000, timeout: 15000 });
+}
+
+function renderNearestStopChip() {
+  const chip = document.getElementById('gps-nearest-chip');
+  if (!chip || _userLat === null) { chip?.classList.add('hidden'); return; }
+  const today = TRIP_DATA.days.find(d => d.id === state.currentDayId);
+  if (!today || today.isCountdown) { chip.classList.add('hidden'); return; }
+  const active = getDayStops(today).filter(s => !state.skipped[s.id] && s.lat && s.lng);
+  if (!active.length) { chip.classList.add('hidden'); return; }
+  let nearest = null, bestDist = Infinity;
+  active.forEach(s => {
+    const d = haversineM(_userLat, _userLng, s.lat, s.lng);
+    if (d < bestDist) { bestDist = d; nearest = s; }
+  });
+  if (!nearest || bestDist > 50000) { chip.classList.add('hidden'); return; }
+  const distStr = bestDist < 1000 ? `${Math.round(bestDist)}m` : `${(bestDist / 1000).toFixed(1)}km`;
+  chip.classList.remove('hidden');
+  chip.innerHTML = `<i class="ph ph-map-pin-simple-area"></i> ${distStr} from ${getStopName(nearest)}`;
+  chip.onclick = () => openDetail(nearest);
 }
 
 function updateLocMarker(accuracy) {
@@ -1864,6 +1895,126 @@ function renderOverview(c) {
 }
 
 /* ── Filter list ───────────────────────────────────────────────────── */
+async function renderVeganView(container) {
+  container.innerHTML = '';
+
+  const hdr = document.createElement('div');
+  hdr.className = 'vegan-view-header';
+  hdr.innerHTML = '<i class="ph ph-leaf"></i> Vegan near you';
+  container.appendChild(hdr);
+
+  const nearbySection = document.createElement('div');
+  nearbySection.className = 'vegan-nearby-section';
+  container.appendChild(nearbySection);
+
+  if (_userLat === null) {
+    nearbySection.innerHTML = `<div class="vegan-no-gps"><i class="ph ph-map-pin-slash"></i><div>Enable location to find vegan places nearby</div><button class="pill-btn primary" id="vegan-gps-btn">Share location</button></div>`;
+    nearbySection.querySelector('#vegan-gps-btn')?.addEventListener('click', () => {
+      startLocationWatch();
+      nearbySection.innerHTML = `<div class="vegan-searching"><i class="ph ph-spinner vegan-spin"></i> Getting your location…</div>`;
+    });
+  } else {
+    nearbySection.innerHTML = `<div class="vegan-searching"><i class="ph ph-spinner vegan-spin"></i> Finding vegan places within 8 km…</div>`;
+    try {
+      const places = await fetchVeganNearby(_userLat, _userLng, 8000);
+      nearbySection.innerHTML = '';
+      if (places.length === 0) {
+        nearbySection.innerHTML = `<div class="vegan-empty"><i class="ph ph-smiley-sad"></i><div>No tagged vegan places found within 8 km.<br>Try HappyCow for community tips.</div></div>
+          <a class="vegan-happycow-btn" href="https://www.happycow.net/searchmap?lat=${_userLat}&lng=${_userLng}&zoom=13" target="_blank" rel="noopener"><i class="ph ph-leaf"></i> Open HappyCow</a>`;
+      } else {
+        const sub = document.createElement('div');
+        sub.className = 'vegan-nearby-subtitle';
+        sub.textContent = `${places.length} place${places.length !== 1 ? 's' : ''} found`;
+        nearbySection.appendChild(sub);
+        places.forEach(p => nearbySection.appendChild(buildVeganCard(p)));
+        const hcLink = document.createElement('a');
+        hcLink.className = 'vegan-happycow-btn';
+        hcLink.href = `https://www.happycow.net/searchmap?lat=${_userLat}&lng=${_userLng}&zoom=13`;
+        hcLink.target = '_blank'; hcLink.rel = 'noopener';
+        hcLink.innerHTML = '<i class="ph ph-leaf"></i> More on HappyCow';
+        nearbySection.appendChild(hcLink);
+      }
+    } catch {
+      nearbySection.innerHTML = `<div class="vegan-empty"><i class="ph ph-wifi-slash"></i><div>Couldn't load nearby places — check connection.</div></div>
+        <a class="vegan-happycow-btn" href="https://www.happycow.net/searchmap?lat=${_userLat}&lng=${_userLng}&zoom=13" target="_blank" rel="noopener"><i class="ph ph-leaf"></i> Open HappyCow</a>`;
+    }
+  }
+
+  const planHdr = document.createElement('div');
+  planHdr.className = 'vegan-plan-header';
+  planHdr.innerHTML = '<i class="ph ph-calendar-check"></i> On your itinerary';
+  container.appendChild(planHdr);
+
+  let found = false;
+  TRIP_DATA.days.forEach(day => {
+    getDayStops(day).forEach(stop => {
+      if (!getStopVegan(stop) && getStopType(stop) !== 'food') return;
+      found = true;
+      const card = document.createElement('div');
+      card.className = 'filter-card';
+      card.innerHTML = `
+        <span class="filter-icon">${stopTypeIcon(stop)}</span>
+        <div class="filter-info">
+          <div class="filter-day">${getDayLabel(day)} · ${day.isFestival ? '20–27 Jun' : formatDate(day.date)}</div>
+          <div class="filter-loc">${stop.location}</div>
+          <div class="filter-reason">${stop.reason}</div>
+        </div>
+        <div><a class="act-btn tesla" href="${teslaNavUrl(stop)}" target="_blank" rel="noopener"><i class="ph ph-navigation-arrow"></i></a></div>`;
+      card.querySelector('.filter-info').addEventListener('click', () => openDetail(stop));
+      container.appendChild(card);
+    });
+  });
+  if (!found) {
+    const empty = document.createElement('div');
+    empty.className = 'vegan-empty';
+    empty.innerHTML = '<i class="ph ph-calendar-x"></i><div>No vegan stops on current itinerary.</div>';
+    container.appendChild(empty);
+  }
+}
+
+async function fetchVeganNearby(lat, lng, radiusM) {
+  const query = `[out:json][timeout:15];(nwr["diet:vegan"~"^(yes|only)$"]["amenity"~"^(restaurant|cafe|bar|fast_food|bakery|pub)$"](around:${radiusM},${lat},${lng}););out center body qt;`;
+  const res = await fetch('https://overpass-api.de/api/interpreter', {
+    method: 'POST', body: 'data=' + encodeURIComponent(query),
+  });
+  if (!res.ok) throw new Error('Overpass error');
+  const json = await res.json();
+  return (json.elements || []).map(el => {
+    const elLat = el.lat ?? el.center?.lat;
+    const elLng = el.lon ?? el.center?.lon;
+    if (!elLat || !elLng) return null;
+    return {
+      name: el.tags?.name || 'Unnamed place',
+      type: el.tags?.amenity || 'place',
+      veganLevel: el.tags?.['diet:vegan'] || 'yes',
+      address: [el.tags?.['addr:street'], el.tags?.['addr:city']].filter(Boolean).join(', '),
+      lat: elLat, lng: elLng,
+      dist: haversineM(lat, lng, elLat, elLng),
+    };
+  }).filter(Boolean).sort((a, b) => a.dist - b.dist).slice(0, 30);
+}
+
+function buildVeganCard(place) {
+  const card = document.createElement('div');
+  card.className = 'vegan-place-card';
+  const distStr = place.dist < 1000 ? `${Math.round(place.dist)}m` : `${(place.dist / 1000).toFixed(1)}km`;
+  const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${place.lat},${place.lng}`;
+  const typeLabel = { restaurant:'Restaurant', cafe:'Café', bar:'Bar', fast_food:'Takeaway', bakery:'Bakery', pub:'Pub' }[place.type] || place.type;
+  const levelLabel = place.veganLevel === 'only' ? 'Fully vegan' : 'Vegan options';
+  const levelClass = place.veganLevel === 'only' ? 'full' : '';
+  card.innerHTML = `
+    <div class="vegan-place-main">
+      <div class="vegan-place-name">${place.name}</div>
+      <div class="vegan-place-meta"><span class="vegan-place-type">${typeLabel}</span><span class="alt-card-vegan ${levelClass}">${levelLabel}</span></div>
+      ${place.address ? `<div class="vegan-place-addr">${place.address}</div>` : ''}
+    </div>
+    <div class="vegan-place-right">
+      <div class="vegan-place-dist">${distStr}</div>
+      <a class="vegan-place-nav" href="${mapsUrl}" target="_blank" rel="noopener"><i class="ph ph-navigation-arrow"></i></a>
+    </div>`;
+  return card;
+}
+
 function renderFilterList(container, kind) {
   container.innerHTML = '';
   TRIP_DATA.days.forEach(day => {
@@ -3532,14 +3683,17 @@ function initDetailNavSwipe() {
   const page    = document.getElementById('detail-page');
   const sliderWrapId = 'detail-slider-wrap';
 
+  const DETAIL_EDGE = 70;
   let startX = 0, startY = 0, diffX = 0, isHoriz = null, active = false;
 
   page.addEventListener('touchstart', e => {
     const sliderWrap  = document.getElementById(sliderWrapId);
     const poiCarousel = document.getElementById('detail-poi-carousel');
-    if (sliderWrap  && sliderWrap.contains(e.target))  return; // photo slider owns this
-    if (poiCarousel && poiCarousel.contains(e.target)) return; // POI carousel owns this
-    startX = e.touches[0].clientX;
+    if (sliderWrap  && sliderWrap.contains(e.target))  return;
+    if (poiCarousel && poiCarousel.contains(e.target)) return;
+    const x = e.touches[0].clientX;
+    if (x > DETAIL_EDGE && x < window.innerWidth - DETAIL_EDGE) return;
+    startX = x;
     startY = e.touches[0].clientY;
     diffX = 0; isHoriz = null; active = true;
   }, { passive: true });
@@ -3549,14 +3703,14 @@ function initDetailNavSwipe() {
     const dx = e.touches[0].clientX - startX;
     const dy = e.touches[0].clientY - startY;
     if (isHoriz === null) {
-      if (Math.abs(dx) > Math.abs(dy) + 6)       isHoriz = true;
-      else if (Math.abs(dy) > Math.abs(dx) + 6)  isHoriz = false;
+      if (Math.abs(dy) > 30)                      { active = false; return; }
+      if (Math.abs(dx) > Math.abs(dy) + 8)        isHoriz = true;
+      else if (Math.abs(dy) > Math.abs(dx) + 8)   { active = false; return; }
       else return;
     }
-    if (!isHoriz) return;
+    if (!isHoriz) { active = false; return; }
     diffX = dx;
     page.style.transition = 'none';
-    // right-swipe: slide out right; left-swipe: slide out left (dampened)
     page.style.transform = `translateX(${diffX * 0.35}px)`;
     e.preventDefault();
   }, { passive: false });
@@ -3573,11 +3727,11 @@ function initDetailNavSwipe() {
     const _ds = day ? getDayStops(day) : [];
     const idx  = day && _detailStop ? _ds.findIndex(s => s.id === _detailStop.id) : -1;
 
-    if (diffX > 60) {
+    if (diffX > 100) {
       const prev = idx > 0 ? _ds[idx - 1] : null;
       if (prev) openDetail(prev);
       else closeDetail();
-    } else if (diffX < -60) {
+    } else if (diffX < -100) {
       const next = idx >= 0 ? _ds[idx + 1] : null;
       if (next) openDetail(next);
     }
@@ -3967,7 +4121,7 @@ function closeSkipPrompt() {
 /* ── Day swipe (edge swipe left/right to change day) ───────────────── */
 function initDaySwipe() {
   const mc = document.getElementById('main-content');
-  const EDGE = 44; // px from screen edge that activates the gesture
+  const EDGE = 60; // px from screen edge that activates the gesture
   let startX = 0, startY = 0, diffX = 0, active = false, isHoriz = null;
 
   function adjacentDayId(delta) {
@@ -3996,7 +4150,7 @@ function initDaySwipe() {
     const dy = e.touches[0].clientY - startY;
     if (isHoriz === null) {
       if (Math.abs(dx) > Math.abs(dy) + 6)      isHoriz = true;
-      else if (Math.abs(dy) > Math.abs(dx) + 6) isHoriz = false;
+      else if (Math.abs(dy) > Math.abs(dx) + 6) { active = false; return; }
       else return;
     }
     if (!isHoriz) { active = false; return; }
@@ -4006,7 +4160,7 @@ function initDaySwipe() {
   mc.addEventListener('touchend', () => {
     if (!active || !isHoriz) { active = false; return; }
     active = false;
-    if (Math.abs(diffX) < 60) return;
+    if (Math.abs(diffX) < 80) return;
     const delta = diffX < 0 ? 1 : -1; // left = next day, right = previous day
     const nextId = adjacentDayId(delta);
     if (nextId) selectDay(nextId);
