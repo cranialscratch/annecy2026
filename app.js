@@ -1,5 +1,5 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v216';
+const APP_VERSION = 'v217';
 const _errorLog = [];
 window.addEventListener('error', e => {
   _errorLog.push({ ts: new Date().toISOString(), msg: e.message || String(e), src: (e.filename||'').split('/').pop() + ':' + (e.lineno||'?') });
@@ -1583,6 +1583,11 @@ function startLocationWatch() {
     updateLocMarker(pos.coords.accuracy);
     refreshMapCarouselOrder();
     renderNearestStopChip();
+    // On first fix: refresh vegan view if it's open (it renders before GPS is ready)
+    if (firstFix && state.currentView === 'vegan') {
+      const tl = document.getElementById('timeline');
+      if (tl) renderVeganView(tl);
+    }
     // On first fix: re-fetch countdown POIs (which used fallback coords)
     if (firstFix && _leafletMap) {
       const day = TRIP_DATA.days.find(d => d.id === state.currentDayId);
@@ -1974,9 +1979,19 @@ async function renderVeganView(container) {
 
 async function fetchVeganNearby(lat, lng, radiusM) {
   const query = `[out:json][timeout:15];(nwr["diet:vegan"~"^(yes|only)$"]["amenity"~"^(restaurant|cafe|bar|fast_food|bakery|pub)$"](around:${radiusM},${lat},${lng}););out center body qt;`;
-  const res = await fetch('https://overpass-api.de/api/interpreter', {
-    method: 'POST', body: 'data=' + encodeURIComponent(query),
-  });
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 20000);
+  let res;
+  try {
+    res = await fetch('https://overpass-api.de/api/interpreter', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: 'data=' + encodeURIComponent(query),
+      signal: ctrl.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
   if (!res.ok) throw new Error('Overpass error');
   const json = await res.json();
   return (json.elements || []).map(el => {
