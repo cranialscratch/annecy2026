@@ -2279,3 +2279,89 @@ a.vd-info-link { color: var(--accent); }
 .vd-day-btn.selected { background: rgba(10,132,255,.18); border-color: var(--accent); color: var(--accent); }
 .vd-day-btn-name { display: block; font-size: 13px; font-weight: 700; }
 .vd-day-btn-date { display: block; font-size: 11px; opacity: .7; margin-top: 2px; }
+
+/* ── Charger cards ──────────────────────────────────────────────────── */
+.charger-card {
+  margin: 0 16px 10px; border-radius: 16px; overflow: hidden; cursor: pointer;
+  background: var(--glass-bg); border: 1px solid var(--glass-border);
+  box-shadow: inset 0 1px 0 var(--glass-hi);
+  display: flex; align-items: stretch;
+}
+body.light .charger-card { background: rgba(255,255,255,.7); }
+.charger-brand-bar {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 6px;
+  padding: 8px 12px; font-size: 12px;
+}
+.charger-brand-name { font-weight: 800; font-size: 12px; }
+.charger-kw-badge {
+  font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 20px;
+  background: rgba(56,189,248,.18); color: var(--teal); white-space: nowrap;
+}
+.charger-bays {
+  font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 20px;
+  background: rgba(255,255,255,.08); color: var(--text3);
+}
+.charger-card-body { flex: 1; padding: 10px 12px 12px; min-width: 0; }
+.charger-card-name { font-size: 14px; font-weight: 700; margin-bottom: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.charger-card-addr { font-size: 12px; color: var(--text3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.charger-price { font-size: 12px; color: var(--text2); margin-top: 4px; display: flex; align-items: center; gap: 5px; }
+.charger-price i { font-size: 14px; color: var(--green); }
+.charger-card { flex-direction: column; }
+.charger-card > .vegan-place-right { display: none; }
+/* Stack brand-bar on top, then body+dist side by side */
+.charger-card-inner { display: flex; align-items: center; }
+
+/* ── Charger detail ─────────────────────────────────────────────────── */
+#cd-overlay {
+  position: fixed; inset: 0; z-index: 400;
+  background: var(--bg);
+  transform: translateY(100%); transition: transform .32s cubic-bezier(.32,0,.25,1);
+  overflow-y: auto; -webkit-overflow-scrolling: touch;
+}
+#cd-overlay:not(.hidden) { transform: translateY(0); }
+#cd-overlay.hidden { display: none; }
+#cd-page { min-height: 100%; display: flex; flex-direction: column; position: relative; }
+#cd-hero { width: 100%; height: 180px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; }
+#cd-body { padding: 22px 22px calc(var(--safe-bot) + 100px); flex: 1; }
+#cd-meta-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+#cd-name { font-size: 26px; font-weight: 800; line-height: 1.15; letter-spacing: -.8px; margin-bottom: 14px; }
+#cd-toolbar {
+  position: absolute;
+  bottom: max(12px, env(safe-area-inset-bottom));
+  left: 16px; right: 16px;
+  display: flex; gap: 0;
+  background: var(--glass-bg-strong);
+  backdrop-filter: saturate(200%) brightness(1.4) blur(40px);
+  -webkit-backdrop-filter: saturate(200%) brightness(1.4) blur(40px);
+  border: 1px solid var(--glass-border);
+  box-shadow: inset 0 1px 0 var(--glass-hi), 0 8px 40px rgba(0,0,0,0.5);
+  border-radius: 100px; padding: 4px 6px; z-index: 10;
+}
+.cd-connectors { margin: 12px 0; border: 1px solid var(--glass-border); border-radius: 12px; overflow: hidden; }
+.cd-connector-row {
+  display: flex; align-items: center; gap: 8px; padding: 10px 14px;
+  border-bottom: 1px solid var(--glass-border);
+  font-size: 14px;
+}
+.cd-connector-row:last-child { border-bottom: none; }
+.cd-connector-label { flex: 1; font-weight: 600; }
+.cd-connector-count { font-size: 12px; color: var(--text3); }
+.cd-realtime-note {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12px; color: var(--text3); margin-top: 14px; padding: 10px 12px;
+  background: rgba(255,255,255,.04); border-radius: 10px;
+}
+.cd-realtime-note i { flex-shrink: 0; }
+
+/* Charger add-to-trip sheet */
+#cd-add-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 500;
+  display: flex; align-items: flex-end; justify-content: center;
+}
+#cd-add-overlay.hidden { display: none; }
+#cd-add-sheet {
+  background: var(--glass-bg-strong); backdrop-filter: var(--glass); -webkit-backdrop-filter: var(--glass);
+  border: 1px solid var(--glass-border); box-shadow: inset 0 1px 0 var(--glass-hi), var(--shadow);
+  border-radius: 28px 28px 0 0; width: 100%; max-width: 500px;
+  padding-bottom: var(--safe-bot); max-height: 80vh; overflow-y: auto;
+}

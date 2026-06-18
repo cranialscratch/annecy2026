@@ -1,5 +1,5 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v218';
+const APP_VERSION = 'v219';
 const _errorLog = [];
 window.addEventListener('error', e => {
   _errorLog.push({ ts: new Date().toISOString(), msg: e.message || String(e), src: (e.filename||'').split('/').pop() + ':' + (e.lineno||'?') });
@@ -1544,7 +1544,7 @@ function renderView(scrollToNow) {
     tl.classList.remove('hidden');
     if (state.currentView === 'overview')      { setBgClass(null); renderOverview(tl); }
     else if (state.currentView === 'vegan')    { setBgClass(null); renderVeganView(tl); }
-    else if (state.currentView === 'charging') { setBgClass(null); renderFilterList(tl, 'charging'); }
+    else if (state.currentView === 'charging') { setBgClass(null); renderChargerView(tl); }
     else if (state.cardView === 'calendar') renderCalView(tl);
     else {
       // Inject GPS chip before timeline if not present
@@ -1583,10 +1583,13 @@ function startLocationWatch() {
     updateLocMarker(pos.coords.accuracy);
     refreshMapCarouselOrder();
     renderNearestStopChip();
-    // On first fix: refresh vegan view if it's open (it renders before GPS is ready)
-    if (firstFix && state.currentView === 'vegan') {
+    // On first fix: refresh vegan/charger view if open (renders before GPS is ready)
+    if (firstFix && (state.currentView === 'vegan' || state.currentView === 'charging')) {
       const tl = document.getElementById('timeline');
-      if (tl) renderVeganView(tl);
+      if (tl) {
+        if (state.currentView === 'vegan') renderVeganView(tl);
+        else renderChargerView(tl);
+      }
     }
     // On first fix: re-fetch countdown POIs (which used fallback coords)
     if (firstFix && _leafletMap) {
@@ -2097,6 +2100,32 @@ function parseOpeningHours(str) {
   return { open: isOpen, todayStr: todayHours };
 }
 
+/* ── Maps URL helpers ───────────────────────────────────────────────── */
+function mapsSearchUrl(name, address, lat, lng) {
+  const q = [name, address].filter(Boolean).join(', ');
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q || (lat + ',' + lng))}`;
+}
+function mapsDirectionsUrl(name, address, lat, lng) {
+  const dest = address ? encodeURIComponent([name, address].filter(Boolean).join(', '))
+                       : `${lat},${lng}`;
+  return `https://www.google.com/maps/dir/?api=1&destination=${dest}&travelmode=driving`;
+}
+
+/* ── Wikimedia photo fetch ──────────────────────────────────────────── */
+async function fetchWikimediaPhoto(tag) {
+  if (!tag) return null;
+  // tag may be "File:foo.jpg" or just a filename
+  const title = tag.startsWith('File:') ? tag : `File:${tag}`;
+  try {
+    const url = `https://commons.wikimedia.org/w/api.php?action=query&titles=${encodeURIComponent(title)}&prop=imageinfo&iiprop=url&iiurlwidth=600&format=json&origin=*`;
+    const res = await fetch(url);
+    const json = await res.json();
+    const pages = json?.query?.pages || {};
+    const page = Object.values(pages)[0];
+    return page?.imageinfo?.[0]?.thumburl || page?.imageinfo?.[0]?.url || null;
+  } catch { return null; }
+}
+
 /* ── Find matching planned stop by proximity ────────────────────────── */
 function findMatchingPlannedStop(place) {
   for (const day of TRIP_DATA.days) {
@@ -2154,22 +2183,27 @@ function openVeganDetail(place) {
   const levelLabel = place.veganLevel === 'only' ? 'Fully vegan' : 'Vegan options';
   const levelClass = place.veganLevel === 'only' ? 'full' : '';
   const distStr = place.dist < 1000 ? `${Math.round(place.dist)}m away` : `${(place.dist / 1000).toFixed(1)}km away`;
-  const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${place.lat},${place.lng}`;
+  const mapsUrl = mapsSearchUrl(place.name, place.address, place.lat, place.lng);
+  const mapsNavUrl = mapsDirectionsUrl(place.name, place.address, place.lat, place.lng);
   const happycowUrl = `https://www.happycow.net/searchmap?lat=${place.lat}&lng=${place.lng}&zoom=16`;
   const planned = findMatchingPlannedStop(place);
   const { open, todayStr } = parseOpeningHours(place.openingHours);
 
-  // Hero
+  // Hero — start with placeholder, async-load photo
   const hero = document.getElementById('vd-hero');
   const typeColors = { restaurant:'#ea580c', cafe:'#d97706', bar:'#7c3aed', fast_food:'#dc2626', bakery:'#b45309', pub:'#4f46e5' };
   const heroColor = typeColors[place.type] || '#16a34a';
-  if (place.image && place.image.startsWith('http')) {
-    hero.style.background = `url(${place.image}) center/cover no-repeat`;
-    hero.innerHTML = '<div class="vd-hero-scrim"></div>';
-  } else {
-    hero.style.background = `linear-gradient(135deg, ${heroColor}33 0%, ${heroColor}11 100%)`;
-    hero.innerHTML = `<div class="vd-hero-icon">${typeIcon}</div>`;
-  }
+  hero.style.background = `linear-gradient(135deg, ${heroColor}33 0%, ${heroColor}11 100%)`;
+  hero.innerHTML = `<div class="vd-hero-icon">${typeIcon}</div>`;
+  // Try direct image tag first, then Wikimedia Commons
+  const tryPhoto = place.image?.startsWith('http') ? Promise.resolve(place.image)
+    : place.image ? fetchWikimediaPhoto(place.image) : Promise.resolve(null);
+  tryPhoto.then(url => {
+    if (url && document.getElementById('vd-overlay') && !document.getElementById('vd-overlay').classList.contains('hidden')) {
+      hero.style.background = `url(${url}) center/cover no-repeat`;
+      hero.innerHTML = '<div class="vd-hero-scrim"></div>';
+    }
+  });
 
   // Meta row
   document.getElementById('vd-meta-row').innerHTML =
@@ -2234,7 +2268,7 @@ function openVeganDetail(place) {
   const addLabel = planned ? 'Already on itinerary' : 'Add to trip';
   const addDisabled = planned ? 'disabled' : '';
   document.getElementById('vd-toolbar').innerHTML =
-    `<a class="detail-tool-btn nav-tool" href="${mapsUrl}" target="_blank" rel="noopener"><i class="ph ph-navigation-arrow"></i>Navigate</a>` +
+    `<a class="detail-tool-btn nav-tool" href="${mapsNavUrl}" target="_blank" rel="noopener"><i class="ph ph-navigation-arrow"></i>Navigate</a>` +
     `<button class="detail-tool-btn vd-add-tool" id="vd-add-btn" ${addDisabled}><i class="ph ph-calendar-plus"></i>${addLabel}</button>`;
 
   document.getElementById('vd-add-btn')?.addEventListener('click', () => {
@@ -2333,6 +2367,346 @@ function openVeganAddSheet() {
     showToast(`${newStop.location} added to ${getDayLabel(day)}`);
   };
 
+  sheet.classList.remove('hidden');
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   EV CHARGER FINDER
+   ═══════════════════════════════════════════════════════════════════════ */
+
+const CHARGER_BRANDS = {
+  tesla:    { label:'Tesla Supercharger', color:'#cc0000', icon:'⚡' },
+  ionity:   { label:'Ionity',             color:'#6d28d9', icon:'⚡' },
+  fastned:  { label:'Fastned',            color:'#f59e0b', icon:'⚡' },
+  electra:  { label:'Electra',            color:'#0ea5e9', icon:'⚡' },
+  'bp pulse':{ label:'BP Pulse',          color:'#16a34a', icon:'⚡' },
+  default:  { label:'Charger',            color:'#3b82f6', icon:'⚡' },
+};
+
+function chargerBrand(op) {
+  if (!op) return CHARGER_BRANDS.default;
+  const lo = op.toLowerCase();
+  for (const [key, val] of Object.entries(CHARGER_BRANDS)) {
+    if (key !== 'default' && lo.includes(key)) return { ...val, isTesla: key === 'tesla' };
+  }
+  return { ...CHARGER_BRANDS.default, label: op };
+}
+
+function parseKW(str) {
+  if (!str) return null;
+  const m = str.match(/(\d+(?:\.\d+)?)\s*(?:kW|KW|kw)?/);
+  return m ? parseFloat(m[1]) : null;
+}
+
+async function fetchChargersNearby(lat, lng, radiusM) {
+  const query = `[out:json][timeout:15];(nwr["amenity"="charging_station"](around:${radiusM},${lat},${lng}););out center body qt;`;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 20000);
+  let res;
+  try {
+    res = await fetch('https://overpass-api.de/api/interpreter', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: 'data=' + encodeURIComponent(query),
+      signal: ctrl.signal,
+    });
+  } finally { clearTimeout(timer); }
+  if (!res.ok) throw new Error('Overpass error');
+  const json = await res.json();
+
+  return (json.elements || []).map(el => {
+    const elLat = el.lat ?? el.center?.lat;
+    const elLng = el.lon ?? el.center?.lon;
+    if (!elLat || !elLng) return null;
+    const t = el.tags || {};
+
+    // Operator / network
+    const operator = t.operator || t.network || t.brand || '';
+
+    // Max kW — scan all socket output tags
+    let maxKW = null;
+    for (const [k, v] of Object.entries(t)) {
+      if (k.endsWith(':output') || k === 'maxpower' || k === 'charging_station:output') {
+        const kw = parseKW(v);
+        if (kw && kw > (maxKW || 0)) maxKW = kw;
+      }
+    }
+
+    // Connector types and counts
+    const connectors = [];
+    const socketKeys = { 'socket:type2_combo':'CCS', 'socket:ccs':'CCS', 'socket:chademo':'CHAdeMO',
+      'socket:tesla_supercharger':'Tesla', 'socket:type2':'Type 2', 'socket:type1':'Type 1' };
+    for (const [sk, label] of Object.entries(socketKeys)) {
+      const count = parseInt(t[sk]) || 0;
+      const kw    = parseKW(t[`${sk}:output`]);
+      if (count > 0 || t[sk]) connectors.push({ label, count: count || null, kw });
+    }
+
+    return {
+      osmId:        el.id,
+      name:         t.name || t['name:en'] || operator || 'Charging station',
+      operator,
+      address:      [t['addr:housenumber'], t['addr:street'], t['addr:city']].filter(Boolean).join(' '),
+      openingHours: t.opening_hours || '',
+      fee:          t.fee,
+      charge:       t.charge || t['charge:description'] || '',
+      capacity:     parseInt(t.capacity) || null,
+      maxKW,
+      connectors,
+      phone:        t.phone || '',
+      website:      t.website || '',
+      lat: elLat, lng: elLng,
+      dist: haversineM(lat, lng, elLat, elLng),
+    };
+  }).filter(Boolean).sort((a, b) => a.dist - b.dist).slice(0, 40);
+}
+
+async function renderChargerView(container) {
+  container.innerHTML = '';
+
+  const hdr = document.createElement('div');
+  hdr.className = 'vegan-view-header';
+  hdr.style.color = 'var(--teal)';
+  hdr.innerHTML = '<i class="ph ph-lightning"></i> EV Chargers near you';
+  container.appendChild(hdr);
+
+  const nearbySection = document.createElement('div');
+  nearbySection.className = 'vegan-nearby-section';
+  container.appendChild(nearbySection);
+
+  if (_userLat === null) {
+    nearbySection.innerHTML = `<div class="vegan-no-gps"><i class="ph ph-map-pin-slash"></i><div>Enable location to find chargers near you</div><button class="pill-btn primary" id="charger-gps-btn">Share location</button></div>`;
+    nearbySection.querySelector('#charger-gps-btn')?.addEventListener('click', () => {
+      startLocationWatch();
+      nearbySection.innerHTML = `<div class="vegan-searching"><i class="ph ph-spinner vegan-spin"></i> Getting your location…</div>`;
+    });
+  } else {
+    nearbySection.innerHTML = `<div class="vegan-searching"><i class="ph ph-spinner vegan-spin"></i> Finding chargers within 20 km…</div>`;
+    try {
+      const chargers = await fetchChargersNearby(_userLat, _userLng, 20000);
+      nearbySection.innerHTML = '';
+      if (chargers.length === 0) {
+        nearbySection.innerHTML = `<div class="vegan-empty"><i class="ph ph-charging-station"></i><div>No chargers found within 20 km.</div></div>`;
+      } else {
+        const sub = document.createElement('div');
+        sub.className = 'vegan-nearby-subtitle';
+        sub.textContent = `${chargers.length} station${chargers.length !== 1 ? 's' : ''} found`;
+        nearbySection.appendChild(sub);
+        chargers.forEach(c => nearbySection.appendChild(buildChargerCard(c)));
+      }
+    } catch {
+      nearbySection.innerHTML = `<div class="vegan-empty"><i class="ph ph-wifi-slash"></i><div>Couldn't load chargers — check connection.</div></div>`;
+    }
+  }
+
+  // Planned charging stops
+  const planHdr = document.createElement('div');
+  planHdr.className = 'vegan-plan-header';
+  planHdr.innerHTML = '<i class="ph ph-calendar-check"></i> On your itinerary';
+  container.appendChild(planHdr);
+
+  let found = false;
+  TRIP_DATA.days.forEach(day => {
+    getDayStops(day).forEach(stop => {
+      if (stop.type !== 'charging') return;
+      found = true;
+      const card = document.createElement('div');
+      card.className = 'filter-card';
+      card.innerHTML = `
+        <span class="filter-icon">${stopTypeIcon(stop)}</span>
+        <div class="filter-info">
+          <div class="filter-day">${getDayLabel(day)} · ${day.isFestival ? '20–27 Jun' : formatDate(day.date)}</div>
+          <div class="filter-loc">${stop.location}</div>
+          <div class="filter-reason">${stop.reason || ''}</div>
+        </div>
+        <div><a class="act-btn tesla" href="${teslaNavUrl(stop)}" target="_blank" rel="noopener"><i class="ph ph-navigation-arrow"></i></a></div>`;
+      card.querySelector('.filter-info').addEventListener('click', () => openDetail(stop));
+      container.appendChild(card);
+    });
+  });
+  if (!found) {
+    const empty = document.createElement('div');
+    empty.className = 'vegan-empty';
+    empty.innerHTML = '<i class="ph ph-calendar-x"></i><div>No charging stops on current itinerary.</div>';
+    container.appendChild(empty);
+  }
+}
+
+function buildChargerCard(charger) {
+  const card = document.createElement('div');
+  card.className = 'charger-card';
+  const distStr = charger.dist < 1000 ? `${Math.round(charger.dist)}m` : `${(charger.dist / 1000).toFixed(1)}km`;
+  const brand = chargerBrand(charger.operator);
+  const { open, todayStr } = parseOpeningHours(charger.openingHours);
+  const openBadge = open === true ? '<span class="vp-open-badge open">Open</span>'
+                  : open === false ? '<span class="vp-open-badge closed">Closed</span>' : '';
+  const kwBadge = charger.maxKW ? `<span class="charger-kw-badge">${charger.maxKW % 1 === 0 ? charger.maxKW : charger.maxKW.toFixed(0)}kW</span>` : '';
+  const bays = charger.capacity ? `<span class="charger-bays">${charger.capacity} bay${charger.capacity !== 1 ? 's' : ''}</span>` : '';
+
+  card.innerHTML = `
+    <div class="charger-brand-bar" style="background:${brand.color}22;border-left:3px solid ${brand.color}">
+      <span class="charger-brand-name" style="color:${brand.color}">${brand.isTesla ? '⚡ ' : ''}${brand.label}</span>
+      ${kwBadge}${bays}${openBadge}
+    </div>
+    <div class="charger-card-body">
+      <div class="charger-card-name">${charger.name !== charger.operator ? charger.name : (charger.address || charger.name)}</div>
+      ${charger.address ? `<div class="charger-card-addr">${charger.address}</div>` : ''}
+      ${todayStr ? `<div class="vegan-place-hours-mini">${todayStr}</div>` : ''}
+      ${charger.charge ? `<div class="charger-price"><i class="ph ph-currency-circle-dollar"></i> ${charger.charge}</div>` : ''}
+    </div>
+    <div class="vegan-place-right">
+      <div class="vegan-place-dist">${distStr}</div>
+      <div class="vegan-place-chevron"><i class="ph ph-caret-right"></i></div>
+    </div>`;
+  card.addEventListener('click', () => openChargerDetail(charger));
+  return card;
+}
+
+/* ── Charger detail overlay ─────────────────────────────────────────── */
+let _cdPlace = null;
+
+function openChargerDetail(charger) {
+  _cdPlace = charger;
+  const overlay = document.getElementById('cd-overlay');
+  if (!overlay) return;
+
+  const brand = chargerBrand(charger.operator);
+  const distStr = charger.dist < 1000 ? `${Math.round(charger.dist)}m away` : `${(charger.dist / 1000).toFixed(1)}km away`;
+  const mapsUrl = mapsSearchUrl(charger.name, charger.address, charger.lat, charger.lng);
+  const mapsNav = mapsDirectionsUrl(charger.name, charger.address, charger.lat, charger.lng);
+  const teslaNav = `https://www.tesla.com/_tsla/journey/?lat=${charger.lat}&lng=${charger.lng}`;
+  const { open, todayStr } = parseOpeningHours(charger.openingHours);
+
+  // Hero
+  const hero = document.getElementById('cd-hero');
+  hero.style.background = `linear-gradient(135deg, ${brand.color}44 0%, ${brand.color}11 100%)`;
+  hero.innerHTML = `<div class="vd-hero-icon" style="font-size:56px">${brand.isTesla ? '⚡' : '🔌'}</div>`;
+
+  // Meta row
+  document.getElementById('cd-meta-row').innerHTML =
+    `<span class="tl-card-badge" style="background:${brand.color}22;color:${brand.color}">${brand.label}</span>` +
+    (charger.maxKW ? `<span class="charger-kw-badge" style="margin-left:8px">${Math.round(charger.maxKW)}kW max</span>` : '') +
+    `<span class="vd-dist-label">${distStr}</span>`;
+
+  document.getElementById('cd-name').textContent = charger.name;
+
+  // Hours
+  const hoursEl = document.getElementById('cd-hours-row');
+  if (charger.openingHours) {
+    const statusClass = open === true ? 'open' : open === false ? 'closed' : '';
+    const statusText  = open === true ? 'Open now' : open === false ? 'Closed now' : '';
+    hoursEl.className = 'vd-hours-row';
+    hoursEl.innerHTML = `<i class="ph ph-clock"></i>` +
+      (statusText ? `<span class="vp-open-badge ${statusClass}">${statusText}</span>` : '') +
+      `<span class="vd-hours-text">${todayStr || charger.openingHours}</span>`;
+  } else {
+    hoursEl.className = 'hidden';
+  }
+
+  // Address
+  const addrEl = document.getElementById('cd-address');
+  addrEl.innerHTML = charger.address ? `<i class="ph ph-map-pin"></i> ${charger.address}` : '';
+  addrEl.className = charger.address ? 'vd-info-line' : 'hidden';
+
+  // Connectors table
+  const infoEl = document.getElementById('cd-info-rows');
+  const rows = [];
+  if (charger.connectors.length) {
+    rows.push('<div class="cd-connectors">');
+    charger.connectors.forEach(c => {
+      rows.push(`<div class="cd-connector-row">
+        <span class="cd-connector-label">${c.label}</span>
+        ${c.kw ? `<span class="charger-kw-badge">${Math.round(c.kw)}kW</span>` : ''}
+        ${c.count ? `<span class="cd-connector-count">${c.count} bay${c.count !== 1 ? 's' : ''}</span>` : ''}
+      </div>`);
+    });
+    rows.push('</div>');
+  }
+  if (charger.capacity && !charger.connectors.length)
+    rows.push(`<div class="vd-info-line"><i class="ph ph-stack"></i> ${charger.capacity} charging bays total</div>`);
+  if (charger.charge)
+    rows.push(`<div class="vd-info-line"><i class="ph ph-currency-circle-dollar"></i> ${charger.charge}</div>`);
+  else if (charger.fee === 'no')
+    rows.push(`<div class="vd-info-line"><i class="ph ph-currency-circle-dollar"></i> Free to use</div>`);
+  if (charger.phone)
+    rows.push(`<a class="vd-info-line vd-info-link" href="tel:${charger.phone}"><i class="ph ph-phone"></i> ${charger.phone}</a>`);
+  if (charger.website)
+    rows.push(`<a class="vd-info-line vd-info-link" href="${charger.website}" target="_blank" rel="noopener"><i class="ph ph-globe"></i> Operator website</a>`);
+
+  // Real-time note
+  rows.push(`<div class="cd-realtime-note"><i class="ph ph-info"></i> Live bay availability requires the operator's app</div>`);
+  infoEl.innerHTML = rows.join('');
+
+  // Links row
+  document.getElementById('cd-links-row').innerHTML =
+    `<div class="vd-links-label">Open in</div>
+     <div class="vd-links-btns">
+       <a class="vd-link-btn gmaps" href="${mapsUrl}" target="_blank" rel="noopener"><i class="ph ph-google-logo"></i><span>Google Maps</span></a>
+       ${brand.isTesla ? `<a class="vd-link-btn" style="color:#cc0000;background:rgba(204,0,0,.1);border-color:rgba(204,0,0,.2)" href="https://www.tesla.com/en_gb/charging" target="_blank" rel="noopener"><span>⚡</span><span>Tesla app</span></a>` : ''}
+     </div>`;
+
+  document.getElementById('cd-maps-link').href = mapsUrl;
+
+  // Toolbar
+  const isPlanned = TRIP_DATA.days.some(d => getDayStops(d).some(s => s.lat && haversineM(s.lat, s.lng, charger.lat, charger.lng) < 200));
+  document.getElementById('cd-toolbar').innerHTML =
+    `<a class="detail-tool-btn nav-tool" href="${mapsNav}" target="_blank" rel="noopener"><i class="ph ph-navigation-arrow"></i>Navigate</a>` +
+    `<button class="detail-tool-btn vd-add-tool" id="cd-add-btn" ${isPlanned ? 'disabled' : ''}><i class="ph ph-calendar-plus"></i>${isPlanned ? 'On itinerary' : 'Add to trip'}</button>`;
+
+  document.getElementById('cd-add-btn')?.addEventListener('click', () => {
+    if (!isPlanned) openChargerAddSheet();
+  });
+
+  document.getElementById('cd-back').onclick = () => { overlay.classList.add('hidden'); _cdPlace = null; };
+  overlay.classList.remove('hidden');
+}
+
+function openChargerAddSheet() {
+  const sheet = document.getElementById('cd-add-overlay');
+  if (!sheet) return;
+  const daysEl = document.getElementById('cd-add-days');
+  daysEl.innerHTML = '';
+  let selectedDayId = state.currentDayId;
+  TRIP_DATA.days.filter(d => !d.isCountdown).forEach(day => {
+    const btn = document.createElement('button');
+    btn.className = 'vd-day-btn' + (day.id === selectedDayId ? ' selected' : '');
+    btn.dataset.dayId = day.id;
+    btn.innerHTML = `<span class="vd-day-btn-name">${getDayLabel(day)}</span><span class="vd-day-btn-date">${formatDate(day.date)}</span>`;
+    btn.addEventListener('click', () => {
+      daysEl.querySelectorAll('.vd-day-btn').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected'); selectedDayId = day.id;
+    });
+    daysEl.appendChild(btn);
+  });
+  setTimeout(() => daysEl.querySelector('.selected')?.scrollIntoView({ block:'nearest', behavior:'smooth' }), 50);
+
+  document.getElementById('cd-add-close').onclick  = () => sheet.classList.add('hidden');
+  document.getElementById('cd-add-cancel').onclick = () => sheet.classList.add('hidden');
+  document.getElementById('cd-add-confirm').onclick = () => {
+    const time   = document.getElementById('cd-add-time').value || '12:00';
+    const ripple = document.getElementById('cd-add-ripple').checked;
+    const day    = TRIP_DATA.days.find(d => d.id === selectedDayId);
+    if (!day || !_cdPlace) return;
+    saveUndoSnapshot();
+    const newStop = {
+      id: 'charger_' + Date.now(), time, type: 'charging', duration: 30,
+      location: _cdPlace.name || 'Charging stop',
+      reason: [_cdPlace.operator, _cdPlace.maxKW ? `${Math.round(_cdPlace.maxKW)}kW` : '', _cdPlace.charge].filter(Boolean).join(' · '),
+      lat: _cdPlace.lat, lng: _cdPlace.lng,
+      mapsUrl: mapsSearchUrl(_cdPlace.name, _cdPlace.address, _cdPlace.lat, _cdPlace.lng),
+      order: 999,
+    };
+    if (!state.addedStops[day.id]) state.addedStops[day.id] = [];
+    state.addedStops[day.id].push(newStop);
+    if (ripple) applyTravelAction(day, newStop, time, true);
+    save();
+    sheet.classList.add('hidden');
+    document.getElementById('cd-overlay').classList.add('hidden');
+    _cdPlace = null;
+    state.currentDayId = day.id; state.currentView = 'day';
+    renderView(false);
+    showToast(`Charging stop added to ${getDayLabel(day)}`);
+  };
   sheet.classList.remove('hidden');
 }
 
