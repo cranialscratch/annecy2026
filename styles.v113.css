@@ -1950,29 +1950,35 @@ body.light #devdata-footer { border-color: rgba(0,0,0,0.08); }
 /* ── Plan status badges on timeline cards ──────────────────────────── */
 .card-plan-badge {
   display: none;
-  position: absolute; top: 8px; right: 8px;
-  padding: 2px 7px; border-radius: 20px;
-  font-size: 10px; font-weight: 600; letter-spacing: .02em;
+  position: absolute; bottom: 10px; right: 10px;
+  padding: 5px 11px 5px 9px; border-radius: 20px;
+  font-size: 12px; font-weight: 700; letter-spacing: .01em;
   pointer-events: none; white-space: nowrap; z-index: 2;
+  gap: 5px;
 }
+.card-plan-badge i { font-size: 14px; }
 .tl-card.plan-conditional .card-plan-badge {
-  display: flex; align-items: center; gap: 3px;
-  background: rgba(251,146,60,.18); color: #fb923c;
-  border: 1px solid rgba(251,146,60,.35);
+  display: flex; align-items: center;
+  background: rgba(251,146,60,.28); color: #ffb07a;
+  border: 1.5px solid rgba(251,146,60,.6);
+  box-shadow: 0 2px 8px rgba(251,146,60,.2);
 }
 .tl-card.plan-weak-vegan .card-plan-badge {
-  display: flex; align-items: center; gap: 3px;
-  background: rgba(251,146,60,.18); color: #fb923c;
-  border: 1px solid rgba(251,146,60,.35);
+  display: flex; align-items: center;
+  background: rgba(251,146,60,.28); color: #ffb07a;
+  border: 1.5px solid rgba(251,146,60,.6);
+  box-shadow: 0 2px 8px rgba(251,146,60,.2);
 }
 .tl-card.plan-anchor .card-plan-badge {
-  display: flex; align-items: center; gap: 3px;
-  background: rgba(99,102,241,.18); color: #818cf8;
-  border: 1px solid rgba(99,102,241,.3);
+  display: flex; align-items: center;
+  background: rgba(99,102,241,.25); color: #a5b4fc;
+  border: 1.5px solid rgba(99,102,241,.45);
 }
 body.light .tl-card.plan-conditional .card-plan-badge,
-body.light .tl-card.plan-weak-vegan .card-plan-badge { color: #c2410c; background: rgba(251,146,60,.12); }
-body.light .tl-card.plan-anchor .card-plan-badge { color: #4338ca; background: rgba(99,102,241,.1); }
+body.light .tl-card.plan-weak-vegan .card-plan-badge {
+  color: #b45309; background: rgba(251,146,60,.18); border-color: rgba(251,146,60,.5);
+}
+body.light .tl-card.plan-anchor .card-plan-badge { color: #3730a3; background: rgba(99,102,241,.12); }
 
 /* ── Plan status section inside detail overlay ─────────────────────── */
 #detail-plan-section {
@@ -2083,3 +2089,8 @@ body.light .alt-card-trigger { background: rgba(99,102,241,.08); color: #4338ca;
 body.light .alt-card-btn { border-color: rgba(0,0,0,.15); }
 .alt-card-btn.maps-btn { border-color: rgba(59,130,246,.4); color: #60a5fa; }
 body.light .alt-card-btn.maps-btn { color: #1d4ed8; }
+.alt-card-btn.switch-btn {
+  background: rgba(251,146,60,.15); border-color: rgba(251,146,60,.5); color: #ffb07a;
+  font-weight: 700;
+}
+body.light .alt-card-btn.switch-btn { color: #b45309; background: rgba(251,146,60,.1); }

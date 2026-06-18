@@ -1,5 +1,5 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v212';
+const APP_VERSION = 'v213';
 const _errorLog = [];
 window.addEventListener('error', e => {
   _errorLog.push({ ts: new Date().toISOString(), msg: e.message || String(e), src: (e.filename||'').split('/').pop() + ':' + (e.lineno||'?') });
@@ -3213,15 +3213,67 @@ function renderDetailPlanSection(stop) {
           ${alt.trigger ? `<div class="alt-card-trigger">Use when: ${alt.trigger}</div>` : ''}
           ${alt.sameDayAction ? `<div class="plan-info-row" style="margin:4px 0 0;font-size:12px"><span class="plan-info-label">Today</span><span class="plan-info-value">${alt.sameDayAction}</span></div>` : ''}
           <div class="alt-card-actions">
+            <button class="alt-card-btn switch-btn" data-primary-id="${stop.id}" data-alt-idx="${alts.indexOf(alt)}"><i class="ph ph-shuffle"></i> Use this instead</button>
             <a class="alt-card-btn maps-btn" href="${alt.mapsUrl}" target="_blank" rel="noopener"><i class="ph ph-map-trifold"></i> Maps</a>
-            ${alt.veganFriendly || alt.veganFit ? `<a class="alt-card-btn" href="${veganNearbyUrl(alt)}" target="_blank" rel="noopener"><i class="ph ph-leaf"></i> Vegan nearby</a>` : ''}
           </div>
         </div>`;
       }).join('');
+    altsEl.querySelectorAll('.switch-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const altIdx = parseInt(btn.dataset.altIdx, 10);
+        switchToAlternative(stop, alts[altIdx]);
+      });
+    });
   } else {
     altsEl.classList.add('hidden');
     altsEl.innerHTML = '';
   }
+}
+
+function switchToAlternative(primaryStop, alt) {
+  saveUndoSnapshot();
+  // Find the day containing the primary stop
+  const day = TRIP_DATA.days.find(d => getDayStops(d).some(s => s.id === primaryStop.id));
+  if (!day) return;
+
+  // Skip the primary stop
+  state.skipped[primaryStop.id] = true;
+  delete state.checked[primaryStop.id];
+
+  // Build a new stop object from the alternative, inheriting the primary's time and order
+  const newStop = {
+    id:           alt.id,
+    order:        primaryStop.order + 0.5,   // insert right after primary
+    time:         getStopTime(primaryStop),
+    tz:           primaryStop.tz || 'FR',
+    location:     alt.location,
+    type:         alt.type || primaryStop.type,
+    priority:     primaryStop.priority,
+    lat:          alt.lat,
+    lng:          alt.lng,
+    mapsUrl:      alt.mapsUrl,
+    reason:       alt.reason,
+    duration:     alt.duration || primaryStop.duration,
+    veganFriendly: alt.veganFriendly || false,
+    planStatus:   'primary',
+  };
+
+  // Add to addedStops for this day
+  if (!state.addedStops[day.id]) state.addedStops[day.id] = [];
+  // Remove any prior switch to the same alt
+  state.addedStops[day.id] = state.addedStops[day.id].filter(s => s.id !== alt.id);
+  state.addedStops[day.id].push(newStop);
+
+  // If primary had a linked depart stop, skip that too
+  const dayStops = getDayStops(day);
+  const pIdx = dayStops.findIndex(s => s.id === primaryStop.id);
+  const next = dayStops[pIdx + 1];
+  if (next && getStopType(next) === 'depart') state.skipped[next.id] = true;
+
+  save();
+  closeDetail();
+  renderView(false);
+  showToast(`Switched to ${alt.location}`);
 }
 
 function openDetail(stop) {
