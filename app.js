@@ -1,5 +1,5 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v213';
+const APP_VERSION = 'v214';
 const _errorLog = [];
 window.addEventListener('error', e => {
   _errorLog.push({ ts: new Date().toISOString(), msg: e.message || String(e), src: (e.filename||'').split('/').pop() + ':' + (e.lineno||'?') });
@@ -2584,15 +2584,14 @@ function buildTimelineItem(stop, isLast, day, nextStop, prevStop) {
     </div>
     <div class="tl-swipe-wrap">
       <div class="tl-swipe-track">
-      <div class="tl-card${isVisited ? ' visited' : ''}${isSkipped ? ' skipped' : ''}${ (() => { const ps = stop.planStatus; return (ps === 'conditional' || ps === 'weak-vegan' || ps === 'anchor') ? ' plan-' + ps : ''; })() }" data-stop-id="${stop.id}">
+      <div class="tl-card${isVisited ? ' visited' : ''}${isSkipped ? ' skipped' : ''}" data-stop-id="${stop.id}">
         <div class="card-visited-badge">✓</div>
         <div class="card-skipped-badge"><i class="ph ph-x"></i> Skipped</div>
-        ${ (() => { const ps = stop.planStatus; const badges = { 'conditional': '<div class="card-plan-badge"><i class="ph ph-warning"></i> Check</div>', 'weak-vegan': '<div class="card-plan-badge"><i class="ph ph-leaf"></i> Weak vegan</div>', 'anchor': '<div class="card-plan-badge"><i class="ph ph-anchor-simple"></i> Fixed</div>' }; return badges[ps] || ''; })() }
         ${buildSlider(stop, 'card')}
         <div class="card-body">
           <div class="card-top-row">
             <div class="card-name">${stopTypeIcon(stop)} ${getStopName(stop)}</div>
-            <button class="check-btn${isVisited ? ' checked' : ''}" data-stop-id="${stop.id}" aria-label="Mark visited"><i class="ph ${isVisited ? 'ph-check-circle' : 'ph-circle'}"></i></button>
+            ${ (stop.planStatus === 'conditional' || stop.planStatus === 'weak-vegan') ? '<span class="card-warn-icon"><i class="ph ph-warning"></i></span>' : '' }<button class="check-btn${isVisited ? ' checked' : ''}" data-stop-id="${stop.id}" aria-label="Mark visited"><i class="ph ${isVisited ? 'ph-check-circle' : 'ph-circle'}"></i></button>
           </div>
           <div class="card-meta-row">
             <span class="tl-card-badge">${typeLabel(getStopType(stop))}</span>
@@ -3200,24 +3199,35 @@ function renderDetailPlanSection(stop) {
   if (alts.length) {
     altsEl.classList.remove('hidden');
     const veganLabel = { full:'Fully vegan', wide:'Wide vegan choice', limited:'Limited vegan', single:'One vegan dish' };
-    altsEl.innerHTML = `<div class="detail-alts-title"><i class="ph ph-shuffle"></i> Alternatives</div>` +
-      alts.map(alt => {
-        const vLabel = alt.veganFit ? veganLabel[alt.veganFit] || alt.veganFit : (alt.veganFriendly ? 'Vegan-friendly' : '');
-        const vClass = { full:'full', wide:'', limited:'limited', single:'limited' }[alt.veganFit] || '';
-        return `<div class="alt-card">
-          <div class="alt-card-header">
-            <div class="alt-card-name">${stopTypeIcon(alt)} ${alt.location}</div>
-            ${vLabel ? `<span class="alt-card-vegan ${vClass}">${vLabel}</span>` : ''}
-          </div>
-          <div class="alt-card-reason">${alt.reason}</div>
-          ${alt.trigger ? `<div class="alt-card-trigger">Use when: ${alt.trigger}</div>` : ''}
-          ${alt.sameDayAction ? `<div class="plan-info-row" style="margin:4px 0 0;font-size:12px"><span class="plan-info-label">Today</span><span class="plan-info-value">${alt.sameDayAction}</span></div>` : ''}
-          <div class="alt-card-actions">
-            <button class="alt-card-btn switch-btn" data-primary-id="${stop.id}" data-alt-idx="${alts.indexOf(alt)}"><i class="ph ph-shuffle"></i> Use this instead</button>
-            <a class="alt-card-btn maps-btn" href="${alt.mapsUrl}" target="_blank" rel="noopener"><i class="ph ph-map-trifold"></i> Maps</a>
-          </div>
-        </div>`;
-      }).join('');
+    const altCards = alts.map((alt, idx) => {
+      const vLabel = alt.veganFit ? veganLabel[alt.veganFit] || alt.veganFit : (alt.veganFriendly ? 'Vegan-friendly' : '');
+      const vClass = { full:'full', wide:'', limited:'limited', single:'limited' }[alt.veganFit] || '';
+      return `<div class="alt-card">
+        <div class="alt-card-header">
+          <div class="alt-card-name">${stopTypeIcon(alt)} ${alt.location}</div>
+          ${vLabel ? `<span class="alt-card-vegan ${vClass}">${vLabel}</span>` : ''}
+        </div>
+        <div class="alt-card-reason">${alt.reason}</div>
+        ${alt.trigger ? `<div class="alt-card-trigger">Use when: ${alt.trigger}</div>` : ''}
+        ${alt.sameDayAction ? `<div class="plan-info-row" style="margin:4px 0 0;font-size:12px"><span class="plan-info-label">Today</span><span class="plan-info-value">${alt.sameDayAction}</span></div>` : ''}
+        <div class="alt-card-actions">
+          <button class="alt-card-btn switch-btn" data-alt-idx="${idx}"><i class="ph ph-shuffle"></i> Use this instead</button>
+          <a class="alt-card-btn maps-btn" href="${alt.mapsUrl}" target="_blank" rel="noopener"><i class="ph ph-map-trifold"></i> Maps</a>
+        </div>
+      </div>`;
+    }).join('');
+    altsEl.innerHTML =
+      `<div class="detail-alts-toggle" id="detail-alts-toggle">
+        <div class="detail-alts-toggle-label"><i class="ph ph-shuffle"></i> Alternatives <span class="detail-alts-toggle-count">${alts.length}</span></div>
+        <i class="ph ph-caret-down detail-alts-chevron"></i>
+      </div>
+      <div id="detail-alts-list">${altCards}</div>`;
+    altsEl.querySelector('#detail-alts-toggle').addEventListener('click', () => {
+      const toggle = altsEl.querySelector('#detail-alts-toggle');
+      const list   = altsEl.querySelector('#detail-alts-list');
+      toggle.classList.toggle('open');
+      list.classList.toggle('open');
+    });
     altsEl.querySelectorAll('.switch-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         const altIdx = parseInt(btn.dataset.altIdx, 10);
@@ -3309,13 +3319,15 @@ function openDetail(stop) {
   renderDetailPlanSection(stop);
 
   const actEl = document.getElementById('detail-actions');
-  const parts = [`<a class="act-btn-full tesla" href="${teslaNavUrl(stop)}" target="_blank" rel="noopener"><i class="ph ph-navigation-arrow"></i> Navigate</a>`];
+  const secParts = [];
   if (getStopVegan(stop) || getStopType(stop) === 'food')
-    parts.push(`<a class="act-btn-full vegan" href="${veganNearbyUrl(stop)}" target="_blank" rel="noopener"><i class="ph ph-leaf"></i> Vegan nearby</a>`);
-  parts.push(`<a class="act-btn-full charge" href="${chargingNearbyUrl(stop)}" target="_blank" rel="noopener"><i class="ph ph-lightning"></i> Chargers</a>`);
+    secParts.push(`<a class="act-btn-full vegan" href="${veganNearbyUrl(stop)}" target="_blank" rel="noopener"><i class="ph ph-leaf"></i>Vegan</a>`);
+  secParts.push(`<a class="act-btn-full charge" href="${chargingNearbyUrl(stop)}" target="_blank" rel="noopener"><i class="ph ph-lightning"></i>Charge</a>`);
   if (stop.mapsUrl && stop.mapsUrl !== 'N/A')
-    parts.push(`<a class="act-btn-full maps" href="${stop.mapsUrl}" target="_blank" rel="noopener"><i class="ph ph-map-trifold"></i> Maps</a>`);
-  actEl.innerHTML = parts.join('');
+    secParts.push(`<a class="act-btn-full maps" href="${stop.mapsUrl}" target="_blank" rel="noopener"><i class="ph ph-map-trifold"></i>Maps</a>`);
+  actEl.innerHTML =
+    `<a class="act-btn-full tesla act-btn-primary" href="${teslaNavUrl(stop)}" target="_blank" rel="noopener"><i class="ph ph-navigation-arrow"></i> Navigate</a>` +
+    (secParts.length ? `<div class="detail-secondary-actions">${secParts.join('')}</div>` : '');
   document.getElementById('detail-edit-btn').onclick = () => openEditSheet(stop);
 
   // Travel action buttons — only shown for today's stops
