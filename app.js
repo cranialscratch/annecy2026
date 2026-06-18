@@ -1,5 +1,5 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v214';
+const APP_VERSION = 'v215';
 const _errorLog = [];
 window.addEventListener('error', e => {
   _errorLog.push({ ts: new Date().toISOString(), msg: e.message || String(e), src: (e.filename||'').split('/').pop() + ':' + (e.lineno||'?') });
@@ -3318,16 +3318,14 @@ function openDetail(stop) {
   // ── Plan status + alternatives ──────────────────────────────────────
   renderDetailPlanSection(stop);
 
-  const actEl = document.getElementById('detail-actions');
-  const secParts = [];
+  const toolbarEl = document.getElementById('detail-toolbar');
+  const toolBtns = [`<a class="detail-tool-btn nav-tool" href="${teslaNavUrl(stop)}" target="_blank" rel="noopener"><i class="ph ph-navigation-arrow"></i>Navigate</a>`];
   if (getStopVegan(stop) || getStopType(stop) === 'food')
-    secParts.push(`<a class="act-btn-full vegan" href="${veganNearbyUrl(stop)}" target="_blank" rel="noopener"><i class="ph ph-leaf"></i>Vegan</a>`);
-  secParts.push(`<a class="act-btn-full charge" href="${chargingNearbyUrl(stop)}" target="_blank" rel="noopener"><i class="ph ph-lightning"></i>Charge</a>`);
+    toolBtns.push(`<a class="detail-tool-btn vegan-tool" href="${veganNearbyUrl(stop)}" target="_blank" rel="noopener"><i class="ph ph-leaf"></i>Vegan</a>`);
+  toolBtns.push(`<a class="detail-tool-btn charge-tool" href="${chargingNearbyUrl(stop)}" target="_blank" rel="noopener"><i class="ph ph-lightning"></i>Charge</a>`);
   if (stop.mapsUrl && stop.mapsUrl !== 'N/A')
-    secParts.push(`<a class="act-btn-full maps" href="${stop.mapsUrl}" target="_blank" rel="noopener"><i class="ph ph-map-trifold"></i>Maps</a>`);
-  actEl.innerHTML =
-    `<a class="act-btn-full tesla act-btn-primary" href="${teslaNavUrl(stop)}" target="_blank" rel="noopener"><i class="ph ph-navigation-arrow"></i> Navigate</a>` +
-    (secParts.length ? `<div class="detail-secondary-actions">${secParts.join('')}</div>` : '');
+    toolBtns.push(`<a class="detail-tool-btn maps-tool" href="${stop.mapsUrl}" target="_blank" rel="noopener"><i class="ph ph-map-trifold"></i>Maps</a>`);
+  toolbarEl.innerHTML = toolBtns.join('');
   document.getElementById('detail-edit-btn').onclick = () => openEditSheet(stop);
 
   // Travel action buttons — only shown for today's stops
