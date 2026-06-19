@@ -2137,42 +2137,69 @@ function renderBucketView(container) {
   container.appendChild(hdr);
 
   if (!state.bucketList.length) {
-    container.innerHTML += '<div class="vegan-no-gps" style="margin:40px 16px"><i class="ph ph-smiley"></i><div>Nothing here yet — remove a stop from the itinerary to save it here</div></div>';
+    const empty = document.createElement('div');
+    empty.className = 'bucket-empty';
+    empty.innerHTML = `<i class="ph ph-bookmark-simple" style="font-size:40px;opacity:.3"></i>
+      <div style="margin-top:12px;font-size:16px;font-weight:600">No saved places yet</div>
+      <div style="margin-top:6px;font-size:14px;opacity:.6">Save places from the Vegan search, or swipe left on any stop and tap Remove</div>`;
+    container.appendChild(empty);
     return;
   }
 
   state.bucketList.forEach((entry, idx) => {
-    const { stop, dayLabel } = entry;
-    const card = document.createElement('div');
-    card.className = 'vegan-place-card bucket-card';
-    card.innerHTML = `
-      <div class="vegan-place-main">
-        <div class="vegan-place-name">${stopTypeIcon(stop)} ${stop.location || stop.name || 'Unnamed'}</div>
-        <div class="vegan-place-meta">
-          <span class="vegan-place-type">${typeLabel(getStopType(stop))}</span>
-          <span class="vd-dist-label" style="margin-left:auto">From: ${dayLabel}</span>
+    const { stop } = entry;
+    const wrapper = document.createElement('div');
+    wrapper.className = 'bucket-card-wrap';
+
+    // Photo/hero + card body — mirrors the timeline card look
+    const [c1, c2] = TYPE_GRAD[getStopType(stop)] || ['#334155','#0f172a'];
+    const sliderHtml = buildSlider(stop, 'card');
+    const addr = stop.address || stop.location || '';
+    wrapper.innerHTML = `
+      <div class="tl-card bucket-tl-card">
+        ${sliderHtml}
+        <div class="card-body">
+          <div class="card-top-row">
+            <div class="card-name">${stopTypeIcon(stop)} ${getStopName(stop)}</div>
+          </div>
+          ${addr ? `<div class="card-address">${addr}</div>` : ''}
+          <div class="card-meta-row">
+            <span class="tl-card-badge">${typeLabel(getStopType(stop))}</span>
+            ${stop.rating ? `<span style="font-size:13px;opacity:.8">⭐ ${stop.rating}</span>` : ''}
+          </div>
+          ${stop.reason ? `<div class="card-reason">${stop.reason}</div>` : ''}
         </div>
-        ${stop.reason ? `<div class="vegan-place-hours-mini" style="margin-top:4px;font-size:13px;color:var(--text3)">${stop.reason.slice(0,80)}${stop.reason.length>80?'…':''}</div>` : ''}
-      </div>
-      <div class="vegan-place-right">
-        <button class="bucket-add-btn" title="Add to a day"><i class="ph ph-calendar-plus"></i></button>
-        <button class="bucket-delete-btn" title="Delete permanently"><i class="ph ph-trash"></i></button>
+        <div class="bucket-card-actions">
+          <button class="bucket-add-btn pill-btn primary" style="flex:1"><i class="ph ph-calendar-plus"></i> Add to trip</button>
+          <button class="bucket-delete-btn pill-btn danger" style="flex:0 0 44px;padding:0"><i class="ph ph-trash"></i></button>
+        </div>
       </div>`;
 
-    card.querySelector('.bucket-add-btn').addEventListener('click', e => {
+    // Open detail on card tap (not on buttons)
+    wrapper.querySelector('.tl-card').addEventListener('click', e => {
+      if (e.target.closest('.bucket-card-actions')) return;
+      if (stop.osmId || stop.id?.startsWith('vegan_') || stop.id?.startsWith('gplace_')) {
+        const place = { ...stop, name: stop.location || stop.name, dist: 0 };
+        openVeganDetail(place);
+      } else {
+        openDetail(stop);
+      }
+    });
+
+    wrapper.querySelector('.bucket-add-btn').addEventListener('click', e => {
       e.stopPropagation();
       openBucketAddSheet(entry, idx);
     });
 
-    const deleteBtn = card.querySelector('.bucket-delete-btn');
+    const deleteBtn = wrapper.querySelector('.bucket-delete-btn');
     deleteBtn.addEventListener('click', e => {
       e.stopPropagation();
       if (deleteBtn._confirming) return;
       deleteBtn._confirming = true;
       const confirmDiv = document.createElement('div');
       confirmDiv.className = 'bucket-delete-confirm';
-      confirmDiv.innerHTML = 'Delete permanently? <button class="bucket-confirm-yes">Yes</button> <button class="bucket-confirm-no">No</button>';
-      card.appendChild(confirmDiv);
+      confirmDiv.innerHTML = 'Delete permanently? <button class="bucket-confirm-yes">Yes, delete</button> <button class="bucket-confirm-no">Cancel</button>';
+      wrapper.appendChild(confirmDiv);
       confirmDiv.querySelector('.bucket-confirm-yes').addEventListener('click', ev => {
         ev.stopPropagation();
         state.bucketList.splice(idx, 1);
@@ -2186,7 +2213,8 @@ function renderBucketView(container) {
       });
     });
 
-    container.appendChild(card);
+    initSlider(wrapper.querySelector('.card-slider'), stop, 'card');
+    container.appendChild(wrapper);
   });
 }
 
@@ -2888,12 +2916,35 @@ function openVeganDetail(place) {
   // Toolbar
   const addLabel = planned ? 'Already on itinerary' : 'Add to trip';
   const addDisabled = planned ? 'disabled' : '';
+  const alreadyBucketed = state.bucketList.some(e => e.stop.osmId === place.osmId || e.stop.id === place.osmId);
   document.getElementById('vd-toolbar').innerHTML =
     `<a class="detail-tool-btn nav-tool" href="${mapsNavUrl}" target="_blank" rel="noopener"><i class="ph ph-navigation-arrow"></i>Navigate</a>` +
-    `<button class="detail-tool-btn vd-add-tool" id="vd-add-btn" ${addDisabled}><i class="ph ph-calendar-plus"></i>${addLabel}</button>`;
+    `<button class="detail-tool-btn vd-add-tool" id="vd-add-btn" ${addDisabled}><i class="ph ph-calendar-plus"></i>${addLabel}</button>` +
+    `<button class="detail-tool-btn" id="vd-bucket-btn" ${alreadyBucketed ? 'disabled' : ''}><i class="ph ph-bookmark-simple"></i>${alreadyBucketed ? 'Saved' : 'Save'}</button>`;
 
   document.getElementById('vd-add-btn')?.addEventListener('click', () => {
     if (!planned) openVeganAddSheet();
+  });
+  document.getElementById('vd-bucket-btn')?.addEventListener('click', () => {
+    if (alreadyBucketed) return;
+    const stop = {
+      id: 'vegan_' + Date.now(),
+      osmId: place.osmId,
+      location: place.name,
+      address: place.address,
+      lat: place.lat,
+      lng: place.lng,
+      type: 'food',
+      veganLevel: place.veganLevel,
+      rating: place.rating,
+      reason: place.openingHours ? '' : '',
+    };
+    const day = TRIP_DATA.days.find(d => d.id === state.currentDayId) || TRIP_DATA.days[0];
+    state.bucketList.unshift({ stop, dayLabel: 'Vegan search', originalDayId: day.id, removedAt: Date.now() });
+    save();
+    document.getElementById('vd-bucket-btn').disabled = true;
+    document.getElementById('vd-bucket-btn').innerHTML = '<i class="ph ph-bookmark-simple"></i> Saved';
+    showToast('Saved to Bucket List');
   });
 
   // Back button

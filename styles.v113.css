@@ -2727,3 +2727,19 @@ body.light .cl-text { color: #475569; }
   font-size: 11px; font-weight: 700; padding: 1px 6px; margin-left: auto;
 }
 .detail-bucket-btn { background: rgba(99,102,241,.15); color: #6366f1; border-color: rgba(99,102,241,.3); margin-top: 6px; }
+
+/* ── Bucket list cards ─────────────────────────────────────────────── */
+.bucket-empty {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 60px 32px; text-align: center; opacity: .7;
+}
+.bucket-card-wrap { margin: 0 16px 16px; }
+.bucket-tl-card { cursor: pointer; }
+.bucket-card-actions {
+  display: flex; gap: 8px; padding: 10px 14px 14px;
+}
+.bucket-delete-confirm {
+  padding: 10px 14px; font-size: 13px; background: rgba(220,38,38,.08);
+  border-top: 1px solid rgba(220,38,38,.2); display: flex; align-items: center; gap: 8px;
+  border-radius: 0 0 16px 16px;
+}
