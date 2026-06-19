@@ -2049,7 +2049,7 @@ body.light .alt-card { background: rgba(0,0,0,.03); border-color: rgba(0,0,0,.1)
 }
 .alt-card-name { font-size: 15px; font-weight: 700; }
 .alt-card-vegan {
-  font-size: 11px; padding: 2px 7px; border-radius: 20px;
+  font-size: 12px; padding: 3px 8px; border-radius: 20px;
   background: rgba(48,209,88,.2); color: #34d399;
   font-weight: 600;
 }
@@ -2162,9 +2162,9 @@ body.light .detail-alts-toggle-count { background: rgba(0,0,0,.08); }
 }
 body.light .vegan-place-card { background: rgba(255,255,255,.7); }
 .vegan-place-main { flex: 1; min-width: 0; }
-.vegan-place-name { font-size: 15px; font-weight: 700; margin-bottom: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vegan-place-name { font-size: 17px; font-weight: 700; margin-bottom: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .vegan-place-meta { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-bottom: 2px; }
-.vegan-place-type { font-size: 11px; color: var(--text3); font-weight: 600; text-transform: capitalize; }
+.vegan-place-type { font-size: 13px; color: var(--text3); font-weight: 600; text-transform: capitalize; }
 .vegan-place-addr { font-size: 11px; color: var(--text3); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .vegan-place-right { display: flex; flex-direction: column; align-items: center; gap: 8px; flex-shrink: 0; }
 .vegan-place-dist { font-size: 12px; font-weight: 700; color: var(--text2); white-space: nowrap; }
@@ -2178,11 +2178,11 @@ body.light .vegan-place-card { background: rgba(255,255,255,.7); }
 /* ── Vegan place card enhancements ──────────────────────────────────── */
 .vegan-place-card { cursor: pointer; }
 .vegan-place-chevron { color: var(--text3); font-size: 18px; }
-.vegan-place-hours-mini { font-size: 11px; color: var(--text3); margin-top: 3px; }
-.vp-open-badge { font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 20px; }
+.vegan-place-hours-mini { font-size: 13px; color: var(--text3); margin-top: 3px; }
+.vp-open-badge { font-size: 12px; font-weight: 700; padding: 3px 8px; border-radius: 20px; }
 .vp-open-badge.open   { background: rgba(48,209,88,.18); color: var(--green); }
 .vp-open-badge.closed { background: rgba(255,55,95,.15); color: var(--rose); }
-.vp-planned-badge { font-size: 11px; font-weight: 600; color: var(--accent); background: rgba(10,132,255,.12); padding: 2px 8px; border-radius: 20px; white-space: nowrap; }
+.vp-planned-badge { font-size: 12px; font-weight: 600; color: var(--accent); background: rgba(10,132,255,.12); padding: 3px 9px; border-radius: 20px; white-space: nowrap; }
 .vp-planned-badge i { vertical-align: -2px; }
 
 /* ── Vegan detail overlay ───────────────────────────────────────────── */
@@ -2190,11 +2190,11 @@ body.light .vegan-place-card { background: rgba(255,255,255,.7); }
   position: fixed; inset: 0; z-index: 400;
   background: var(--bg);
   transform: translateY(100%); transition: transform .32s cubic-bezier(.32,0,.25,1);
-  display: flex; flex-direction: column; overflow: hidden;
+  overflow: hidden;
 }
 #vd-overlay:not(.hidden) { transform: translateY(0); }
 #vd-overlay.hidden { display: none; }
-#vd-page { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; display: flex; flex-direction: column; position: relative; }
+#vd-page { height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch; display: flex; flex-direction: column; padding-bottom: calc(88px + env(safe-area-inset-bottom)); }
 
 .vd-topbar {
   position: absolute; top: calc(var(--safe-top) + 14px); left: 16px; right: 16px;
@@ -2210,7 +2210,7 @@ body.light .vegan-place-card { background: rgba(255,255,255,.7); }
 .vd-hero-scrim { position: absolute; inset: 0; background: linear-gradient(to bottom, rgba(0,0,0,.25), rgba(0,0,0,.5)); }
 .vd-hero-icon { font-size: 64px; opacity: .6; }
 
-#vd-body { padding: 22px 22px 24px; flex: 1; }
+#vd-body { padding: 22px 22px 16px; flex: 1; }
 #vd-meta-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
 .vd-dist-label { font-size: 13px; font-weight: 600; color: var(--text3); margin-left: auto; }
 #vd-name { font-size: 28px; font-weight: 800; line-height: 1.15; letter-spacing: -.8px; margin-bottom: 14px; }
@@ -2238,15 +2238,16 @@ a.vd-info-link { color: var(--accent); }
 .vd-link-btn.happycow { color: var(--green); background: rgba(48,209,88,.1); border-color: rgba(48,209,88,.2); }
 
 #vd-toolbar {
-  flex-shrink: 0;
-  margin: 8px 16px max(12px, env(safe-area-inset-bottom));
+  position: absolute;
+  bottom: max(12px, env(safe-area-inset-bottom));
+  left: 16px; right: 16px;
   display: flex; gap: 0;
   background: var(--glass-bg-strong);
   backdrop-filter: saturate(200%) brightness(1.4) blur(40px);
   -webkit-backdrop-filter: saturate(200%) brightness(1.4) blur(40px);
   border: 1px solid var(--glass-border);
   box-shadow: inset 0 1px 0 var(--glass-hi), 0 8px 40px rgba(0,0,0,0.5);
-  border-radius: 100px; padding: 4px 6px;
+  border-radius: 100px; padding: 4px 6px; z-index: 10;
 }
 .vd-add-tool { flex: 1; background: none; border: none; cursor: pointer; text-decoration: none; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 10px 4px; color: var(--green); font-size: 11px; font-weight: 600; -webkit-tap-highlight-color: transparent; border-radius: 100px; }
 .vd-add-tool i { font-size: 22px; line-height: 1; }
@@ -2315,25 +2316,26 @@ body.light .charger-card { background: rgba(255,255,255,.7); }
   position: fixed; inset: 0; z-index: 400;
   background: var(--bg);
   transform: translateY(100%); transition: transform .32s cubic-bezier(.32,0,.25,1);
-  display: flex; flex-direction: column; overflow: hidden;
+  overflow: hidden;
 }
 #cd-overlay:not(.hidden) { transform: translateY(0); }
 #cd-overlay.hidden { display: none; }
-#cd-page { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; display: flex; flex-direction: column; position: relative; }
+#cd-page { height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch; display: flex; flex-direction: column; padding-bottom: calc(88px + env(safe-area-inset-bottom)); }
 #cd-hero { width: 100%; height: 180px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; }
-#cd-body { padding: 22px 22px 24px; flex: 1; }
+#cd-body { padding: 22px 22px 16px; flex: 1; }
 #cd-meta-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
 #cd-name { font-size: 26px; font-weight: 800; line-height: 1.15; letter-spacing: -.8px; margin-bottom: 14px; }
 #cd-toolbar {
-  flex-shrink: 0;
-  margin: 8px 16px max(12px, env(safe-area-inset-bottom));
+  position: absolute;
+  bottom: max(12px, env(safe-area-inset-bottom));
+  left: 16px; right: 16px;
   display: flex; gap: 0;
   background: var(--glass-bg-strong);
   backdrop-filter: saturate(200%) brightness(1.4) blur(40px);
   -webkit-backdrop-filter: saturate(200%) brightness(1.4) blur(40px);
   border: 1px solid var(--glass-border);
   box-shadow: inset 0 1px 0 var(--glass-hi), 0 8px 40px rgba(0,0,0,0.5);
-  border-radius: 100px; padding: 4px 6px;
+  border-radius: 100px; padding: 4px 6px; z-index: 10;
 }
 .cd-connectors { margin: 12px 0; border: 1px solid var(--glass-border); border-radius: 12px; overflow: hidden; }
 .cd-connector-row {
@@ -2384,13 +2386,20 @@ body.light .charger-card { background: rgba(255,255,255,.7); }
 .leaflet-container { background: var(--glass-bg); }
 
 /* Larger text in vegan/charger detail body */
-#vd-name, #cd-name { font-size: 30px !important; font-weight: 800; }
+#vd-name, #cd-name { font-size: 32px !important; font-weight: 800; }
+#vd-meta-row, #cd-meta-row { font-size: 14px !important; }
 #vd-body .vd-hours-row,
 #cd-body .vd-hours-row { font-size: 16px; }
 #vd-body .vd-info-line,
-#cd-body .vd-info-line { font-size: 15px; margin-bottom: 10px; }
+#cd-body .vd-info-line { font-size: 16px; margin-bottom: 12px; }
 #vd-body .vd-links-label,
-#cd-body .vd-links-label { font-size: 14px; display: flex; align-items: center; gap: 6px; }
+#cd-body .vd-links-label { font-size: 15px; display: flex; align-items: center; gap: 6px; }
+.gp-rating-row { font-size: 16px; margin-bottom: 14px; }
+.gp-rating-num { font-size: 20px; font-weight: 800; }
+.gp-rating-count { font-size: 13px; color: var(--text3); }
+.gp-review-card { font-size: 15px; }
+.gp-review-author { font-size: 14px; font-weight: 700; }
+.gp-review-text { font-size: 14px; line-height: 1.5; }
 
 /* Bigger, taller link buttons with sub-label */
 .vd-link-btn { padding: 14px 16px !important; gap: 12px; align-items: center; }

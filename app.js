@@ -1,5 +1,5 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v223';
+const APP_VERSION = 'v224';
 const _errorLog = [];
 window.addEventListener('error', e => {
   _errorLog.push({ ts: new Date().toISOString(), msg: e.message || String(e), src: (e.filename||'').split('/').pop() + ':' + (e.lineno||'?') });
@@ -1928,29 +1928,41 @@ async function renderVeganView(container) {
       nearbySection.innerHTML = `<div class="vegan-searching"><i class="ph ph-spinner vegan-spin"></i> Getting your location…</div>`;
     });
   } else {
-    nearbySection.innerHTML = `<div class="vegan-searching"><i class="ph ph-spinner vegan-spin"></i> Finding vegan places within 8 km…</div>`;
-    try {
-      const places = await fetchVeganNearby(_userLat, _userLng, 8000);
+    const isCached = _veganCache &&
+      Math.abs(_veganCache.lat - _userLat) < 0.05 &&
+      Math.abs(_veganCache.lng - _userLng) < 0.05;
+    const doRender = (places, fromCache) => {
       nearbySection.innerHTML = '';
+      const lat = _userLat, lng = _userLng;
       if (places.length === 0) {
         nearbySection.innerHTML = `<div class="vegan-empty"><i class="ph ph-smiley-sad"></i><div>No tagged vegan places found within 8 km.<br>Try HappyCow for community tips.</div></div>
-          <a class="vegan-happycow-btn" href="https://www.happycow.net/searchmap?lat=${_userLat}&lng=${_userLng}&zoom=13" target="_blank" rel="noopener"><i class="ph ph-leaf"></i> Open HappyCow</a>`;
+          <a class="vegan-happycow-btn" href="https://www.happycow.net/searchmap?lat=${lat}&lng=${lng}&zoom=13" target="_blank" rel="noopener"><i class="ph ph-leaf"></i> Open HappyCow</a>`;
       } else {
         const sub = document.createElement('div');
         sub.className = 'vegan-nearby-subtitle';
-        sub.textContent = `${places.length} place${places.length !== 1 ? 's' : ''} found`;
+        sub.textContent = `${places.length} place${places.length !== 1 ? 's' : ''} found${fromCache ? ' · pull to refresh' : ''}`;
         nearbySection.appendChild(sub);
         places.forEach(p => nearbySection.appendChild(buildVeganCard(p)));
         const hcLink = document.createElement('a');
         hcLink.className = 'vegan-happycow-btn';
-        hcLink.href = `https://www.happycow.net/searchmap?lat=${_userLat}&lng=${_userLng}&zoom=13`;
+        hcLink.href = `https://www.happycow.net/searchmap?lat=${lat}&lng=${lng}&zoom=13`;
         hcLink.target = '_blank'; hcLink.rel = 'noopener';
         hcLink.innerHTML = '<i class="ph ph-leaf"></i> More on HappyCow';
         nearbySection.appendChild(hcLink);
       }
-    } catch {
-      nearbySection.innerHTML = `<div class="vegan-empty"><i class="ph ph-wifi-slash"></i><div>Couldn't load nearby places — check connection.</div></div>
-        <a class="vegan-happycow-btn" href="https://www.happycow.net/searchmap?lat=${_userLat}&lng=${_userLng}&zoom=13" target="_blank" rel="noopener"><i class="ph ph-leaf"></i> Open HappyCow</a>`;
+    };
+    if (isCached) {
+      doRender(_veganCache.places, true);
+    } else {
+      nearbySection.innerHTML = `<div class="vegan-searching"><i class="ph ph-spinner vegan-spin"></i> Finding vegan places within 8 km…</div>`;
+      try {
+        const places = await fetchVeganNearby(_userLat, _userLng, 8000);
+        _veganCache = { lat: _userLat, lng: _userLng, places };
+        doRender(places, false);
+      } catch {
+        nearbySection.innerHTML = `<div class="vegan-empty"><i class="ph ph-wifi-slash"></i><div>Couldn't load nearby places — check connection.</div></div>
+          <a class="vegan-happycow-btn" href="https://www.happycow.net/searchmap?lat=${_userLat}&lng=${_userLng}&zoom=13" target="_blank" rel="noopener"><i class="ph ph-leaf"></i> Open HappyCow</a>`;
+      }
     }
   }
 
@@ -1965,16 +1977,21 @@ async function renderVeganView(container) {
       if (!getStopVegan(stop) && getStopType(stop) !== 'food') return;
       found = true;
       const card = document.createElement('div');
-      card.className = 'filter-card';
+      card.className = 'vegan-place-card';
+      const dateStr = day.isFestival ? '20–27 Jun' : formatDate(day.date);
       card.innerHTML = `
-        <span class="filter-icon">${stopTypeIcon(stop)}</span>
-        <div class="filter-info">
-          <div class="filter-day">${getDayLabel(day)} · ${day.isFestival ? '20–27 Jun' : formatDate(day.date)}</div>
-          <div class="filter-loc">${stop.location}</div>
-          <div class="filter-reason">${stop.reason}</div>
+        <div class="vegan-place-main">
+          <div class="vegan-place-name">${stop.location} <span class="vp-planned-badge"><i class="ph ph-calendar-check"></i> ${getDayLabel(day)} · ${dateStr}</span></div>
+          <div class="vegan-place-meta">
+            <span class="vegan-place-type">${stopTypeIcon(stop)} ${getStopType(stop)}</span>
+            <span class="alt-card-vegan full">On itinerary</span>
+          </div>
+          ${stop.reason ? `<div class="vegan-place-hours-mini">${stop.reason}</div>` : ''}
         </div>
-        <div><a class="act-btn tesla" href="${teslaNavUrl(stop)}" target="_blank" rel="noopener"><i class="ph ph-navigation-arrow"></i></a></div>`;
-      card.querySelector('.filter-info').addEventListener('click', () => openDetail(stop));
+        <div class="vegan-place-right">
+          <div class="vegan-place-chevron"><i class="ph ph-caret-right"></i></div>
+        </div>`;
+      card.addEventListener('click', () => openDetail(stop));
       container.appendChild(card);
     });
   });
@@ -2276,6 +2293,8 @@ function buildVeganCard(place) {
 let _vdPlace = null;
 let _vdMiniMap = null;
 let _cdMiniMap = null;
+let _veganCache = null;   // { lat, lng, places }
+let _chargerCache = null; // { lat, lng, chargers }
 
 function initMiniMap(containerId, lat, lng, mapRef) {
   const el = document.getElementById(containerId);
@@ -2615,21 +2634,32 @@ async function renderChargerView(container) {
       nearbySection.innerHTML = `<div class="vegan-searching"><i class="ph ph-spinner vegan-spin"></i> Getting your location…</div>`;
     });
   } else {
-    nearbySection.innerHTML = `<div class="vegan-searching"><i class="ph ph-spinner vegan-spin"></i> Finding chargers within 20 km…</div>`;
-    try {
-      const chargers = await fetchChargersNearby(_userLat, _userLng, 20000);
+    const isCached = _chargerCache &&
+      Math.abs(_chargerCache.lat - _userLat) < 0.05 &&
+      Math.abs(_chargerCache.lng - _userLng) < 0.05;
+    const doRender = (chargers, fromCache) => {
       nearbySection.innerHTML = '';
       if (chargers.length === 0) {
         nearbySection.innerHTML = `<div class="vegan-empty"><i class="ph ph-charging-station"></i><div>No chargers found within 20 km.</div></div>`;
       } else {
         const sub = document.createElement('div');
         sub.className = 'vegan-nearby-subtitle';
-        sub.textContent = `${chargers.length} station${chargers.length !== 1 ? 's' : ''} found`;
+        sub.textContent = `${chargers.length} station${chargers.length !== 1 ? 's' : ''} found${fromCache ? ' · pull to refresh' : ''}`;
         nearbySection.appendChild(sub);
         chargers.forEach(c => nearbySection.appendChild(buildChargerCard(c)));
       }
-    } catch {
-      nearbySection.innerHTML = `<div class="vegan-empty"><i class="ph ph-wifi-slash"></i><div>Couldn't load chargers — check connection.</div></div>`;
+    };
+    if (isCached) {
+      doRender(_chargerCache.chargers, true);
+    } else {
+      nearbySection.innerHTML = `<div class="vegan-searching"><i class="ph ph-spinner vegan-spin"></i> Finding chargers within 20 km…</div>`;
+      try {
+        const chargers = await fetchChargersNearby(_userLat, _userLng, 20000);
+        _chargerCache = { lat: _userLat, lng: _userLng, chargers };
+        doRender(chargers, false);
+      } catch {
+        nearbySection.innerHTML = `<div class="vegan-empty"><i class="ph ph-wifi-slash"></i><div>Couldn't load chargers — check connection.</div></div>`;
+      }
     }
   }
 
@@ -2645,16 +2675,21 @@ async function renderChargerView(container) {
       if (stop.type !== 'charging') return;
       found = true;
       const card = document.createElement('div');
-      card.className = 'filter-card';
+      card.className = 'vegan-place-card';
+      const dateStr = day.isFestival ? '20–27 Jun' : formatDate(day.date);
       card.innerHTML = `
-        <span class="filter-icon">${stopTypeIcon(stop)}</span>
-        <div class="filter-info">
-          <div class="filter-day">${getDayLabel(day)} · ${day.isFestival ? '20–27 Jun' : formatDate(day.date)}</div>
-          <div class="filter-loc">${stop.location}</div>
-          <div class="filter-reason">${stop.reason || ''}</div>
+        <div class="vegan-place-main">
+          <div class="vegan-place-name">${stop.location} <span class="vp-planned-badge"><i class="ph ph-calendar-check"></i> ${getDayLabel(day)} · ${dateStr}</span></div>
+          <div class="vegan-place-meta">
+            <span class="vegan-place-type">${stopTypeIcon(stop)} Charging stop</span>
+            <span class="alt-card-vegan full" style="background:rgba(56,189,248,.15);color:var(--teal);border-color:rgba(56,189,248,.3)">On itinerary</span>
+          </div>
+          ${stop.reason ? `<div class="vegan-place-hours-mini">${stop.reason}</div>` : ''}
         </div>
-        <div><a class="act-btn tesla" href="${teslaNavUrl(stop)}" target="_blank" rel="noopener"><i class="ph ph-navigation-arrow"></i></a></div>`;
-      card.querySelector('.filter-info').addEventListener('click', () => openDetail(stop));
+        <div class="vegan-place-right">
+          <div class="vegan-place-chevron"><i class="ph ph-caret-right"></i></div>
+        </div>`;
+      card.addEventListener('click', () => openDetail(stop));
       container.appendChild(card);
     });
   });
@@ -5053,8 +5088,10 @@ function initPullToRefresh() {
     spinner.classList.add('spinning');
     spinner.classList.remove('ready');
     try {
+      if (state.currentView === 'vegan') { _veganCache = null; }
+      else if (state.currentView === 'charging') { _chargerCache = null; }
       const day = TRIP_DATA.days.find(d => d.id === state.currentDayId);
-      if (day) {
+      if (day && state.currentView !== 'vegan' && state.currentView !== 'charging') {
         _weatherCache.delete(day.id);
         await fetchWeatherForDay(day);
       }
