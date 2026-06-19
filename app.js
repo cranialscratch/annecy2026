@@ -2218,6 +2218,78 @@ function renderBucketView(container) {
   });
 }
 
+function openRescheduleSheet(stop) {
+  const sheet = document.getElementById('vd-add-overlay');
+  if (!sheet) return;
+
+  // Customise the sheet title
+  const titleEl = sheet.querySelector('.edit-sheet-title');
+  if (titleEl) titleEl.textContent = 'Reschedule stop';
+  const confirmBtn = document.getElementById('vd-add-confirm');
+  if (confirmBtn) confirmBtn.textContent = 'Move to this day';
+
+  const daysEl = document.getElementById('vd-add-days');
+  daysEl.innerHTML = '';
+  const currentDay = TRIP_DATA.days.find(d => d.id === state.currentDayId);
+  let selectedDayId = null; // no default — user must actively choose
+  TRIP_DATA.days.filter(d => !d.isCountdown && d.id !== state.currentDayId).forEach(day => {
+    const btn = document.createElement('button');
+    btn.className = 'vd-day-btn';
+    btn.dataset.dayId = day.id;
+    btn.innerHTML = `<span class="vd-day-btn-name">${getDayLabel(day)}</span><span class="vd-day-btn-date">${formatDate(day.date)}</span>`;
+    btn.addEventListener('click', () => {
+      daysEl.querySelectorAll('.vd-day-btn').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+      selectedDayId = day.id;
+    });
+    daysEl.appendChild(btn);
+  });
+
+  document.getElementById('vd-add-time').value = stop.time || '10:00';
+  document.getElementById('vd-add-ripple').checked = true;
+  sheet.classList.remove('hidden');
+
+  document.getElementById('vd-add-close').onclick  = () => { sheet.classList.add('hidden'); resetAddSheetTitle(); };
+  document.getElementById('vd-add-cancel').onclick = () => { sheet.classList.add('hidden'); resetAddSheetTitle(); };
+
+  document.getElementById('vd-add-confirm').onclick = () => {
+    if (!selectedDayId) { showToast('Pick a day first'); return; }
+    const targetDay = TRIP_DATA.days.find(d => d.id === selectedDayId);
+    if (!targetDay) return;
+    const time = document.getElementById('vd-add-time').value;
+
+    // For added stops: move between addedStops arrays
+    const isAdded = (state.addedStops[state.currentDayId] || []).some(s => s.id === stop.id);
+    if (isAdded) {
+      state.addedStops[state.currentDayId] = (state.addedStops[state.currentDayId] || []).filter(s => s.id !== stop.id);
+      const movedStop = { ...stop, id: 'added_' + Date.now(), time };
+      if (!state.addedStops[selectedDayId]) state.addedStops[selectedDayId] = [];
+      state.addedStops[selectedDayId].push(movedStop);
+    } else {
+      // Original trip stop — use crossDayMoves + time override
+      if (!state.crossDayMoves) state.crossDayMoves = {};
+      state.crossDayMoves[stop.id] = selectedDayId;
+      state.overrides[stop.id] = time;
+    }
+
+    delete state.skipped[stop.id];
+    save();
+    sheet.classList.add('hidden');
+    resetAddSheetTitle();
+    closeDetail();
+    state.currentDayId = selectedDayId;
+    renderView(false);
+    showToast(`Moved to ${getDayLabel(targetDay)}`);
+  };
+}
+
+function resetAddSheetTitle() {
+  const titleEl = document.querySelector('#vd-add-overlay .edit-sheet-title');
+  if (titleEl) titleEl.textContent = 'Add to trip';
+  const confirmBtn = document.getElementById('vd-add-confirm');
+  if (confirmBtn) confirmBtn.textContent = 'Add stop';
+}
+
 function openBucketAddSheet(entry, idx) {
   const sheet = document.getElementById('vd-add-overlay');
   if (!sheet) return;
@@ -5243,6 +5315,11 @@ function openDetail(stop) {
         showToast('Moved to Bucket List');
       });
       travelActEl.appendChild(bucketBtn);
+      const rescheduleBtn = document.createElement('button');
+      rescheduleBtn.className = 'travel-action-btn detail-reschedule-btn';
+      rescheduleBtn.innerHTML = '<i class="ph ph-calendar-dots"></i> Reschedule to another day';
+      rescheduleBtn.addEventListener('click', () => openRescheduleSheet(stop));
+      travelActEl.appendChild(rescheduleBtn);
     } else {
       travelActEl.innerHTML = '';
       travelActEl.classList.add('hidden');
