@@ -1,7 +1,13 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v235';
+const APP_VERSION = 'v236';
 
 const CHANGELOG = [
+  { version: 'v236', title: 'Inline time picker, fixed stops, cascade fix', items: [
+    { type: 'feature', text: 'Arrived and Depart chips now show inline time inputs — tap to pick a time using the native picker, or tap the clock to set to now' },
+    { type: 'feature', text: 'Changing arrival auto-updates departure (keeps duration); changing departure auto-updates duration' },
+    { type: 'fix', text: 'Teams Presentation at 16:00 is now a fixed anchor — cascade stops there and will not move it' },
+    { type: 'fix', text: 'Cascade logic extracted into shared helper used by all time-editing flows' },
+  ]},
   { version: 'v235', title: 'Arrived now ripples following stops', items: [
     { type: 'fix', text: '"Arrived now" now cascades the time delta to all following stops on the day' },
     { type: 'fix', text: 'Duration stepper (±5 min) now ripples following stops by the same amount' },
@@ -4618,125 +4624,110 @@ function renderDetailTimeStrip(stop, container) {
   const stopType = getStopType(stop);
   const interactive = isToday && stopType !== 'depart';
 
-  const arrival = getStopTime(stop) || '—';
+  const arrVal  = getStopTime(stop) || '';
   const durMins = getStopDuration(stop) || 0;
-  const durH = Math.floor(durMins / 60);
-  const durM = durMins % 60;
-  const durStr = durH > 0 ? `${durH}h${durM > 0 ? durM + 'm' : ''}` : `${durMins}m`;
-  const arrMins = timeToMinutes(arrival) || 0;
-  const depart = durMins > 0 ? minutesToTime(arrMins + durMins) : '—';
+  const durH    = Math.floor(durMins / 60);
+  const durM    = durMins % 60;
+  const durStr  = durH > 0 ? `${durH}h${durM > 0 ? durM + 'm' : ''}` : `${durMins}m`;
+  const arrMins = timeToMinutes(arrVal) ?? null;
+  const depVal  = (arrMins !== null && durMins > 0) ? minutesToTime(arrMins + durMins) : '';
 
-  container.innerHTML = `
-    <div class="dts-row">
-      <button class="dts-chip${interactive ? ' dts-interactive' : ''}" id="dts-arrived"${!interactive ? ' disabled' : ''}>
-        <span class="dts-label">Arrived</span>
-        <span class="dts-time">${arrival}</span>
-      </button>
-      <div class="dts-chip dts-dur-chip">
-        ${interactive ? `<button class="dts-step-btn" id="dts-dur-minus" aria-label="Decrease duration"><i class="ph ph-minus"></i></button>` : ''}
-        <div class="dts-dur-inner">
-          <i class="ph ph-timer" style="font-size:13px;color:var(--text2)"></i>
-          <span class="dts-time" id="dts-dur-val">${durStr}</span>
+  if (interactive) {
+    container.innerHTML = `
+      <div class="dts-row">
+        <div class="dts-chip dts-input-chip">
+          <span class="dts-label">Arrived</span>
+          <input class="dts-time-input" id="dts-arr-input" type="time" value="${arrVal}">
+          <button class="dts-now-inline" id="dts-arr-now" title="Set to now"><i class="ph ph-clock"></i></button>
         </div>
-        ${interactive ? `<button class="dts-step-btn" id="dts-dur-plus" aria-label="Increase duration"><i class="ph ph-plus"></i></button>` : ''}
-      </div>
-      <button class="dts-chip${interactive ? ' dts-interactive' : ''}" id="dts-departed"${!interactive ? ' disabled' : ''}>
-        <span class="dts-label">Depart</span>
-        <span class="dts-time">${depart}</span>
-      </button>
-    </div>
-    ${interactive ? `<div class="dts-now-row">
-      <button class="dts-now-full-btn" id="dts-now-btn"><i class="ph ph-clock"></i> Arrived now</button>
-    </div>` : ''}`;
-  container.classList.remove('hidden');
+        <div class="dts-chip dts-dur-chip">
+          <button class="dts-step-btn" id="dts-dur-minus"><i class="ph ph-minus"></i></button>
+          <div class="dts-dur-inner">
+            <i class="ph ph-timer" style="font-size:13px;color:var(--text2)"></i>
+            <span class="dts-time" id="dts-dur-val">${durStr}</span>
+          </div>
+          <button class="dts-step-btn" id="dts-dur-plus"><i class="ph ph-plus"></i></button>
+        </div>
+        <div class="dts-chip dts-input-chip">
+          <span class="dts-label">Depart</span>
+          <input class="dts-time-input" id="dts-dep-input" type="time" value="${depVal}">
+        </div>
+      </div>`;
+    container.classList.remove('hidden');
 
-  if (!interactive) return;
+    const arrInput = document.getElementById('dts-arr-input');
+    const depInput = document.getElementById('dts-dep-input');
 
-  document.getElementById('dts-arrived')?.addEventListener('click', () => openTravelAction(stop, 'arrived'));
-  document.getElementById('dts-departed')?.addEventListener('click', () => openTravelAction(stop, 'departed'));
+    const commit = (newArrMins, newDurMins, toast) => {
+      saveUndoSnapshot();
+      const oldArrMins = timeToMinutes(getStopTime(stop)) ?? newArrMins;
+      const delta = newArrMins - oldArrMins;
+      state.overrides[stop.id]    = minutesToTime(newArrMins);
+      state.durOverrides[stop.id] = Math.max(0, newDurMins);
+      cascadeTimeDelta(stop, delta);
+      save(); renderView(false); renderDetailTimeStrip(stop, container);
+      if (toast) showUndoToast(toast);
+    };
 
-  const adjustDur = (durDelta) => {
-    saveUndoSnapshot();
-    const oldDur = getStopDuration(stop) || 0;
-    const newDur = Math.max(0, oldDur + durDelta);
-    state.durOverrides[stop.id] = newDur;
-    const timeDelta = newDur - oldDur; // minutes shift for following stops
-    if (timeDelta !== 0) {
-      const day = TRIP_DATA.days.find(d => d.id === state.currentDayId);
-      if (day) {
-        const days = TRIP_DATA.days;
-        const dayIdx = days.findIndex(d => d.id === day.id);
-        if (!state.crossDayMoves) state.crossDayMoves = {};
-        const homeDayStops = [...day.stops, ...(state.addedStops?.[day.id] || [])];
-        const sorted = [...homeDayStops].sort((a, b) => (a.order ?? 9999) - (b.order ?? 9999));
-        let found = false;
-        sorted.forEach(s => {
-          if (!found) { if (s.id === stop.id) found = true; return; }
-          if (state.skipped[s.id]) return;
-          const cur = timeToMinutes(getStopTime(s));
-          if (cur === null) return;
-          const currentDayIdx = state.crossDayMoves[s.id] ? days.findIndex(d => d.id === state.crossDayMoves[s.id]) : dayIdx;
-          const newAbsolute = currentDayIdx * 1440 + cur + timeDelta;
-          const targetDayIdx = Math.min(Math.max(0, Math.floor(newAbsolute / 1440)), days.length - 1);
-          state.overrides[s.id] = minutesToTime(newAbsolute);
-          if (targetDayIdx !== dayIdx) state.crossDayMoves[s.id] = days[targetDayIdx].id;
-          else delete state.crossDayMoves[s.id];
-        });
-      }
-    }
-    save();
-    renderView(false);
-    renderDetailTimeStrip(stop, container);
-  };
+    arrInput?.addEventListener('change', () => {
+      const newArr = timeToMinutes(arrInput.value);
+      if (newArr === null) return;
+      commit(newArr, getStopDuration(stop) || 0, 'Arrival updated');
+    });
 
-  document.getElementById('dts-dur-minus')?.addEventListener('click', () => adjustDur(-5));
-  document.getElementById('dts-dur-plus')?.addEventListener('click', () => adjustDur(5));
+    depInput?.addEventListener('change', () => {
+      const newDep = timeToMinutes(depInput.value);
+      const curArr = timeToMinutes(getStopTime(stop));
+      if (newDep === null || curArr === null) return;
+      const newDur = Math.max(0, newDep - curArr);
+      saveUndoSnapshot();
+      state.durOverrides[stop.id] = newDur;
+      save(); renderView(false); renderDetailTimeStrip(stop, container);
+    });
 
-  document.getElementById('dts-now-btn')?.addEventListener('click', () => {
-    const now = new Date();
-    const nowStr = now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0');
-    saveUndoSnapshot();
+    document.getElementById('dts-arr-now')?.addEventListener('click', () => {
+      const now = new Date();
+      const nowMins = now.getHours() * 60 + now.getMinutes();
+      commit(nowMins, getStopDuration(stop) || 0, 'Arrival set to now — times updated');
+    });
 
-    const planned = timeToMinutes(getStopTime(stop)) || 0;
-    const actual  = timeToMinutes(nowStr);
-    const delta   = actual - planned;
-    state.overrides[stop.id] = nowStr;
+    document.getElementById('dts-dur-minus')?.addEventListener('click', () => {
+      const curArr = timeToMinutes(getStopTime(stop)) ?? 0;
+      const newDur = Math.max(0, (getStopDuration(stop) || 0) - 5);
+      saveUndoSnapshot();
+      state.durOverrides[stop.id] = newDur;
+      cascadeTimeDelta(stop, -5);
+      save(); renderView(false); renderDetailTimeStrip(stop, container);
+    });
 
-    // Cascade delta to following stops on this day (same logic as applyTravelAction)
-    if (delta !== 0) {
-      const day = TRIP_DATA.days.find(d => d.id === state.currentDayId);
-      if (day) {
-        const days = TRIP_DATA.days;
-        const dayIdx = days.findIndex(d => d.id === day.id);
-        if (!state.crossDayMoves) state.crossDayMoves = {};
-        const homeDayStops = [...day.stops, ...(state.addedStops?.[day.id] || [])];
-        const homeDayIds = new Set(homeDayStops.map(s => s.id));
-        const movedFromThisDay = Object.entries(state.crossDayMoves)
-          .filter(([stopId]) => homeDayIds.has(stopId))
-          .map(([stopId]) => homeDayStops.find(s => s.id === stopId)).filter(Boolean);
-        const sorted = [...homeDayStops, ...movedFromThisDay.filter(s => !homeDayIds.has(s.id))];
-        sorted.sort((a, b) => (a.order ?? 9999) - (b.order ?? 9999));
-        let found = false;
-        sorted.forEach(s => {
-          if (!found) { if (s.id === stop.id) found = true; return; }
-          if (state.skipped[s.id]) return;
-          const cur = timeToMinutes(getStopTime(s));
-          if (cur === null) return;
-          const currentDayIdx = state.crossDayMoves[s.id] ? days.findIndex(d => d.id === state.crossDayMoves[s.id]) : dayIdx;
-          const newAbsolute = currentDayIdx * 1440 + cur + delta;
-          const targetDayIdx = Math.min(Math.max(0, Math.floor(newAbsolute / 1440)), days.length - 1);
-          state.overrides[s.id] = minutesToTime(newAbsolute);
-          if (targetDayIdx !== dayIdx) state.crossDayMoves[s.id] = days[targetDayIdx].id;
-          else delete state.crossDayMoves[s.id];
-        });
-      }
-    }
+    document.getElementById('dts-dur-plus')?.addEventListener('click', () => {
+      const newDur = (getStopDuration(stop) || 0) + 5;
+      saveUndoSnapshot();
+      state.durOverrides[stop.id] = newDur;
+      cascadeTimeDelta(stop, 5);
+      save(); renderView(false); renderDetailTimeStrip(stop, container);
+    });
 
-    save();
-    renderView(false);
-    renderDetailTimeStrip(stop, container);
-    showUndoToast('Arrival recorded — times updated');
-  });
+  } else {
+    container.innerHTML = `
+      <div class="dts-row">
+        <div class="dts-chip">
+          <span class="dts-label">Arrived</span>
+          <span class="dts-time">${arrVal || '—'}</span>
+        </div>
+        <div class="dts-chip dts-dur-chip">
+          <div class="dts-dur-inner">
+            <i class="ph ph-timer" style="font-size:13px;color:var(--text2)"></i>
+            <span class="dts-time">${durStr}</span>
+          </div>
+        </div>
+        <div class="dts-chip">
+          <span class="dts-label">Depart</span>
+          <span class="dts-time">${depVal || '—'}</span>
+        </div>
+      </div>`;
+    container.classList.remove('hidden');
+  }
 }
 
 function openDetail(stop) {
@@ -5379,6 +5370,33 @@ function closeTravelAction() {
   _travelActionStop = _travelActionType = null;
 }
 
+// Cascade a time delta to all following stops on the same day, stopping at fixed stops.
+// skipSet: Set of stop ids to skip over (already-skipped stops stay un-updated but don't block cascade).
+function cascadeTimeDelta(fromStop, delta, skipSet = new Set()) {
+  if (!delta) return;
+  const day = TRIP_DATA.days.find(d => d.stops.concat(state.addedStops?.[d.id] || []).some(s => s.id === fromStop.id));
+  if (!day) return;
+  const days = TRIP_DATA.days;
+  const dayIdx = days.findIndex(d => d.id === day.id);
+  if (!state.crossDayMoves) state.crossDayMoves = {};
+  const homeDayStops = [...day.stops, ...(state.addedStops?.[day.id] || [])];
+  const sorted = [...homeDayStops].sort((a, b) => (a.order ?? 9999) - (b.order ?? 9999));
+  let found = false;
+  for (const s of sorted) {
+    if (!found) { if (s.id === fromStop.id) found = true; continue; }
+    if (s.fixed) break; // hard commitment — stop cascading here
+    if (skipSet.has(s.id) || state.skipped[s.id]) continue;
+    const cur = timeToMinutes(getStopTime(s));
+    if (cur === null) continue;
+    const currentDayIdx = state.crossDayMoves[s.id] ? days.findIndex(d => d.id === state.crossDayMoves[s.id]) : dayIdx;
+    const newAbsolute = currentDayIdx * 1440 + cur + delta;
+    const targetDayIdx = Math.min(Math.max(0, Math.floor(newAbsolute / 1440)), days.length - 1);
+    state.overrides[s.id] = minutesToTime(newAbsolute);
+    if (targetDayIdx !== dayIdx) state.crossDayMoves[s.id] = days[targetDayIdx].id;
+    else delete state.crossDayMoves[s.id];
+  }
+}
+
 function applyTravelAction(ripple) {
   if (!_travelActionStop) return;
   saveUndoSnapshot();
@@ -5397,33 +5415,8 @@ function applyTravelAction(ripple) {
   state.overrides[_travelActionStop.id] = minutesToTime(actual);
 
   if (ripple && delta !== 0) {
-    const day = TRIP_DATA.days.find(d => d.id === state.currentDayId);
-    if (day) {
-      const skipped = new Set([...document.querySelectorAll('#travel-action-skip-list input:checked')].map(cb => cb.value));
-      const days = TRIP_DATA.days;
-      const dayIdx = days.findIndex(d => d.id === day.id);
-      if (!state.crossDayMoves) state.crossDayMoves = {};
-      const homeDayStops = [...day.stops, ...(state.addedStops?.[day.id] || [])];
-      const homeDayIds = new Set(homeDayStops.map(s => s.id));
-      const movedFromThisDay = Object.entries(state.crossDayMoves)
-        .filter(([stopId]) => homeDayIds.has(stopId))
-        .map(([stopId]) => homeDayStops.find(s => s.id === stopId)).filter(Boolean);
-      const sorted = [...homeDayStops, ...movedFromThisDay.filter(s => !homeDayIds.has(s.id))];
-      sorted.sort((a, b) => (a.order ?? 9999) - (b.order ?? 9999));
-      let found = false;
-      sorted.forEach(s => {
-        if (!found) { if (s.id === _travelActionStop.id) found = true; return; }
-        if (skipped.has(s.id)) return;
-        const cur = timeToMinutes(getStopTime(s));
-        if (cur === null) return;
-        const currentDayIdx = state.crossDayMoves[s.id] ? days.findIndex(d => d.id === state.crossDayMoves[s.id]) : dayIdx;
-        const newAbsolute  = currentDayIdx * 1440 + cur + delta;
-        const targetDayIdx = Math.min(Math.max(0, Math.floor(newAbsolute / 1440)), days.length - 1);
-        state.overrides[s.id] = minutesToTime(newAbsolute);
-        if (targetDayIdx !== dayIdx) state.crossDayMoves[s.id] = days[targetDayIdx].id;
-        else delete state.crossDayMoves[s.id];
-      });
-    }
+    const skipSet = new Set([...document.querySelectorAll('#travel-action-skip-list input:checked')].map(cb => cb.value));
+    cascadeTimeDelta(_travelActionStop, delta, skipSet);
   }
 
   save(); closeTravelAction(); renderView(false);
