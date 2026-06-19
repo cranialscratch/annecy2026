@@ -16,6 +16,15 @@
   <link rel="stylesheet" href="styles.v113.css">
 </head>
 <body>
+  <!-- Offline banner — shown when navigator.onLine is false -->
+  <div id="offline-banner" style="display:none">
+    <i class="ph ph-wifi-slash"></i> No internet — showing cached content
+  </div>
+  <!-- Update banner — shown when a new SW version has activated -->
+  <div id="sw-update-banner" style="display:none">
+    <span><i class="ph ph-arrow-clockwise"></i> Update available</span>
+    <button onclick="window.location.reload()">Reload</button>
+  </div>
   <div id="app">
     <div id="bg-clip"><div id="bg-layer"></div></div>
     <header id="app-header">
@@ -415,13 +424,22 @@
   <script>
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.addEventListener('message', e => {
-        if (e.data?.type === 'SW_UPDATED') window.location.reload();
+        if (e.data?.type !== 'SW_UPDATED') return;
+        // Show a non-disruptive banner rather than auto-reloading mid-journey
+        var b = document.getElementById('sw-update-banner');
+        if (b) b.style.display = 'flex';
       });
-      // updateViaCache:'none' bypasses HTTP cache when fetching sw.js itself,
-      // so standalone PWAs always pick up new versions without needing a cache clear
       navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' })
         .then(reg => reg.update());
     }
+    // Offline / online indicator
+    function setOnlineBanner(online) {
+      var b = document.getElementById('offline-banner');
+      if (b) b.style.display = online ? 'none' : 'flex';
+    }
+    window.addEventListener('online',  function() { setOnlineBanner(true); });
+    window.addEventListener('offline', function() { setOnlineBanner(false); });
+    document.addEventListener('DOMContentLoaded', function() { setOnlineBanner(navigator.onLine); });
   </script>
   <!-- Firebase (compat SDK — no bundler needed) -->
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>

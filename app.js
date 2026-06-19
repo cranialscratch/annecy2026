@@ -1,7 +1,13 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v231';
+const APP_VERSION = 'v232';
 
 const CHANGELOG = [
+  { version: 'v232', title: 'Offline resilience — icons & map cached', items: [
+    { type: 'feature', text: 'Leaflet map library and Phosphor icons now cached offline at install' },
+    { type: 'feature', text: 'CDN fonts/assets cached on first use — survive loss of signal' },
+    { type: 'feature', text: 'Orange "No internet" banner when offline — shows cached content continues working' },
+    { type: 'fix', text: 'App updates no longer auto-reload mid-journey — blue banner with Reload button instead' },
+  ]},
   { version: 'v231', title: 'Navigation fix, time strip, map refresh', items: [
     { type: 'fix', text: 'navUrl function restored — Navigate buttons now work (were throwing ReferenceError)' },
     { type: 'fix', text: 'Apple Maps is the default; switch to Google Maps in Settings drawer' },
