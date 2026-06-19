@@ -1,7 +1,14 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v233';
+const APP_VERSION = 'v234';
 
 const CHANGELOG = [
+  { version: 'v234', title: 'Toolbar fix, arrived-now, broader vegan search', items: [
+    { type: 'fix', text: 'Toolbar now fixed to bottom of screen on vegan and charger detail pages' },
+    { type: 'fix', text: '"Arrived now" sets your arrival time to the current time (was wrongly calculating duration)' },
+    { type: 'fix', text: 'Travel action strip simplified — Skip stop only; time/duration handled by time strip' },
+    { type: 'fix', text: 'Google Maps button readable in dark mode (was unreadable with brand-colour SVG)' },
+    { type: 'fix', text: 'Vegan search now finds health food shops and cuisine=vegan venues (e.g. Hemp in Troyes)' },
+  ]},
   { version: 'v233', title: 'Fix icons — safe CDN caching', items: [
     { type: 'fix', text: 'Icons restored — CDN fetch interception removed (was breaking Phosphor script loading)' },
     { type: 'feature', text: 'Leaflet and Phosphor pre-cached at SW install for offline use (cache-first on match)' },
@@ -2169,7 +2176,11 @@ async function renderVeganView(container) {
 }
 
 async function fetchVeganNearby(lat, lng, radiusM) {
-  const query = `[out:json][timeout:15];(nwr["diet:vegan"~"^(yes|only)$"]["amenity"~"^(restaurant|cafe|bar|fast_food|bakery|pub)$"](around:${radiusM},${lat},${lng}););out center body qt;`;
+  const query = `[out:json][timeout:20];(
+nwr["diet:vegan"~"^(yes|only)$"]["amenity"~"^(restaurant|cafe|bar|fast_food|bakery|pub)$"](around:${radiusM},${lat},${lng});
+nwr["diet:vegan"~"^(yes|only)$"]["shop"~"^(health_food|organic|deli|supermarket|convenience|bakery)$"](around:${radiusM},${lat},${lng});
+nwr["cuisine"~"vegan"]["amenity"~"^(restaurant|cafe|bar|fast_food|bakery)$"](around:${radiusM},${lat},${lng});
+);out center body qt;`;
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 20000);
   let res;
@@ -2194,7 +2205,7 @@ async function fetchVeganNearby(lat, lng, radiusM) {
       osmId:        el.id,
       osmType:      el.type,
       name:         t.name || 'Unnamed place',
-      type:         t.amenity || 'place',
+      type:         t.amenity || t.shop || 'place',
       veganLevel:   t['diet:vegan'] || 'yes',
       vegetarian:   t['diet:vegetarian'],
       cuisine:      t.cuisine ? t.cuisine.replace(/_/g,' ').replace(/;/g, ', ') : '',
@@ -4631,7 +4642,7 @@ function renderDetailTimeStrip(stop, container) {
       </button>
     </div>
     ${interactive ? `<div class="dts-now-row">
-      <button class="dts-now-full-btn" id="dts-now-btn"><i class="ph ph-clock"></i> Set duration to now</button>
+      <button class="dts-now-full-btn" id="dts-now-btn"><i class="ph ph-clock"></i> Arrived now</button>
     </div>` : ''}`;
   container.classList.remove('hidden');
 
@@ -4652,9 +4663,10 @@ function renderDetailTimeStrip(stop, container) {
   document.getElementById('dts-dur-plus')?.addEventListener('click', () => adjustDur(5));
 
   document.getElementById('dts-now-btn')?.addEventListener('click', () => {
+    const now = new Date();
+    const nowStr = now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0');
     saveUndoSnapshot();
-    const nowMins = new Date().getHours() * 60 + new Date().getMinutes();
-    state.durOverrides[stop.id] = Math.max(0, nowMins - (timeToMinutes(getStopTime(stop)) || 0));
+    state.overrides[stop.id] = nowStr;
     save();
     renderView(false);
     renderDetailTimeStrip(stop, container);
@@ -4727,7 +4739,7 @@ function openDetail(stop) {
     const _extBtns = [];
     if (_st === 'food' || _st === 'vegan' || getStopVegan(stop))
       _extBtns.push(`<a class="vd-link-btn happycow" href="${_hcUrl}" target="_blank" rel="noopener"><i class="ph ph-leaf"></i><div><strong>HappyCow</strong><small>Vegan reviews</small></div></a>`);
-    _extBtns.push(`<a class="vd-link-btn google" href="${_gmUrl}" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" width="18" height="18" style="flex-shrink:0"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg><div><strong>Google Maps</strong><small>Reviews &amp; photos</small></div></a>`);
+    _extBtns.push(`<a class="vd-link-btn gmaps" href="${_gmUrl}" target="_blank" rel="noopener"><i class="ph ph-google-logo"></i><div><span class="vd-link-title">Google Maps</span><span class="vd-link-sub">Reviews &amp; photos</span></div></a>`);
     _extEl.innerHTML = `<div class="vd-links-row">${_extBtns.join('')}</div>`;
     _extEl.classList.remove('hidden');
   }
@@ -4762,44 +4774,17 @@ function openDetail(stop) {
     renderDetailTimeStrip(stop, timeStripEl);
   }
 
-  // Travel action buttons — only shown for today's stops
+  // Travel action buttons — Skip stop only (time/duration handled by time strip above)
   const travelActEl = document.getElementById('detail-travel-actions');
   if (travelActEl) {
-    const _todayStr2 = localDateStr();
-    const _stopDay = TRIP_DATA.days.find(d => getDayStops(d).some(s => s.id === stop.id));
-    const _stopIsToday = _stopDay && (_stopDay.date === _todayStr2 ||
-      (_stopDay.isFestival && _todayStr2 >= _stopDay.date && _todayStr2 <= (_stopDay.dateEnd || _stopDay.date)));
     const stopType = getStopType(stop);
     if (stopType !== 'depart') {
       const isSkippedNow = !!state.skipped[stop.id];
-      const tParts = [];
-      if (_stopIsToday && stopType !== 'hotel')
-        tParts.push(`<button class="travel-action-btn departed-btn" data-stop-id="${stop.id}"><i class="ph ph-flag-checkered"></i> Departed</button>`);
-      if (_stopIsToday && stopType === 'hotel')
-        tParts.push(`<button class="travel-action-btn arrived-btn" data-stop-id="${stop.id}"><i class="ph ph-bed"></i> Arrived</button>`);
-      if (_stopIsToday && hasExplicitDuration(stop) && stopType !== 'hotel')
-        tParts.push(`
-          <div class="dur-adjust-row">
-            <button class="travel-action-btn dur-minus-btn" data-stop-id="${stop.id}"><i class="ph ph-minus"></i> 5m</button>
-            <button class="travel-action-btn dur-plus-btn"  data-stop-id="${stop.id}"><i class="ph ph-plus"></i> 5m</button>
-            <button class="travel-action-btn dur-reset-btn" data-stop-id="${stop.id}"><i class="ph ph-arrow-counter-clockwise"></i> Reset</button>
-          </div>`);
-      tParts.push(`<button class="travel-action-btn detail-skip-btn${isSkippedNow ? ' active' : ''}" data-stop-id="${stop.id}">
+      travelActEl.innerHTML = `<button class="travel-action-btn detail-skip-btn${isSkippedNow ? ' active' : ''}" data-stop-id="${stop.id}">
         <i class="ph ${isSkippedNow ? 'ph-arrow-u-up-left' : 'ph-x-circle'}"></i> ${isSkippedNow ? 'Restore stop' : 'Skip stop'}
-      </button>`);
-      travelActEl.innerHTML = tParts.join('');
+      </button>`;
       travelActEl.classList.remove('hidden');
-      travelActEl.querySelector('.departed-btn')?.addEventListener('click', () => { closeDetail(); openTravelAction(stop, 'departed'); });
-      travelActEl.querySelector('.arrived-btn')?.addEventListener('click',  () => { closeDetail(); openTravelAction(stop, 'arrived'); });
-      const refreshDetail = (msg) => {
-        document.getElementById('detail-time').textContent = getStopTime(stop) + (stop.tz ? ' ' + stop.tz : '');
-        const dlb = document.getElementById('detail-leaveby');
-        if (dlb) renderLeaveByEl(dlb, stop);
-        showDetailConfirm(travelActEl, msg);
-      };
-      travelActEl.querySelector('.dur-plus-btn')?.addEventListener('click',  () => { extendStop(stop,  5); refreshDetail('+5 min'); });
-      travelActEl.querySelector('.dur-minus-btn')?.addEventListener('click', () => { extendStop(stop, -5); refreshDetail('−5 min'); });
-      travelActEl.querySelector('.dur-reset-btn')?.addEventListener('click', () => { resetStopDuration(stop); refreshDetail('Reset'); });
+      travelActEl.classList.remove('hidden');
       travelActEl.querySelector('.detail-skip-btn')?.addEventListener('click', () => {
         if (state.skipped[stop.id]) {
           delete state.skipped[stop.id];
