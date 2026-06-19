@@ -4,10 +4,10 @@ const APP_VERSION = 'v244';
 const CHANGELOG = [
   { version: 'v244', title: 'Swipe to Skip or Remove, compact skipped cards, Bucket List', items: [
     { type: 'feature', text: 'Swipe left on any stop to reveal two options: Skip (or Restore) and Remove' },
-    { type: 'feature', text: 'Skipped stops collapse to a compact single-line card; tap Restore via swipe to expand' },
+    { type: 'feature', text: 'Skipped stops collapse to a compact single-line card; swipe Restore to expand' },
     { type: 'feature', text: 'Remove sends a stop to the Bucket List — accessible from the drawer menu' },
     { type: 'feature', text: 'Bucket List shows removed stops; tap + to re-add to any day, or trash to delete permanently (with confirmation)' },
-    { type: 'feature', text: '"Move to Bucket List" and "Delete permanently" actions available inside each stop\'s detail page' },
+    { type: 'feature', text: '"Move to Bucket List" button available inside each stop\'s detail page' },
   ]},
   { version: 'v243', title: 'Ripple fixed, next-leg travel info on stop pages', items: [
     { type: 'fix', text: 'Ripple when adding a vegan/search stop now correctly shifts following stops by the new stop\'s duration' },
@@ -170,6 +170,8 @@ const state = {
   overrides: {},        // stopId → time string
   checked: {},          // stopId → bool (visited)
   skipped: {},          // stopId → bool (deliberately skipped)
+  removed: {},          // stopId → true (hidden from timeline, moved to bucket list)
+  bucketList: [],       // [{ stop, dayLabel, originalDayId, removedAt }]
   locOverrides: {},     // stopId → { name, lat, lng }
   durOverrides: {},     // stopId → minutes
   typeOverrides: {},    // stopId → type string
@@ -1292,13 +1294,15 @@ function getDayStops(day) {
   const added = (state.addedStops || {})[day.id] || [];
   const crossMoves = state.crossDayMoves || {};
 
-  // Base stops for this day, excluding any moved to a different day or removed to bucket list
+  const removed = state.removed || {};
+  // Base stops for this day, excluding any moved to a different day or removed to bucket
   const baseStops = day.stops.filter(s => {
-    if (state.removed[s.id]) return false;
+    if (removed[s.id]) return false;
     const movedTo = crossMoves[s.id];
     return !movedTo || movedTo === day.id;
   });
   const addedFiltered = added.filter(s => {
+    if (removed[s.id]) return false;
     const movedTo = crossMoves[s.id];
     return !movedTo || movedTo === day.id;
   });
@@ -1605,6 +1609,8 @@ function localSave() {
     localStorage.setItem('annecy_vegan_overrides',    JSON.stringify(state.veganOverrides));
     localStorage.setItem('annecy_added_stops',        JSON.stringify(state.addedStops));
     localStorage.setItem('annecy_cross_day_moves',    JSON.stringify(state.crossDayMoves || {}));
+    localStorage.setItem('annecy_removed',            JSON.stringify(state.removed || {}));
+    localStorage.setItem('annecy_bucket_list',        JSON.stringify(state.bucketList || []));
   } catch {}
 }
 function save() {
@@ -2161,6 +2167,8 @@ function renderBucketView(container) {
     const deleteBtn = card.querySelector('.bucket-delete-btn');
     deleteBtn.addEventListener('click', e => {
       e.stopPropagation();
+      if (deleteBtn._confirming) return;
+      deleteBtn._confirming = true;
       const confirmDiv = document.createElement('div');
       confirmDiv.className = 'bucket-delete-confirm';
       confirmDiv.innerHTML = 'Delete permanently? <button class="bucket-confirm-yes">Yes</button> <button class="bucket-confirm-no">No</button>';
@@ -2173,6 +2181,7 @@ function renderBucketView(container) {
       });
       confirmDiv.querySelector('.bucket-confirm-no').addEventListener('click', ev => {
         ev.stopPropagation();
+        deleteBtn._confirming = false;
         confirmDiv.remove();
       });
     });
@@ -2199,28 +2208,26 @@ function openBucketAddSheet(entry, idx) {
     });
     daysEl.appendChild(btn);
   });
-  setTimeout(() => daysEl.querySelector('.selected')?.scrollIntoView({ block:'nearest', behavior:'smooth' }), 50);
-  document.getElementById('vd-add-close').onclick = () => sheet.classList.add('hidden');
-  document.getElementById('vd-add-cancel').onclick = () => sheet.classList.add('hidden');
+  document.getElementById('vd-add-time').value = entry.stop.time || '12:00';
+  document.getElementById('vd-add-ripple').checked = false;
+  sheet.classList.remove('hidden');
+
   document.getElementById('vd-add-confirm').onclick = () => {
-    const time = document.getElementById('vd-add-time').value || '12:00';
-    const ripple = document.getElementById('vd-add-ripple').checked;
     const day = TRIP_DATA.days.find(d => d.id === selectedDayId);
     if (!day) return;
-    saveUndoSnapshot();
-    const stop = { ...entry.stop, id: entry.stop.id.startsWith('vegan_') || entry.stop.id.startsWith('gplace_') ? entry.stop.id : 'bucket_' + Date.now(), time, order: 999 };
+    const time = document.getElementById('vd-add-time').value;
+    const newStop = { ...entry.stop, id: 'added_' + Date.now() };
+    if (time) newStop.time = time;
     if (!state.addedStops[day.id]) state.addedStops[day.id] = [];
-    state.addedStops[day.id].push(stop);
+    state.addedStops[day.id].push(newStop);
     state.bucketList.splice(idx, 1);
-    if (ripple) cascadeTimeDelta(stop, stop.duration || 45);
     save();
     sheet.classList.add('hidden');
     state.currentDayId = day.id;
     state.currentView = 'day';
     renderView(false);
-    showToast(`${stop.location || stop.name} added to ${getDayLabel(day)}`);
+    showToast(`${newStop.location || newStop.name} added to ${getDayLabel(day)}`);
   };
-  sheet.classList.remove('hidden');
 }
 
 /* ── Filter list ───────────────────────────────────────────────────── */
@@ -4110,80 +4117,52 @@ function buildTimelineItem(stop, isLast, day, nextStop, prevStop) {
     return item;
   }
 
-  const _swipeActionsHtml = `
+  item.innerHTML = `
+    <div class="tl-left">
+      <button class="tl-time-btn" data-stop-id="${stop.id}">
+        <span>${time}</span>${stop.tz ? `<div class="tl-tz">${stop.tz}</div>` : ''}
+      </button>
+    </div>
+    <div class="tl-line-wrap">
+      <div class="tl-dot"></div>
+      ${isLast ? '' : '<div class="tl-line"></div>'}
+    </div>
+    <div class="tl-swipe-wrap">
+      <div class="tl-swipe-track">
+      <div class="tl-card${isVisited ? ' visited' : ''}${isSkipped ? ' skipped' : ''}" data-stop-id="${stop.id}">
+        <div class="card-visited-badge">✓</div>
+        <div class="card-skipped-badge"><i class="ph ph-x"></i> Skipped</div>
+        ${buildSlider(stop, 'card')}
+        <div class="card-body">
+          <div class="card-top-row">
+            <div class="card-name">${stopTypeIcon(stop)} ${getStopName(stop)}</div>
+            ${ (stop.planStatus === 'conditional' || stop.planStatus === 'weak-vegan') ? '<span class="card-warn-icon"><i class="ph ph-warning"></i></span>' : '' }<button class="check-btn${isVisited ? ' checked' : ''}" data-stop-id="${stop.id}" aria-label="Mark visited"><i class="ph ${isVisited ? 'ph-check-circle' : 'ph-circle'}"></i></button>
+          </div>
+          ${stop.address || stop.location ? `<div class="card-address">${stop.address || stop.location}</div>` : ''}
+          <div class="card-meta-row">
+            <span class="tl-card-badge">${typeLabel(getStopType(stop))}</span>
+            ${getStopPriority(stop) > 0 ? `<span class="priority-stars">${priorityStars(getStopPriority(stop))}</span>` : ''}
+            <span class="vcard-rating-loading" data-stopid="${stop.id}"></span>
+            <a class="weather-pill" data-stop-id="${stop.id}" data-lat="${getStopLat(stop)||''}" data-lng="${getStopLng(stop)||''}" href="#" onclick="return false;"></a>
+          </div>
+          <div class="card-reason">${getStopReason(stop)}</div>
+          ${buildTags(stop)}
+          ${hasExplicitDuration(stop) ? `<div data-leaveby="${stop.id}" class="leave-by-pill" style="display:none"></div>` : ''}
+          <div class="tl-actions">${buildIconActions(stop)}</div>
+        </div>
+      </div>
       <div class="tl-swipe-actions">
         <button class="swipe-skip-btn">${isSkipped ? '<i class="ph ph-arrow-u-up-left"></i> Restore' : '<i class="ph ph-x-circle"></i> Skip'}</button>
         <button class="swipe-remove-btn"><i class="ph ph-trash"></i> Remove</button>
-      </div>`;
-
-  if (isSkipped) {
-    item.innerHTML = `
-      <div class="tl-left">
-        <button class="tl-time-btn" data-stop-id="${stop.id}">
-          <span>${time}</span>${stop.tz ? `<div class="tl-tz">${stop.tz}</div>` : ''}
-        </button>
       </div>
-      <div class="tl-line-wrap">
-        <div class="tl-dot"></div>
-        ${isLast ? '' : '<div class="tl-line"></div>'}
       </div>
-      <div class="tl-swipe-wrap">
-        <div class="tl-swipe-track">
-        <div class="tl-card skipped compact-card" data-stop-id="${stop.id}">
-          <div class="compact-card-inner">
-            <span class="compact-card-icon">${stopTypeIcon(stop)}</span>
-            <span class="compact-card-name">${getStopName(stop)}</span>
-            <span class="card-skipped-badge"><i class="ph ph-x-circle"></i> Skipped</span>
-          </div>
-        </div>
-        ${_swipeActionsHtml}
-        </div>
-      </div>`;
-  } else {
-    item.innerHTML = `
-      <div class="tl-left">
-        <button class="tl-time-btn" data-stop-id="${stop.id}">
-          <span>${time}</span>${stop.tz ? `<div class="tl-tz">${stop.tz}</div>` : ''}
-        </button>
-      </div>
-      <div class="tl-line-wrap">
-        <div class="tl-dot"></div>
-        ${isLast ? '' : '<div class="tl-line"></div>'}
-      </div>
-      <div class="tl-swipe-wrap">
-        <div class="tl-swipe-track">
-        <div class="tl-card${isVisited ? ' visited' : ''}" data-stop-id="${stop.id}">
-          <div class="card-visited-badge">✓</div>
-          ${buildSlider(stop, 'card')}
-          <div class="card-body">
-            <div class="card-top-row">
-              <div class="card-name">${stopTypeIcon(stop)} ${getStopName(stop)}</div>
-              ${ (stop.planStatus === 'conditional' || stop.planStatus === 'weak-vegan') ? '<span class="card-warn-icon"><i class="ph ph-warning"></i></span>' : '' }<button class="check-btn${isVisited ? ' checked' : ''}" data-stop-id="${stop.id}" aria-label="Mark visited"><i class="ph ${isVisited ? 'ph-check-circle' : 'ph-circle'}"></i></button>
-            </div>
-            ${stop.address || stop.location ? `<div class="card-address">${stop.address || stop.location}</div>` : ''}
-            <div class="card-meta-row">
-              <span class="tl-card-badge">${typeLabel(getStopType(stop))}</span>
-              ${getStopPriority(stop) > 0 ? `<span class="priority-stars">${priorityStars(getStopPriority(stop))}</span>` : ''}
-              <span class="vcard-rating-loading" data-stopid="${stop.id}"></span>
-              <a class="weather-pill" data-stop-id="${stop.id}" data-lat="${getStopLat(stop)||''}" data-lng="${getStopLng(stop)||''}" href="#" onclick="return false;"></a>
-            </div>
-            <div class="card-reason">${getStopReason(stop)}</div>
-            ${buildTags(stop)}
-            ${hasExplicitDuration(stop) ? `<div data-leaveby="${stop.id}" class="leave-by-pill" style="display:none"></div>` : ''}
-            <div class="tl-actions">${buildIconActions(stop)}</div>
-          </div>
-        </div>
-        ${_swipeActionsHtml}
-        </div>
-      </div>`;
-  }
+    </div>`;
 
   if (isEditable) {
     const day = TRIP_DATA.days.find(d => d.id === state.currentDayId);
     item.querySelector('.tl-time-btn').addEventListener('click', () => openTimeModal(stop, day));
   }
-  const _checkBtn = item.querySelector('.check-btn');
-  if (_checkBtn) _checkBtn.addEventListener('click', e => {
+  item.querySelector('.check-btn').addEventListener('click', e => {
     e.stopPropagation();
     toggleCheck(stop.id, item);
   });
@@ -4192,7 +4171,6 @@ function buildTimelineItem(stop, isLast, day, nextStop, prevStop) {
   const card = item.querySelector('.tl-card');
   card.style.cursor = 'pointer';
   card.addEventListener('click', e => {
-    if (isSkipped) return; // compact card — no detail open
     if (e.target.closest('.act-btn, .check-btn')) return;
     openDetail(stop);
   });
@@ -4257,24 +4235,14 @@ function buildTimelineItem(stop, isLast, day, nextStop, prevStop) {
       skipStop(stop);
     }
   });
+
   // Remove button — moves stop to bucket list
   item.querySelector('.swipe-remove-btn').addEventListener('click', e => {
     e.stopPropagation();
     swipeTrack.style.transition = 'transform .22s ease'; swipeTrack.style.transform = ''; _sOpen = false;
-    const _rDay = TRIP_DATA.days.find(d => d.id === state.currentDayId) || TRIP_DATA.days[0];
-    const isAdded = state.addedStops[_rDay.id] && state.addedStops[_rDay.id].some(s => s.id === stop.id);
-    if (stop.id.startsWith('vegan_') || stop.id.startsWith('gplace_') || isAdded) {
-      if (state.addedStops[_rDay.id]) {
-        state.addedStops[_rDay.id] = state.addedStops[_rDay.id].filter(s => s.id !== stop.id);
-      }
-    } else {
-      state.removed[stop.id] = true;
-    }
-    state.bucketList.unshift({ stop: { ...stop }, dayLabel: getDayLabel(_rDay), originalDayId: _rDay.id, removedAt: Date.now() });
-    delete state.skipped[stop.id];
-    delete state.checked[stop.id];
-    delete state.overrides[stop.id];
-    save(); renderView(false); showToast('Moved to Bucket List');
+    moveStopToBucketList(stop);
+    renderView(false);
+    showToast('Moved to Bucket List');
   });
 
   // Photo slider still handles its own swipe; tap on slider already calls openDetail,
@@ -5628,7 +5596,7 @@ function extendStop(stop, deltaMins) {
 
 function moveStopToBucketList(stop) {
   const day = TRIP_DATA.days.find(d => d.id === state.currentDayId) || TRIP_DATA.days[0];
-  const isAdded = state.addedStops[day.id] && state.addedStops[day.id].some(s => s.id === stop.id);
+  const isAdded = (state.addedStops[day.id] || []).some(s => s.id === stop.id);
   if (stop.id.startsWith('vegan_') || stop.id.startsWith('gplace_') || isAdded) {
     if (state.addedStops[day.id]) {
       state.addedStops[day.id] = state.addedStops[day.id].filter(s => s.id !== stop.id);
