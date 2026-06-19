@@ -2572,9 +2572,9 @@ body.light .cl-text { color: #475569; }
 .dts-step-btn:active { background: var(--glass-border); }
 .dts-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text2); }
 .dts-time { font-size: 18px; font-weight: 800; color: var(--text); line-height: 1.1; }
-.dts-now-row { padding: 6px 0 0; }
+.dts-now-row { padding: 6px 0 0; display: flex; gap: 8px; }
 .dts-now-full-btn {
-  width: 100%; padding: 9px; border-radius: 12px; background: var(--glass-bg);
+  flex: 1; padding: 9px; border-radius: 12px; background: var(--glass-bg);
   border: 1px solid var(--glass-border); font-size: 14px; font-weight: 600;
   color: var(--accent); cursor: pointer; -webkit-tap-highlight-color: transparent; font-family: inherit;
   display: flex; align-items: center; justify-content: center; gap: 6px;

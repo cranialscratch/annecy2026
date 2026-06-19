@@ -1,7 +1,11 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v238';
+const APP_VERSION = 'v239';
 
 const CHANGELOG = [
+  { version: 'v239', title: 'Arrived/Departed now buttons, hotel cascade stop', items: [
+    { type: 'fix', text: '"Arrived now" and "Departed now" are now two visible buttons below the time strip — no longer hidden as tiny icons' },
+    { type: 'fix', text: 'Cascade stops at hotel/sleep stops — arriving early no longer incorrectly shifts next morning\'s departure' },
+  ]},
   { version: 'v238', title: 'Fix departure cascade — anchor to original plan', items: [
     { type: 'fix', text: 'Departure cascade now anchors downstream stops to actual departure + original travel gaps — no longer compounds errors from earlier arrival cascades' },
     { type: 'fix', text: 'Setting departure to 11:24 with 1h55m travel to next stop now correctly shows next arrival as 13:19' },
@@ -4646,7 +4650,6 @@ function renderDetailTimeStrip(stop, container) {
         <div class="dts-chip dts-input-chip">
           <span class="dts-label">Arrived</span>
           <input class="dts-time-input" id="dts-arr-input" type="time" value="${arrVal}">
-          <button class="dts-now-inline" id="dts-arr-now" title="Set to now"><i class="ph ph-clock"></i></button>
         </div>
         <div class="dts-chip dts-dur-chip">
           <button class="dts-step-btn" id="dts-dur-minus"><i class="ph ph-minus"></i></button>
@@ -4659,8 +4662,11 @@ function renderDetailTimeStrip(stop, container) {
         <div class="dts-chip dts-input-chip">
           <span class="dts-label">Depart</span>
           <input class="dts-time-input" id="dts-dep-input" type="time" value="${depVal}">
-          <button class="dts-now-inline" id="dts-dep-now" title="Set to now"><i class="ph ph-clock"></i></button>
         </div>
+      </div>
+      <div class="dts-now-row">
+        <button class="dts-now-full-btn" id="dts-arr-now"><i class="ph ph-clock"></i> Arrived now</button>
+        <button class="dts-now-full-btn" id="dts-dep-now"><i class="ph ph-sign-out"></i> Departed now</button>
       </div>`;
     container.classList.remove('hidden');
 
@@ -5421,6 +5427,7 @@ function cascadeFromDeparture(fromStop, actualDepMins) {
   for (const s of sorted) {
     if (!found) { if (s.id === fromStop.id) found = true; continue; }
     if (s.fixed) break;
+    if (['hotel','sleep'].includes(getStopType(s))) break; // overnight stop — don't shift next day
     if (state.skipped[s.id]) continue;
     // Use ORIGINAL data time so we don't compound previous arrival cascades
     const origTime = timeToMinutes(s.time) ?? timeToMinutes(getStopTime(s));
@@ -5445,7 +5452,8 @@ function cascadeTimeDelta(fromStop, delta, skipSet = new Set()) {
   let found = false;
   for (const s of sorted) {
     if (!found) { if (s.id === fromStop.id) found = true; continue; }
-    if (s.fixed) break; // hard commitment — stop cascading here
+    if (s.fixed) break;
+    if (['hotel','sleep'].includes(getStopType(s))) break; // overnight stop — don't shift next day
     if (skipSet.has(s.id) || state.skipped[s.id]) continue;
     const cur = timeToMinutes(getStopTime(s));
     if (cur === null) continue;
