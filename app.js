@@ -1,7 +1,15 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v229';
+const APP_VERSION = 'v230';
 
 const CHANGELOG = [
+  { version: 'v230', title: 'Google data, ratings on cards, font fixes', items: [
+    { type: 'fix', text: 'Google photo now loads on planned stop detail pages' },
+    { type: 'fix', text: 'Google rating shows in correct position (below name, not at top)' },
+    { type: 'fix', text: 'Removed duplicate HappyCow/Google links on stop pages' },
+    { type: 'feature', text: 'Star ratings from Google shown on day-view cards for food/vegan stops' },
+    { type: 'design', text: 'Font sizes increased on vegan search result cards' },
+    { type: 'design', text: 'Address, phone, website, opening hours use consistent styling on stop pages' },
+  ]},
   { version: 'v229', title: 'Stop detail matches search results', items: [
     { type: 'fix', text: 'Toolbar Vegan/Charge buttons now open own search views (not PlugShare/HappyCow)' },
     { type: 'fix', text: 'Duration stepper: +/− buttons always visible, each tap commits immediately' },
@@ -2305,12 +2313,13 @@ async function injectGoogleData(gData, heroEl, bodyEl) {
   bodyEl.querySelectorAll('.gp-rating-row, .gp-reviews').forEach(el => el.remove());
 
   // Photo — resolve photo URI then set as background
-  if (gData.photos.length) {
+  if (gData.photos.length && heroEl) {
     try {
       const photoUri = await gPhotoUrl(gData.photos[0].name);
       if (photoUri) {
         heroEl.style.background = `url(${photoUri}) center/cover no-repeat`;
         heroEl.innerHTML = '<div class="vd-hero-scrim"></div>';
+        heroEl.classList.remove('hidden');
       }
     } catch {}
   }
@@ -2328,7 +2337,10 @@ async function injectGoogleData(gData, heroEl, bodyEl) {
     const ratingEl = document.createElement('div');
     ratingEl.className = 'gp-rating-row';
     ratingEl.innerHTML = `${starHtml} <span class="gp-rating-num">${gData.rating.toFixed(1)}</span> <span class="gp-rating-count">(${gData.ratingCount.toLocaleString()} reviews)</span>`;
-    bodyEl.insertBefore(ratingEl, bodyEl.firstChild);
+    // Use dedicated slot if available (detail page), else insert at top of body
+    const gratingSlot = bodyEl.querySelector('#detail-grating');
+    if (gratingSlot) gratingSlot.replaceWith(ratingEl);
+    else bodyEl.insertBefore(ratingEl, bodyEl.firstChild);
   }
 
   // Reviews
@@ -3836,6 +3848,7 @@ function buildTimelineItem(stop, isLast, day, nextStop, prevStop) {
           <div class="card-meta-row">
             <span class="tl-card-badge">${typeLabel(getStopType(stop))}</span>
             ${getStopPriority(stop) > 0 ? `<span class="priority-stars">${priorityStars(getStopPriority(stop))}</span>` : ''}
+            <span class="vcard-rating-loading" data-stopid="${stop.id}"></span>
             <a class="weather-pill" data-stop-id="${stop.id}" data-lat="${getStopLat(stop)||''}" data-lng="${getStopLng(stop)||''}" href="#" onclick="return false;"></a>
           </div>
           <div class="card-reason">${getStopReason(stop)}</div>
@@ -3936,6 +3949,24 @@ function buildTimelineItem(stop, isLast, day, nextStop, prevStop) {
   }
 
   initSlider(item.querySelector('.card-slider'), stop, 'card');
+
+  // Lazily populate Google star rating on card
+  const _ratingEl = item.querySelector('.vcard-rating-loading[data-stopid]');
+  if (_ratingEl && stop.lat && stop.lng) {
+    const _cacheKey = 'stop_' + stop.id;
+    const _showRating = (gData) => {
+      if (!_ratingEl.isConnected || !gData?.rating) return;
+      _ratingEl.className = 'vcard-rating';
+      _ratingEl.innerHTML = `<i class="ph ph-star-fill" style="color:#f59e0b"></i> ${gData.rating.toFixed(1)} <span class="vcard-rating-count">(${gData.ratingCount?.toLocaleString()})</span>`;
+    };
+    if (_placeGoogleCache[_cacheKey]) {
+      _showRating(_placeGoogleCache[_cacheKey]);
+    } else if (getStopType(stop) === 'food' || getStopType(stop) === 'vegan' || getStopVegan(stop)) {
+      fetchGooglePlace(stop.name, stop.address, stop.lat, stop.lng).then(gData => {
+        if (gData) { _placeGoogleCache[_cacheKey] = gData; _showRating(gData); }
+      });
+    }
+  }
 
   // Lazily fetch weather and update pill
   const _weatherPill = item.querySelector('.weather-pill');
@@ -4812,20 +4843,6 @@ function openDetail(stop) {
         }
       });
     }
-  }
-
-  // Add HappyCow / Google links for food & vegan stops
-  if (stopType === 'food' || stopType === 'vegan' || stopType === 'hotel') {
-    const linksRow = document.createElement('div');
-    linksRow.className = 'detail-links-row';
-    if (stop.lat && stop.lng) {
-      const hcUrl = `https://www.happycow.net/searchmap?lat=${stop.lat}&lng=${stop.lng}&zoom=15`;
-      linksRow.innerHTML = `
-      <a class="detail-ext-link" href="${hcUrl}" target="_blank" rel="noopener"><i class="ph ph-leaf"></i> HappyCow</a>
-      <a class="detail-ext-link" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((stop.name || '') + ' ' + (stop.address || ''))}" target="_blank" rel="noopener"><i class="ph ph-magnifying-glass"></i> Google</a>`;
-    }
-    const bodyEl = document.getElementById('detail-body');
-    if (bodyEl && linksRow.children.length) bodyEl.appendChild(linksRow);
   }
 
   // Fetch wiki + Places data; refresh slides + description when done

@@ -2164,10 +2164,10 @@ body.light .vegan-place-card { background: rgba(255,255,255,.7); }
 .vegan-place-main { flex: 1; min-width: 0; }
 .vegan-place-name { font-size: 17px; font-weight: 700; margin-bottom: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .vegan-place-meta { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-bottom: 2px; }
-.vegan-place-type { font-size: 13px; color: var(--text3); font-weight: 600; text-transform: capitalize; }
-.vegan-place-addr { font-size: 11px; color: var(--text3); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vegan-place-type { font-size: 14px; color: var(--text3); font-weight: 600; text-transform: capitalize; }
+.vegan-place-addr { font-size: 13px; color: var(--text3); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .vegan-place-right { display: flex; flex-direction: column; align-items: center; gap: 8px; flex-shrink: 0; }
-.vegan-place-dist { font-size: 12px; font-weight: 700; color: var(--text2); white-space: nowrap; }
+.vegan-place-dist { font-size: 14px; font-weight: 700; color: var(--text2); white-space: nowrap; }
 .vegan-place-nav {
   display: flex; align-items: center; justify-content: center;
   width: 36px; height: 36px; border-radius: 10px;
@@ -2178,8 +2178,8 @@ body.light .vegan-place-card { background: rgba(255,255,255,.7); }
 /* ── Vegan place card enhancements ──────────────────────────────────── */
 .vegan-place-card { cursor: pointer; }
 .vegan-place-chevron { color: var(--text3); font-size: 18px; }
-.vegan-place-hours-mini { font-size: 13px; color: var(--text3); margin-top: 3px; }
-.vp-open-badge { font-size: 12px; font-weight: 700; padding: 3px 8px; border-radius: 20px; }
+.vegan-place-hours-mini { font-size: 14px; color: var(--text3); margin-top: 3px; }
+.vp-open-badge { font-size: 13px; font-weight: 700; padding: 3px 8px; border-radius: 20px; }
 .vp-open-badge.open   { background: rgba(48,209,88,.18); color: var(--green); }
 .vp-open-badge.closed { background: rgba(255,55,95,.15); color: var(--rose); }
 .vp-planned-badge { font-size: 12px; font-weight: 600; color: var(--accent); background: rgba(10,132,255,.12); padding: 3px 9px; border-radius: 20px; white-space: nowrap; }
@@ -2558,6 +2558,13 @@ body.light .cl-text { color: #475569; }
 .dts-now-full-btn:active { opacity: 0.7; }
 
 .card-address { font-size: 13px; color: var(--text2); margin: 2px 0 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Aliases so detail-body reuses vegan-detail styles */
+.vd-info-row { display: flex; align-items: center; gap: 8px; font-size: 16px; color: var(--text2); margin-bottom: 10px; text-decoration: none; }
+.vd-info-row i { font-size: 18px; color: var(--text3); flex-shrink: 0; }
+.vd-info-row a.vd-link { color: var(--accent); text-decoration: none; }
+.vd-hours-str { font-size: 15px; color: var(--text2); }
+.vd-links-row { display: flex; gap: 10px; flex-wrap: wrap; padding: 4px 0; }
 
 .detail-links-row { display: flex; gap: 10px; padding: 12px 0 4px; }
 .detail-ext-link { display: flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 12px; background: var(--glass-bg); border: 1px solid var(--glass-border); font-size: 14px; font-weight: 600; color: var(--text); text-decoration: none; }
