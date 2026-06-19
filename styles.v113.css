@@ -544,27 +544,27 @@ body.light .tl-depart-row {
   flex: 0 0 100%; min-width: 0; /* fills wrapper exactly */
 }
 .tl-swipe-actions {
-  flex: 0 0 160px;   /* same as SWIPE_REVEAL in JS */
-  display: flex; flex-direction: row; align-items: stretch;
+  flex: 0 0 88px;   /* same as SWIPE_REVEAL in JS */
+  display: flex; flex-direction: column; align-items: stretch;
 }
 .swipe-skip-btn {
   flex: 1;
   background: rgba(217,119,6,.92); color: #fff;
   border: none; padding: 0 10px;
-  font-size: 13px; font-weight: 700;
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  font-size: 12px; font-weight: 700;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
   cursor: pointer; -webkit-tap-highlight-color: transparent; font-family: inherit;
   white-space: nowrap;
 }
-.swipe-skip-btn i { font-size: 20px; }
+.swipe-skip-btn i { font-size: 18px; }
 .swipe-skip-btn:active { filter: brightness(.85); }
 .swipe-remove-btn {
   flex: 1; background: #dc2626; color: #fff;
-  border: none; font-size: 13px; font-weight: 700;
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  border: none; font-size: 12px; font-weight: 700;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
   cursor: pointer; -webkit-tap-highlight-color: transparent; font-family: inherit;
 }
-.swipe-remove-btn i { font-size: 20px; }
+.swipe-remove-btn i { font-size: 18px; }
 .swipe-remove-btn:active { filter: brightness(.85); }
 
 /* ─── Card ──────────────────────────────────────────────────────────── */

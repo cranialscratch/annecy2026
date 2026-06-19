@@ -4190,7 +4190,7 @@ function buildTimelineItem(stop, isLast, day, nextStop, prevStop) {
   // Swipe-left to reveal Skip / Restore button
   const swipeWrap  = item.querySelector('.tl-swipe-wrap');
   const swipeTrack = item.querySelector('.tl-swipe-track');
-  const SWIPE_REVEAL = 160;
+  const SWIPE_REVEAL = 88;
   let _sx = 0, _sy = 0, _sActive = false, _sOpen = false, _sMoved = false;
   swipeWrap.addEventListener('touchstart', e => {
     _sx = e.touches[0].clientX; _sy = e.touches[0].clientY;
@@ -5864,7 +5864,7 @@ function closeSkipPrompt() {
 /* ── Day swipe (edge swipe left/right to change day) ───────────────── */
 function initDaySwipe() {
   const mc = document.getElementById('main-content');
-  const EDGE = 60; // px from screen edge that activates the gesture
+  const EDGE = 22; // px from screen edge that activates the gesture
   let startX = 0, startY = 0, diffX = 0, active = false, isHoriz = null;
 
   function adjacentDayId(delta) {
