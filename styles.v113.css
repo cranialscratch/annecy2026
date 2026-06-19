@@ -2365,3 +2365,60 @@ body.light .charger-card { background: rgba(255,255,255,.7); }
   border-radius: 28px 28px 0 0; width: 100%; max-width: 500px;
   padding-bottom: var(--safe-bot); max-height: 80vh; overflow-y: auto;
 }
+
+/* ── v221 fixes ─────────────────────────────────────────────────────── */
+
+/* Toolbar icon colours — force override base rgba */
+#detail-toolbar .detail-tool-btn.nav-tool,
+#vd-toolbar .detail-tool-btn.nav-tool,
+#cd-toolbar .detail-tool-btn.nav-tool { color: var(--accent) !important; }
+#vd-toolbar .vd-add-tool,
+#cd-toolbar .vd-add-tool { color: var(--green) !important; }
+.detail-tool-btn.vegan-tool  { color: var(--green)  !important; }
+.detail-tool-btn.charge-tool { color: var(--teal)   !important; }
+.detail-tool-btn.maps-tool   { color: var(--rose)   !important; }
+.detail-tool-btn i,
+.vd-add-tool i { font-size: 24px !important; }
+
+/* Mini-map hero */
+#vd-hero, #cd-hero { overflow: hidden; }
+#vd-mini-map, #cd-mini-map { z-index: 0; }
+.leaflet-container { background: var(--glass-bg); }
+
+/* Larger text in vegan/charger detail body */
+#vd-name, #cd-name { font-size: 30px !important; font-weight: 800; }
+#vd-body .vd-hours-row,
+#cd-body .vd-hours-row { font-size: 16px; }
+#vd-body .vd-info-line,
+#cd-body .vd-info-line { font-size: 15px; margin-bottom: 10px; }
+#vd-body .vd-links-label,
+#cd-body .vd-links-label { font-size: 14px; display: flex; align-items: center; gap: 6px; }
+
+/* Bigger, taller link buttons with sub-label */
+.vd-link-btn { padding: 14px 16px !important; gap: 12px; align-items: center; }
+.vd-link-btn i { font-size: 24px; flex-shrink: 0; }
+.vd-link-btn > div { display: flex; flex-direction: column; gap: 1px; }
+.vd-link-title { font-size: 15px; font-weight: 700; }
+.vd-link-sub { font-size: 11px; opacity: .65; }
+
+/* Charger card — new layout */
+.charger-card-row { display: flex; align-items: center; padding: 12px 14px; gap: 10px; }
+.charger-card-left { flex: 1; min-width: 0; }
+.charger-card-right { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex-shrink: 0; }
+.charger-brand-pill {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 11px; font-weight: 800; padding: 3px 9px; border-radius: 20px;
+  margin-bottom: 5px;
+}
+.charger-brand-pill i { font-size: 13px; }
+.charger-card-name { font-size: 14px; font-weight: 700; margin-bottom: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.charger-card-addr { font-size: 12px; color: var(--text3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 5px; }
+.charger-card-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 4px; }
+.charger-conn-chip {
+  font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 20px;
+  background: rgba(255,255,255,.08); color: var(--text2);
+}
+/* Remove old brand-bar / body stacked layout */
+.charger-brand-bar { display: none !important; }
+.charger-card-body { display: none !important; }
+.charger-card > .vegan-place-right { display: none !important; }

@@ -1,5 +1,5 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v220';
+const APP_VERSION = 'v221';
 const _errorLog = [];
 window.addEventListener('error', e => {
   _errorLog.push({ ts: new Date().toISOString(), msg: e.message || String(e), src: (e.filename||'').split('/').pop() + ':' + (e.lineno||'?') });
@@ -2178,6 +2178,27 @@ function buildVeganCard(place) {
 
 /* ── Vegan place detail overlay ─────────────────────────────────────── */
 let _vdPlace = null;
+let _vdMiniMap = null;
+let _cdMiniMap = null;
+
+function initMiniMap(containerId, lat, lng, mapRef) {
+  const el = document.getElementById(containerId);
+  if (!el) return mapRef;
+  if (mapRef) {
+    mapRef.setView([lat, lng], 16);
+    mapRef._vdMarker?.setLatLng([lat, lng]);
+    return mapRef;
+  }
+  const m = L.map(el, {
+    zoomControl: false, dragging: false, touchZoom: false,
+    scrollWheelZoom: false, doubleClickZoom: false, keyboard: false,
+    attributionControl: false,
+  }).setView([lat, lng], 16);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(m);
+  m._vdMarker = L.circleMarker([lat, lng], { radius: 8, fillColor: '#0a84ff', fillOpacity: 1, color: '#fff', weight: 2 }).addTo(m);
+  setTimeout(() => m.invalidateSize(), 50);
+  return m;
+}
 
 function openVeganDetail(place) {
   _vdPlace = place;
@@ -2195,17 +2216,18 @@ function openVeganDetail(place) {
   const planned = findMatchingPlannedStop(place);
   const { open, todayStr } = parseOpeningHours(place.openingHours);
 
-  // Hero — start with placeholder, async-load photo
+  // Hero: mini-map always shown; photo loads on top if available
   const hero = document.getElementById('vd-hero');
   const typeColors = { restaurant:'#ea580c', cafe:'#d97706', bar:'#7c3aed', fast_food:'#dc2626', bakery:'#b45309', pub:'#4f46e5' };
   const heroColor = typeColors[place.type] || '#16a34a';
-  hero.style.background = `linear-gradient(135deg, ${heroColor}33 0%, ${heroColor}11 100%)`;
-  hero.innerHTML = `<div class="vd-hero-icon">${typeIcon}</div>`;
-  // Try direct image tag first, then Wikimedia Commons
+  hero.style.background = '';
+  hero.innerHTML = '<div id="vd-mini-map" style="width:100%;height:100%"></div>';
+  _vdMiniMap = initMiniMap('vd-mini-map', place.lat, place.lng, null);
+  // Try to overlay a photo if one is available
   const tryPhoto = place.image?.startsWith('http') ? Promise.resolve(place.image)
     : place.image ? fetchWikimediaPhoto(place.image) : Promise.resolve(null);
   tryPhoto.then(url => {
-    if (url && document.getElementById('vd-overlay') && !document.getElementById('vd-overlay').classList.contains('hidden')) {
+    if (url && !document.getElementById('vd-overlay').classList.contains('hidden')) {
       hero.style.background = `url(${url}) center/cover no-repeat`;
       hero.innerHTML = '<div class="vd-hero-scrim"></div>';
     }
@@ -2261,10 +2283,14 @@ function openVeganDetail(place) {
 
   // Links row (reviews/photos)
   document.getElementById('vd-links-row').innerHTML =
-    `<div class="vd-links-label">Reviews &amp; photos</div>
+    `<div class="vd-links-label"><i class="ph ph-star"></i> Ratings, reviews &amp; photos</div>
      <div class="vd-links-btns">
-       <a class="vd-link-btn gmaps" href="${mapsUrl}" target="_blank" rel="noopener"><i class="ph ph-google-logo"></i><span>Google Maps</span></a>
-       <a class="vd-link-btn happycow" href="${happycowUrl}" target="_blank" rel="noopener"><i class="ph ph-leaf"></i><span>HappyCow</span></a>
+       <a class="vd-link-btn gmaps" href="${mapsUrl}" target="_blank" rel="noopener">
+         <i class="ph ph-google-logo"></i><div><span class="vd-link-title">Google Maps</span><span class="vd-link-sub">Reviews &amp; photos</span></div>
+       </a>
+       <a class="vd-link-btn happycow" href="${happycowUrl}" target="_blank" rel="noopener">
+         <i class="ph ph-leaf"></i><div><span class="vd-link-title">HappyCow</span><span class="vd-link-sub">Vegan reviews</span></div>
+       </a>
      </div>`;
 
   // Maps link in topbar
@@ -2546,23 +2572,34 @@ function buildChargerCard(charger) {
   const { open, todayStr } = parseOpeningHours(charger.openingHours);
   const openBadge = open === true ? '<span class="vp-open-badge open">Open</span>'
                   : open === false ? '<span class="vp-open-badge closed">Closed</span>' : '';
-  const kwBadge = charger.maxKW ? `<span class="charger-kw-badge">${charger.maxKW % 1 === 0 ? charger.maxKW : charger.maxKW.toFixed(0)}kW</span>` : '';
+  const kwBadge = charger.maxKW ? `<span class="charger-kw-badge">${Math.round(charger.maxKW)}kW</span>` : '';
   const bays = charger.capacity ? `<span class="charger-bays">${charger.capacity} bay${charger.capacity !== 1 ? 's' : ''}</span>` : '';
 
+  // Primary display name: use address if name just repeats the operator
+  const sameName = !charger.name || charger.name === charger.operator || charger.name === 'Charging station';
+  const displayName = sameName ? (charger.address || brand.label + ' station') : charger.name;
+  const displayAddr = (sameName || !charger.address) ? '' : charger.address;
+
+  // Connector type chips
+  const connChips = charger.connectors.slice(0, 3).map(c =>
+    `<span class="charger-conn-chip">${c.label}${c.kw ? ' ' + Math.round(c.kw) + 'kW' : ''}</span>`
+  ).join('');
+
   card.innerHTML = `
-    <div class="charger-brand-bar" style="background:${brand.color}22;border-left:3px solid ${brand.color}">
-      <span class="charger-brand-name" style="color:${brand.color}">${brand.isTesla ? '⚡ ' : ''}${brand.label}</span>
-      ${kwBadge}${bays}${openBadge}
-    </div>
-    <div class="charger-card-body">
-      <div class="charger-card-name">${charger.name !== charger.operator ? charger.name : (charger.address || charger.name)}</div>
-      ${charger.address ? `<div class="charger-card-addr">${charger.address}</div>` : ''}
-      ${todayStr ? `<div class="vegan-place-hours-mini">${todayStr}</div>` : ''}
-      ${charger.charge ? `<div class="charger-price"><i class="ph ph-currency-circle-dollar"></i> ${charger.charge}</div>` : ''}
-    </div>
-    <div class="vegan-place-right">
-      <div class="vegan-place-dist">${distStr}</div>
-      <div class="vegan-place-chevron"><i class="ph ph-caret-right"></i></div>
+    <div class="charger-card-row">
+      <div class="charger-card-left">
+        <div class="charger-brand-pill" style="background:${brand.color}22;color:${brand.color}">
+          ${brand.isTesla ? '⚡ ' : '<i class="ph ph-charging-station"></i> '}${brand.label}
+        </div>
+        <div class="charger-card-name">${displayName}</div>
+        ${displayAddr ? `<div class="charger-card-addr">${displayAddr}</div>` : ''}
+        <div class="charger-card-chips">${kwBadge}${bays}${openBadge}${connChips}</div>
+        ${charger.charge ? `<div class="charger-price"><i class="ph ph-currency-circle-dollar"></i> ${charger.charge}</div>` : ''}
+      </div>
+      <div class="charger-card-right">
+        <div class="vegan-place-dist">${distStr}</div>
+        <div class="vegan-place-chevron"><i class="ph ph-caret-right"></i></div>
+      </div>
     </div>`;
   card.addEventListener('click', () => openChargerDetail(charger));
   return card;
@@ -2585,8 +2622,9 @@ function openChargerDetail(charger) {
 
   // Hero
   const hero = document.getElementById('cd-hero');
-  hero.style.background = `linear-gradient(135deg, ${brand.color}44 0%, ${brand.color}11 100%)`;
-  hero.innerHTML = `<div class="vd-hero-icon" style="font-size:56px">${brand.isTesla ? '⚡' : '🔌'}</div>`;
+  hero.style.background = '';
+  hero.innerHTML = '<div id="cd-mini-map" style="width:100%;height:100%"></div>';
+  _cdMiniMap = initMiniMap('cd-mini-map', charger.lat, charger.lng, null);
 
   // Meta row
   document.getElementById('cd-meta-row').innerHTML =
@@ -4384,7 +4422,6 @@ function initDetailNavSwipe() {
   const page    = document.getElementById('detail-page');
   const sliderWrapId = 'detail-slider-wrap';
 
-  const DETAIL_EDGE = 70;
   let startX = 0, startY = 0, diffX = 0, isHoriz = null, active = false;
 
   page.addEventListener('touchstart', e => {
@@ -4392,9 +4429,7 @@ function initDetailNavSwipe() {
     const poiCarousel = document.getElementById('detail-poi-carousel');
     if (sliderWrap  && sliderWrap.contains(e.target))  return;
     if (poiCarousel && poiCarousel.contains(e.target)) return;
-    const x = e.touches[0].clientX;
-    if (x > DETAIL_EDGE && x < window.innerWidth - DETAIL_EDGE) return;
-    startX = x;
+    startX = e.touches[0].clientX;
     startY = e.touches[0].clientY;
     diffX = 0; isHoriz = null; active = true;
   }, { passive: true });
