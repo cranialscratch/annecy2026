@@ -1,7 +1,12 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v232';
+const APP_VERSION = 'v233';
 
 const CHANGELOG = [
+  { version: 'v233', title: 'Fix icons — safe CDN caching', items: [
+    { type: 'fix', text: 'Icons restored — CDN fetch interception removed (was breaking Phosphor script loading)' },
+    { type: 'feature', text: 'Leaflet and Phosphor pre-cached at SW install for offline use (cache-first on match)' },
+    { type: 'feature', text: 'crossorigin=anonymous on CDN scripts so cached CORS responses are matched correctly' },
+  ]},
   { version: 'v232', title: 'Offline resilience — icons & map cached', items: [
     { type: 'feature', text: 'Leaflet map library and Phosphor icons now cached offline at install' },
     { type: 'feature', text: 'CDN fonts/assets cached on first use — survive loss of signal' },

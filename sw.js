@@ -1,4 +1,4 @@
-const CACHE = 'annecy2026-v232';
+const CACHE = 'annecy2026-v233';
 const CORE = [
   './index.html',
   './styles.v113.css',
@@ -7,27 +7,27 @@ const CORE = [
   './manifest.json',
 ];
 
-// CDN assets pre-fetched at install so they work offline from first use
-const CDN_PREFETCH = [
+// CDN libraries pre-fetched at install so they survive going offline after first use.
+// These must match the exact URLs (with crossorigin="" on the script tags) so cached
+// CORS responses can be matched and served by the fetch handler below.
+const CDN_CACHE = [
   'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
   'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
   'https://unpkg.com/@phosphor-icons/web@2.1.1',
 ];
 
-// CDN origins whose responses are cached at runtime (covers icon font files etc.)
-const CDN_ORIGINS = ['unpkg.com', 'cdnjs.cloudflare.com'];
-
 self.addEventListener('install', e => {
   e.waitUntil(
     caches.open(CACHE).then(c =>
       Promise.allSettled([
-        // Core same-origin files
         ...CORE.map(url =>
-          fetch(new Request(url, { cache: 'reload' })).then(r => r.ok ? c.put(url, r) : null)
+          fetch(new Request(url, { cache: 'reload' }))
+            .then(r => r.ok ? c.put(url, r) : null)
         ),
-        // CDN libraries — network only, don't block activation on failure
-        ...CDN_PREFETCH.map(url =>
-          fetch(new Request(url, { cache: 'reload', mode: 'cors' }))
+        // CDN libs: CORS fetch so we can cache a readable response.
+        // Silently skipped if network unavailable during install.
+        ...CDN_CACHE.map(url =>
+          fetch(new Request(url, { cache: 'reload', mode: 'cors', credentials: 'omit' }))
             .then(r => r.ok ? c.put(url, r) : null)
             .catch(() => null)
         ),
@@ -58,21 +58,23 @@ self.addEventListener('fetch', e => {
 
   const url = new URL(e.request.url);
 
-  // CDN libraries (Leaflet, Phosphor, etc.): cache-first so they work offline
-  if (CDN_ORIGINS.some(o => url.hostname.endsWith(o))) {
+  // CDN libraries we pre-cache: cache-first so they work offline.
+  // Only intercept the specific URLs we know about — don't touch other CDN traffic.
+  if (CDN_CACHE.includes(e.request.url)) {
     e.respondWith(
       caches.match(e.request).then(cached => {
         if (cached) return cached;
-        return fetch(e.request, { mode: 'cors' }).then(res => {
+        // Not cached yet — fetch, cache, and return
+        return fetch(e.request).then(res => {
           if (res.ok) caches.open(CACHE).then(c => c.put(e.request, res.clone()));
           return res;
-        }).catch(() => cached); // return undefined if both fail — browser handles gracefully
+        });
       })
     );
     return;
   }
 
-  // Other cross-origin (Wikipedia, OSRM, Google, weather, Firebase): never intercept
+  // All other cross-origin (Wikipedia, OSRM, Google, weather, Firebase): never intercept
   if (url.origin !== self.location.origin) return;
 
   // Same-origin assets: network-first, cache fallback for offline
