@@ -1,7 +1,11 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v234';
+const APP_VERSION = 'v235';
 
 const CHANGELOG = [
+  { version: 'v235', title: 'Arrived now ripples following stops', items: [
+    { type: 'fix', text: '"Arrived now" now cascades the time delta to all following stops on the day' },
+    { type: 'fix', text: 'Duration stepper (±5 min) now ripples following stops by the same amount' },
+  ]},
   { version: 'v234', title: 'Toolbar fix, arrived-now, broader vegan search', items: [
     { type: 'fix', text: 'Toolbar now fixed to bottom of screen on vegan and charger detail pages' },
     { type: 'fix', text: '"Arrived now" sets your arrival time to the current time (was wrongly calculating duration)' },
@@ -4651,9 +4655,35 @@ function renderDetailTimeStrip(stop, container) {
   document.getElementById('dts-arrived')?.addEventListener('click', () => openTravelAction(stop, 'arrived'));
   document.getElementById('dts-departed')?.addEventListener('click', () => openTravelAction(stop, 'departed'));
 
-  const adjustDur = (delta) => {
+  const adjustDur = (durDelta) => {
     saveUndoSnapshot();
-    state.durOverrides[stop.id] = Math.max(0, (getStopDuration(stop) || 0) + delta);
+    const oldDur = getStopDuration(stop) || 0;
+    const newDur = Math.max(0, oldDur + durDelta);
+    state.durOverrides[stop.id] = newDur;
+    const timeDelta = newDur - oldDur; // minutes shift for following stops
+    if (timeDelta !== 0) {
+      const day = TRIP_DATA.days.find(d => d.id === state.currentDayId);
+      if (day) {
+        const days = TRIP_DATA.days;
+        const dayIdx = days.findIndex(d => d.id === day.id);
+        if (!state.crossDayMoves) state.crossDayMoves = {};
+        const homeDayStops = [...day.stops, ...(state.addedStops?.[day.id] || [])];
+        const sorted = [...homeDayStops].sort((a, b) => (a.order ?? 9999) - (b.order ?? 9999));
+        let found = false;
+        sorted.forEach(s => {
+          if (!found) { if (s.id === stop.id) found = true; return; }
+          if (state.skipped[s.id]) return;
+          const cur = timeToMinutes(getStopTime(s));
+          if (cur === null) return;
+          const currentDayIdx = state.crossDayMoves[s.id] ? days.findIndex(d => d.id === state.crossDayMoves[s.id]) : dayIdx;
+          const newAbsolute = currentDayIdx * 1440 + cur + timeDelta;
+          const targetDayIdx = Math.min(Math.max(0, Math.floor(newAbsolute / 1440)), days.length - 1);
+          state.overrides[s.id] = minutesToTime(newAbsolute);
+          if (targetDayIdx !== dayIdx) state.crossDayMoves[s.id] = days[targetDayIdx].id;
+          else delete state.crossDayMoves[s.id];
+        });
+      }
+    }
     save();
     renderView(false);
     renderDetailTimeStrip(stop, container);
@@ -4666,10 +4696,46 @@ function renderDetailTimeStrip(stop, container) {
     const now = new Date();
     const nowStr = now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0');
     saveUndoSnapshot();
+
+    const planned = timeToMinutes(getStopTime(stop)) || 0;
+    const actual  = timeToMinutes(nowStr);
+    const delta   = actual - planned;
     state.overrides[stop.id] = nowStr;
+
+    // Cascade delta to following stops on this day (same logic as applyTravelAction)
+    if (delta !== 0) {
+      const day = TRIP_DATA.days.find(d => d.id === state.currentDayId);
+      if (day) {
+        const days = TRIP_DATA.days;
+        const dayIdx = days.findIndex(d => d.id === day.id);
+        if (!state.crossDayMoves) state.crossDayMoves = {};
+        const homeDayStops = [...day.stops, ...(state.addedStops?.[day.id] || [])];
+        const homeDayIds = new Set(homeDayStops.map(s => s.id));
+        const movedFromThisDay = Object.entries(state.crossDayMoves)
+          .filter(([stopId]) => homeDayIds.has(stopId))
+          .map(([stopId]) => homeDayStops.find(s => s.id === stopId)).filter(Boolean);
+        const sorted = [...homeDayStops, ...movedFromThisDay.filter(s => !homeDayIds.has(s.id))];
+        sorted.sort((a, b) => (a.order ?? 9999) - (b.order ?? 9999));
+        let found = false;
+        sorted.forEach(s => {
+          if (!found) { if (s.id === stop.id) found = true; return; }
+          if (state.skipped[s.id]) return;
+          const cur = timeToMinutes(getStopTime(s));
+          if (cur === null) return;
+          const currentDayIdx = state.crossDayMoves[s.id] ? days.findIndex(d => d.id === state.crossDayMoves[s.id]) : dayIdx;
+          const newAbsolute = currentDayIdx * 1440 + cur + delta;
+          const targetDayIdx = Math.min(Math.max(0, Math.floor(newAbsolute / 1440)), days.length - 1);
+          state.overrides[s.id] = minutesToTime(newAbsolute);
+          if (targetDayIdx !== dayIdx) state.crossDayMoves[s.id] = days[targetDayIdx].id;
+          else delete state.crossDayMoves[s.id];
+        });
+      }
+    }
+
     save();
     renderView(false);
     renderDetailTimeStrip(stop, container);
+    showUndoToast('Arrival recorded — times updated');
   });
 }
 
