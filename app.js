@@ -1,7 +1,10 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v241';
+const APP_VERSION = 'v242';
 
 const CHANGELOG = [
+  { version: 'v242', title: 'Fix false "already on itinerary" on place search', items: [
+    { type: 'fix', text: '"Already on itinerary" no longer fires falsely — name-based substring matching removed, proximity check tightened to 80m' },
+  ]},
   { version: 'v241', title: 'Search for any place and add to stops', items: [
     { type: 'feature', text: 'Search bar at top of Vegan view — type any place name to find it via Google Places' },
     { type: 'feature', text: 'Search results show rating, address, type and distance, then open the full detail page with photos, hours, reviews' },
@@ -2577,14 +2580,11 @@ async function fetchWikimediaPhoto(tag) {
 
 /* ── Find matching planned stop by proximity ────────────────────────── */
 function findMatchingPlannedStop(place) {
+  if (!place.lat || !place.lng) return null;
   for (const day of TRIP_DATA.days) {
     for (const stop of getDayStops(day)) {
       if (!stop.lat || !stop.lng) continue;
-      if (haversineM(place.lat, place.lng, stop.lat, stop.lng) < 150) return { stop, day };
-      // Also match by name similarity
-      const sn = stop.location?.toLowerCase() || '';
-      const pn = place.name?.toLowerCase() || '';
-      if (sn && pn && (sn.includes(pn) || pn.includes(sn))) return { stop, day };
+      if (haversineM(place.lat, place.lng, stop.lat, stop.lng) < 80) return { stop, day };
     }
   }
   return null;
