@@ -1,5 +1,5 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v222';
+const APP_VERSION = 'v223';
 const _errorLog = [];
 window.addEventListener('error', e => {
   _errorLog.push({ ts: new Date().toISOString(), msg: e.message || String(e), src: (e.filename||'').split('/').pop() + ':' + (e.lineno||'?') });
@@ -2133,28 +2133,29 @@ async function fetchGooglePlace(name, address, lat, lng) {
     return {
       rating:      p.rating || null,
       ratingCount: p.userRatingCount || 0,
-      reviews:     (p.reviews || []).slice(0, 3),
+      reviews:     (p.reviews || []).sort((a, b) => new Date(b.publishTime) - new Date(a.publishTime)).slice(0, 3),
       photos:      (p.photos || []).slice(0, 5),
       hours:       p.currentOpeningHours?.weekdayDescriptions || [],
     };
   } catch { return null; }
 }
 
-function gPhotoUrl(photoName, maxWidth = 800) {
-  return `https://places.googleapis.com/v1/${photoName}/media?maxWidthPx=${maxWidth}&key=${GPLACES_KEY}&skipHttpRedirect=true`;
+async function gPhotoUrl(photoName, maxWidth = 800) {
+  const res = await fetch(`https://places.googleapis.com/v1/${photoName}/media?maxWidthPx=${maxWidth}&key=${GPLACES_KEY}&skipHttpRedirect=true`);
+  if (!res.ok) return null;
+  const data = await res.json();
+  return data.photoUri || null;
 }
 
 async function injectGoogleData(gData, heroEl, bodyEl) {
   if (!gData) return;
 
-  // Photo — fetch first photo URL then update hero
+  // Photo — resolve photo URI then set as background
   if (gData.photos.length) {
     try {
-      const photoRes = await fetch(gPhotoUrl(gData.photos[0].name));
-      if (photoRes.ok) {
-        const blob = await photoRes.blob();
-        const objUrl = URL.createObjectURL(blob);
-        heroEl.style.background = `url(${objUrl}) center/cover no-repeat`;
+      const photoUri = await gPhotoUrl(gData.photos[0].name);
+      if (photoUri) {
+        heroEl.style.background = `url(${photoUri}) center/cover no-repeat`;
         heroEl.innerHTML = '<div class="vd-hero-scrim"></div>';
       }
     } catch {}
