@@ -1,5 +1,5 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v219';
+const APP_VERSION = 'v220';
 const _errorLog = [];
 window.addEventListener('error', e => {
   _errorLog.push({ ts: new Date().toISOString(), msg: e.message || String(e), src: (e.filename||'').split('/').pop() + ':' + (e.lineno||'?') });
@@ -82,8 +82,14 @@ function getDayLabel(day) {
   const names = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
   return names[new Date(day.date + 'T00:00:00').getDay()];
 }
+/* Local-timezone date string — avoids UTC offset shifting "today" by hours */
+function localDateStr(d) {
+  const dt = d || new Date();
+  return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
+}
+
 function findTodayDayId() {
-  const today = new Date().toISOString().slice(0,10);
+  const today = localDateStr();
   // Exact date match first (test days, travel days) — before countdown catch-all
   for (const day of TRIP_DATA.days) {
     if (day.date === today) return day.id;
@@ -112,7 +118,7 @@ let _trafficLastFired    = {};   // stopId → timestamp of last alert
 function findNextDrivingLeg() {
   // Returns { from: {lat,lng}, to: stop } for the next stop we're driving to,
   // based on current time vs today's itinerary. Returns null if not a driving day.
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateStr();
   const day = TRIP_DATA.days.find(d =>
     d.date === today || (d.isFestival && today >= d.date && today <= (d.dateEnd || d.date))
   );
@@ -537,7 +543,7 @@ async function copyDevData() {
     userAgent: navigator.userAgent,
     platform: navigator.platform || navigator.userAgentData?.platform || 'unknown',
     online: navigator.onLine,
-    today: new Date().toISOString().slice(0, 10),
+    today: localDateStr(),
     currentDayId: state.currentDayId,
     cardView: state.cardView,
     notifsEnabled: state.notifsEnabled,
@@ -662,7 +668,7 @@ function disableNotifs() {
 }
 
 function collectTodayLeaveEvents() {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateStr();
   const events = [];
   for (const day of TRIP_DATA.days) {
     const covers = day.date === today ||
@@ -1323,7 +1329,7 @@ function getWeatherForStop(weatherMap, stop) {
   if (!weatherMap) return null;
   const day = TRIP_DATA.days.find(d => d.stops?.some(s => s.id === stop.id));
   // For festival/multi-day spans use today's date so weather is current
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateStr();
   const dateStr = (day?.isFestival) ? today : (day?.date || today);
   const hourMap = weatherMap.get(dateStr);
   if (!hourMap) return null;
@@ -1470,7 +1476,7 @@ function buildDayStrip() {
     const chip = document.createElement('button');
     chip.className = 'day-chip';
     chip.dataset.dayId = day.id;
-    const today = new Date().toISOString().slice(0,10);
+    const today = localDateStr();
     const isTodayChip = day.isCountdown
       ? today <= day.dateEnd
       : day.isFestival
@@ -2736,7 +2742,7 @@ let _countdownInterval = null;
 /* Returns { state:'travelling'|'at_stop'|'done', stop, nextStop, targetMs, day }
    based on today's trip day stops and current time. */
 function getTripState() {
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = localDateStr();
   // Find the trip day for today (non-countdown, non-festival, matching date; or festival matching range)
   const today = TRIP_DATA.days.find(d => {
     if (d.isCountdown) return false;
@@ -2974,7 +2980,7 @@ function buildCalDayHeader(day, containerId) {
 
 /* ── Festival banner — title + today's date + weather ──────────────── */
 function buildFestivalBanner(day) {
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = localDateStr();
   const dateStr  = (todayStr >= day.date && todayStr <= day.dateEnd) ? todayStr : day.date;
   const dateLabel = new Date(dateStr + 'T12:00:00').toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long' });
 
@@ -3045,7 +3051,7 @@ function renderCalView(container) {
   const timedStops = getDayStops(day).filter(s => timeToMinutes(getStopTime(s)) !== null);
   if (!timedStops.length) return;
 
-  const _calToday = new Date().toISOString().slice(0, 10);
+  const _calToday = localDateStr();
   const isToday = day.date === _calToday || (day.isFestival && _calToday >= day.date && _calToday <= (day.dateEnd || day.date));
   const isPastDay = day.date && day.date < _calToday;
 
@@ -3132,7 +3138,7 @@ function renderCalView(container) {
     if (calWPill) {
       fetchWeatherForDay(day).then(wMap => {
         if (!wMap || !calWPill.isConnected) return;
-        const today = new Date().toISOString().slice(0, 10);
+        const today = localDateStr();
         const dateStr = day.isFestival ? today : (day.date || '');
         const w = lookupHourlyWeather(wMap, dateStr, getStopTime(stop));
         if (!w) return;
@@ -3237,7 +3243,7 @@ function renderTimeline(container, scrollToNow) {
     container.appendChild(buildFestivalBanner(day));
   }
 
-  const today = new Date().toISOString().slice(0,10);
+  const today = localDateStr();
   const isToday = day.date === today || (day.isFestival && today >= day.date && today <= day.dateEnd);
   const now = nowMinutes();
   let nowLineEl = null;
@@ -3331,7 +3337,7 @@ function buildCompactItem(stop, isLast, day) {
   const isVisited = !!state.checked[stop.id];
   const isSkipped = !!state.skipped[stop.id];
   const info      = leaveByInfo(stop);
-  const _cTodayStr = new Date().toISOString().slice(0, 10);
+  const _cTodayStr = localDateStr();
   const _cDay = day || TRIP_DATA.days.find(d => d.stops.some(s => s.id === stop.id));
   const _cIsToday = _cDay && (_cDay.date === _cTodayStr ||
     (_cDay.isFestival && _cTodayStr >= _cDay.date && _cTodayStr <= (_cDay.dateEnd || _cDay.date)));
@@ -3379,7 +3385,7 @@ function buildTimelineItem(stop, isLast, day, nextStop, prevStop) {
   const isVisited  = !!state.checked[stop.id];
   const isSkipped  = !!state.skipped[stop.id];
 
-  const _todayStr = new Date().toISOString().slice(0, 10);
+  const _todayStr = localDateStr();
   const _currentDay = day || TRIP_DATA.days.find(d => d.id === state.currentDayId);
   const _isToday = _currentDay && (_currentDay.date === _todayStr ||
     (_currentDay.isFestival && _todayStr >= _currentDay.date && _todayStr <= (_currentDay.dateEnd || _currentDay.date)));
@@ -3536,7 +3542,7 @@ function buildTimelineItem(stop, isLast, day, nextStop, prevStop) {
   if (_weatherPill && _currentDay) {
     fetchWeatherForDay(_currentDay).then(wMap => {
       if (!wMap || !_weatherPill.isConnected) return;
-      const today = new Date().toISOString().slice(0, 10);
+      const today = localDateStr();
       const dateStr = _currentDay.isFestival ? today : (_currentDay.date || '');
       const w = lookupHourlyWeather(wMap, dateStr, getStopTime(stop));
       if (!w) return;
@@ -4177,7 +4183,7 @@ function openDetail(stop) {
   // Travel action buttons — only shown for today's stops
   const travelActEl = document.getElementById('detail-travel-actions');
   if (travelActEl) {
-    const _todayStr2 = new Date().toISOString().slice(0, 10);
+    const _todayStr2 = localDateStr();
     const _stopDay = TRIP_DATA.days.find(d => getDayStops(d).some(s => s.id === stop.id));
     const _stopIsToday = _stopDay && (_stopDay.date === _todayStr2 ||
       (_stopDay.isFestival && _todayStr2 >= _stopDay.date && _todayStr2 <= (_stopDay.dateEnd || _stopDay.date)));
@@ -4245,7 +4251,7 @@ function openDetail(stop) {
       fetchWeatherForDay(_dDay).then(wMap => {
         if (!wMap || !detailWeatherEl.isConnected) return;
         if (_detailStop?.id !== stop.id) return;
-        const today = new Date().toISOString().slice(0, 10);
+        const today = localDateStr();
         const dateStr = _dDay.isFestival ? today : (_dDay.date || '');
         const w = lookupHourlyWeather(wMap, dateStr, getStopTime(stop));
         if (!w) return;
@@ -5146,7 +5152,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!day || day.isCountdown) { showToast('No itinerary for this day'); return; }
     const allStops = getDayStops(day);
     const now = nowMinutes();
-    const todayStr = new Date().toISOString().slice(0, 10);
+    const todayStr = localDateStr();
     const isToday = day.date === todayStr;
     let fromIdx = 0;
     if (isToday) {
@@ -5338,4 +5344,23 @@ document.addEventListener('DOMContentLoaded', () => {
   // visibilitychange covers most cases; pageshow catches iOS PWA cold-resume
   document.addEventListener('visibilitychange', handleResume);
   window.addEventListener('pageshow', handleResume);
+
+  // Midnight advance — schedule a tick at the next local midnight so the day
+  // tab advances automatically without needing to reopen the app
+  function scheduleMidnightTick() {
+    const now = new Date();
+    const msUntilMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 5).getTime() - now.getTime();
+    setTimeout(() => {
+      const todayId = findTodayDayId();
+      if (todayId && todayId !== state.currentDayId) {
+        state.currentDayId = todayId;
+        state.currentView  = 'day';
+        updateDayStrip();
+        renderView(true);
+        scheduleNotifs();
+      }
+      scheduleMidnightTick(); // re-arm for the following midnight
+    }, msUntilMidnight);
+  }
+  scheduleMidnightTick();
 });
