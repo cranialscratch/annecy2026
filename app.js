@@ -1,7 +1,12 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v240';
+const APP_VERSION = 'v241';
 
 const CHANGELOG = [
+  { version: 'v241', title: 'Search for any place and add to stops', items: [
+    { type: 'feature', text: 'Search bar at top of Vegan view — type any place name to find it via Google Places' },
+    { type: 'feature', text: 'Search results show rating, address, type and distance, then open the full detail page with photos, hours, reviews' },
+    { type: 'feature', text: 'From the detail page, use "Add to day" to add the found place to your itinerary as a stop' },
+  ]},
   { version: 'v240', title: 'Toolbar fixed, time picker stays open, Now buttons', items: [
     { type: 'fix', text: 'Toolbar now truly fixed to viewport bottom on planned stop pages (detail-overlay scroll restructured)' },
     { type: 'fix', text: 'Native time picker no longer closes mid-scroll — inputs update in-place without re-rendering the strip' },
@@ -2102,6 +2107,117 @@ async function renderVeganView(container) {
   hdr.className = 'vegan-view-header';
   hdr.innerHTML = '<i class="ph ph-leaf"></i> Vegan near you';
   container.appendChild(hdr);
+
+  // ── Place search bar ──────────────────────────────────────────────
+  const searchWrap = document.createElement('div');
+  searchWrap.className = 'place-search-wrap';
+  searchWrap.innerHTML = `
+    <div class="place-search-bar">
+      <i class="ph ph-magnifying-glass"></i>
+      <input class="place-search-input" id="place-search-input" type="search" placeholder="Search for a place by name…" autocomplete="off">
+      <button class="place-search-btn" id="place-search-btn"><i class="ph ph-arrow-right"></i></button>
+    </div>
+    <div id="place-search-results" class="place-search-results hidden"></div>`;
+  container.appendChild(searchWrap);
+
+  const searchInput   = searchWrap.querySelector('#place-search-input');
+  const searchBtn     = searchWrap.querySelector('#place-search-btn');
+  const searchResults = searchWrap.querySelector('#place-search-results');
+
+  const doSearch = async () => {
+    const q = searchInput.value.trim();
+    if (!q) return;
+    searchResults.classList.remove('hidden');
+    searchResults.innerHTML = `<div class="vegan-searching"><i class="ph ph-spinner vegan-spin"></i> Searching…</div>`;
+    try {
+      const body = {
+        textQuery: q + (_userLat !== null ? '' : ''),
+        maxResultCount: 5,
+        languageCode: 'en',
+      };
+      if (_userLat !== null) {
+        body.locationBias = { circle: { center: { latitude: _userLat, longitude: _userLng }, radius: 20000 } };
+      }
+      const res = await fetch('https://places.googleapis.com/v1/places:searchText', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Goog-Api-Key': GPLACES_KEY,
+          'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.userRatingCount,places.primaryType,places.regularOpeningHours,places.currentOpeningHours,places.nationalPhoneNumber,places.websiteUri,places.reviews,places.photos',
+        },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error('Search failed');
+      const data = await res.json();
+      const places = data.places || [];
+      if (!places.length) {
+        searchResults.innerHTML = `<div class="vegan-no-gps">No results found for "<strong>${q}</strong>"</div>`;
+        return;
+      }
+      searchResults.innerHTML = '';
+      places.forEach(p => {
+        const lat = p.location?.latitude, lng = p.location?.longitude;
+        const dist = (_userLat !== null && lat && lng)
+          ? Math.round(haversineM(_userLat, _userLng, lat, lng))
+          : null;
+        const distStr = dist !== null ? (dist < 1000 ? `${dist}m` : `${(dist/1000).toFixed(1)}km`) : '';
+        const typeLabel = (p.primaryType || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || 'Place';
+        const ratingHtml = p.rating
+          ? `<span class="vcard-rating"><i class="ph ph-star-fill" style="color:#f59e0b"></i> ${p.rating.toFixed(1)} <span class="vcard-rating-count">(${(p.userRatingCount||0).toLocaleString()})</span></span>`
+          : '';
+        const card = document.createElement('div');
+        card.className = 'vegan-place-card';
+        card.innerHTML = `
+          <div class="vegan-place-main">
+            <div class="vegan-place-name">${p.displayName?.text || q}</div>
+            <div class="vegan-place-meta">
+              <span class="vegan-place-type">${typeLabel}</span>
+            </div>
+            <div class="vcard-bottom-row">
+              ${ratingHtml}
+              ${p.formattedAddress ? `<span class="vegan-place-hours-mini">${p.formattedAddress}</span>` : ''}
+            </div>
+          </div>
+          <div class="vegan-place-right">
+            ${distStr ? `<div class="vegan-place-dist">${distStr}</div>` : ''}
+            <div class="vegan-place-chevron"><i class="ph ph-caret-right"></i></div>
+          </div>`;
+        card.addEventListener('click', () => {
+          // Convert Google Places result to the internal place format and open detail
+          const osmPlace = {
+            osmId:        'gplace_' + p.id,
+            osmType:      'node',
+            name:         p.displayName?.text || q,
+            type:         (p.primaryType || 'restaurant').replace(/_/g,' '),
+            veganLevel:   'yes',
+            cuisine:      '',
+            address:      p.formattedAddress || '',
+            phone:        p.nationalPhoneNumber || '',
+            website:      p.websiteUri || '',
+            openingHours: p.regularOpeningHours?.weekdayDescriptions?.join('; ') || '',
+            lat,
+            lng,
+            dist:         dist ?? 0,
+          };
+          // Pre-populate Google cache so detail page shows instantly
+          _placeGoogleCache[osmPlace.osmId] = {
+            rating:      p.rating || null,
+            ratingCount: p.userRatingCount || 0,
+            reviews:     (p.reviews || []).sort((a, b) => new Date(b.publishTime) - new Date(a.publishTime)).slice(0, 3),
+            photos:      (p.photos || []).slice(0, 5),
+            hours:       p.regularOpeningHours?.weekdayDescriptions || [],
+          };
+          openVeganDetail(osmPlace);
+        });
+        searchResults.appendChild(card);
+      });
+    } catch (e) {
+      searchResults.innerHTML = `<div class="vegan-no-gps"><i class="ph ph-warning"></i> Search failed — check your connection</div>`;
+    }
+  };
+
+  searchBtn.addEventListener('click', doSearch);
+  searchInput.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); doSearch(); } });
 
   const nearbySection = document.createElement('div');
   nearbySection.className = 'vegan-nearby-section';

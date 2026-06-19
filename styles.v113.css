@@ -2152,6 +2152,28 @@ body.light .detail-alts-toggle-count { background: rgba(0,0,0,.08); }
   padding: 20px 16px 4px; color: var(--green);
 }
 .vegan-view-header i { font-size: 24px; }
+
+/* Place search bar */
+.place-search-wrap { padding: 8px 16px 4px; }
+.place-search-bar {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--glass-bg); border: 1px solid var(--glass-border);
+  border-radius: 14px; padding: 10px 12px;
+}
+.place-search-bar i { font-size: 18px; color: var(--text3); flex-shrink: 0; }
+.place-search-input {
+  flex: 1; background: none; border: none; outline: none;
+  font-size: 16px; color: var(--text); font-family: inherit;
+}
+.place-search-input::placeholder { color: var(--text3); }
+.place-search-btn {
+  background: var(--accent); border: none; border-radius: 10px;
+  width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;
+  color: #fff; cursor: pointer; flex-shrink: 0; font-size: 16px;
+}
+.place-search-results { padding: 8px 0; }
+.place-search-results.hidden { display: none; }
+
 .vegan-nearby-section { padding: 4px 0 8px; }
 .vegan-nearby-subtitle {
   font-size: 14px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase;
