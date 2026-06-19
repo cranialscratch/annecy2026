@@ -1,7 +1,14 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v243';
+const APP_VERSION = 'v244';
 
 const CHANGELOG = [
+  { version: 'v244', title: 'Swipe to Skip or Remove, compact skipped cards, Bucket List', items: [
+    { type: 'feature', text: 'Swipe left on any stop to reveal two options: Skip (or Restore) and Remove' },
+    { type: 'feature', text: 'Skipped stops collapse to a compact single-line card; tap Restore via swipe to expand' },
+    { type: 'feature', text: 'Remove sends a stop to the Bucket List — accessible from the drawer menu' },
+    { type: 'feature', text: 'Bucket List shows removed stops; tap + to re-add to any day, or trash to delete permanently (with confirmation)' },
+    { type: 'feature', text: '"Move to Bucket List" and "Delete permanently" actions available inside each stop\'s detail page' },
+  ]},
   { version: 'v243', title: 'Ripple fixed, next-leg travel info on stop pages', items: [
     { type: 'fix', text: 'Ripple when adding a vegan/search stop now correctly shifts following stops by the new stop\'s duration' },
     { type: 'feature', text: 'Each stop page shows the next stop name, drive time and distance (live from OSRM routing)' },
@@ -1285,8 +1292,9 @@ function getDayStops(day) {
   const added = (state.addedStops || {})[day.id] || [];
   const crossMoves = state.crossDayMoves || {};
 
-  // Base stops for this day, excluding any moved to a different day
+  // Base stops for this day, excluding any moved to a different day or removed to bucket list
   const baseStops = day.stops.filter(s => {
+    if (state.removed[s.id]) return false;
     const movedTo = crossMoves[s.id];
     return !movedTo || movedTo === day.id;
   });
@@ -1626,6 +1634,10 @@ function load() {
     if (as) state.addedStops        = JSON.parse(as);
     const cdm = localStorage.getItem('annecy_cross_day_moves');
     if (cdm) state.crossDayMoves = JSON.parse(cdm);
+    const rm = localStorage.getItem('annecy_removed');
+    if (rm) state.removed = JSON.parse(rm);
+    const bl = localStorage.getItem('annecy_bucket_list');
+    if (bl) state.bucketList = JSON.parse(bl);
   } catch {}
   try {
     if (localStorage.getItem('annecy_theme') === 'light') document.body.classList.add('light');
@@ -1725,7 +1737,11 @@ function renderView(scrollToNow) {
     mapEl.classList.add('hidden');
     mainEl.classList.remove('map-active');
     tl.classList.remove('hidden');
-    if (state.currentView === 'overview')      { setBgClass(null); renderOverview(tl); }
+    // Update bucket badge
+    const _bucketBadge = document.getElementById('bucket-badge');
+    if (_bucketBadge) _bucketBadge.textContent = state.bucketList.length > 0 ? state.bucketList.length : '';
+    if (state.currentView === 'bucket')        { setBgClass(null); renderBucketView(tl); return; }
+    else if (state.currentView === 'overview') { setBgClass(null); renderOverview(tl); }
     else if (state.currentView === 'vegan')    { setBgClass(null); renderVeganView(tl); }
     else if (state.currentView === 'charging') { setBgClass(null); renderChargerView(tl); }
     else if (state.cardView === 'calendar') renderCalView(tl);
@@ -2104,6 +2120,107 @@ function renderOverview(c) {
     grid.appendChild(card);
   });
   c.appendChild(grid);
+}
+
+/* ── Bucket List view ──────────────────────────────────────────────── */
+function renderBucketView(container) {
+  container.innerHTML = '';
+  const hdr = document.createElement('div');
+  hdr.className = 'vegan-view-header';
+  hdr.innerHTML = '<i class="ph ph-bookmark-simple"></i> Bucket List';
+  container.appendChild(hdr);
+
+  if (!state.bucketList.length) {
+    container.innerHTML += '<div class="vegan-no-gps" style="margin:40px 16px"><i class="ph ph-smiley"></i><div>Nothing here yet — remove a stop from the itinerary to save it here</div></div>';
+    return;
+  }
+
+  state.bucketList.forEach((entry, idx) => {
+    const { stop, dayLabel } = entry;
+    const card = document.createElement('div');
+    card.className = 'vegan-place-card bucket-card';
+    card.innerHTML = `
+      <div class="vegan-place-main">
+        <div class="vegan-place-name">${stopTypeIcon(stop)} ${stop.location || stop.name || 'Unnamed'}</div>
+        <div class="vegan-place-meta">
+          <span class="vegan-place-type">${typeLabel(getStopType(stop))}</span>
+          <span class="vd-dist-label" style="margin-left:auto">From: ${dayLabel}</span>
+        </div>
+        ${stop.reason ? `<div class="vegan-place-hours-mini" style="margin-top:4px;font-size:13px;color:var(--text3)">${stop.reason.slice(0,80)}${stop.reason.length>80?'…':''}</div>` : ''}
+      </div>
+      <div class="vegan-place-right">
+        <button class="bucket-add-btn" title="Add to a day"><i class="ph ph-calendar-plus"></i></button>
+        <button class="bucket-delete-btn" title="Delete permanently"><i class="ph ph-trash"></i></button>
+      </div>`;
+
+    card.querySelector('.bucket-add-btn').addEventListener('click', e => {
+      e.stopPropagation();
+      openBucketAddSheet(entry, idx);
+    });
+
+    const deleteBtn = card.querySelector('.bucket-delete-btn');
+    deleteBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      const confirmDiv = document.createElement('div');
+      confirmDiv.className = 'bucket-delete-confirm';
+      confirmDiv.innerHTML = 'Delete permanently? <button class="bucket-confirm-yes">Yes</button> <button class="bucket-confirm-no">No</button>';
+      card.appendChild(confirmDiv);
+      confirmDiv.querySelector('.bucket-confirm-yes').addEventListener('click', ev => {
+        ev.stopPropagation();
+        state.bucketList.splice(idx, 1);
+        save(); renderView(false);
+        showToast('Deleted permanently');
+      });
+      confirmDiv.querySelector('.bucket-confirm-no').addEventListener('click', ev => {
+        ev.stopPropagation();
+        confirmDiv.remove();
+      });
+    });
+
+    container.appendChild(card);
+  });
+}
+
+function openBucketAddSheet(entry, idx) {
+  const sheet = document.getElementById('vd-add-overlay');
+  if (!sheet) return;
+  const daysEl = document.getElementById('vd-add-days');
+  daysEl.innerHTML = '';
+  let selectedDayId = entry.originalDayId || state.currentDayId;
+  TRIP_DATA.days.filter(d => !d.isCountdown).forEach(day => {
+    const btn = document.createElement('button');
+    btn.className = 'vd-day-btn' + (day.id === selectedDayId ? ' selected' : '');
+    btn.dataset.dayId = day.id;
+    btn.innerHTML = `<span class="vd-day-btn-name">${getDayLabel(day)}</span><span class="vd-day-btn-date">${formatDate(day.date)}</span>`;
+    btn.addEventListener('click', () => {
+      daysEl.querySelectorAll('.vd-day-btn').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+      selectedDayId = day.id;
+    });
+    daysEl.appendChild(btn);
+  });
+  setTimeout(() => daysEl.querySelector('.selected')?.scrollIntoView({ block:'nearest', behavior:'smooth' }), 50);
+  document.getElementById('vd-add-close').onclick = () => sheet.classList.add('hidden');
+  document.getElementById('vd-add-cancel').onclick = () => sheet.classList.add('hidden');
+  document.getElementById('vd-add-confirm').onclick = () => {
+    const time = document.getElementById('vd-add-time').value || '12:00';
+    const ripple = document.getElementById('vd-add-ripple').checked;
+    const day = TRIP_DATA.days.find(d => d.id === selectedDayId);
+    if (!day) return;
+    saveUndoSnapshot();
+    const stop = { ...entry.stop, id: entry.stop.id.startsWith('vegan_') || entry.stop.id.startsWith('gplace_') ? entry.stop.id : 'bucket_' + Date.now(), time, order: 999 };
+    if (!state.addedStops[day.id]) state.addedStops[day.id] = [];
+    state.addedStops[day.id].push(stop);
+    state.bucketList.splice(idx, 1);
+    if (ripple) cascadeTimeDelta(stop, stop.duration || 45);
+    save();
+    sheet.classList.add('hidden');
+    state.currentDayId = day.id;
+    state.currentView = 'day';
+    renderView(false);
+    showToast(`${stop.location || stop.name} added to ${getDayLabel(day)}`);
+  };
+  sheet.classList.remove('hidden');
 }
 
 /* ── Filter list ───────────────────────────────────────────────────── */
@@ -3993,51 +4110,80 @@ function buildTimelineItem(stop, isLast, day, nextStop, prevStop) {
     return item;
   }
 
-  item.innerHTML = `
-    <div class="tl-left">
-      <button class="tl-time-btn" data-stop-id="${stop.id}">
-        <span>${time}</span>${stop.tz ? `<div class="tl-tz">${stop.tz}</div>` : ''}
-      </button>
-    </div>
-    <div class="tl-line-wrap">
-      <div class="tl-dot"></div>
-      ${isLast ? '' : '<div class="tl-line"></div>'}
-    </div>
-    <div class="tl-swipe-wrap">
-      <div class="tl-swipe-track">
-      <div class="tl-card${isVisited ? ' visited' : ''}${isSkipped ? ' skipped' : ''}" data-stop-id="${stop.id}">
-        <div class="card-visited-badge">✓</div>
-        <div class="card-skipped-badge"><i class="ph ph-x"></i> Skipped</div>
-        ${buildSlider(stop, 'card')}
-        <div class="card-body">
-          <div class="card-top-row">
-            <div class="card-name">${stopTypeIcon(stop)} ${getStopName(stop)}</div>
-            ${ (stop.planStatus === 'conditional' || stop.planStatus === 'weak-vegan') ? '<span class="card-warn-icon"><i class="ph ph-warning"></i></span>' : '' }<button class="check-btn${isVisited ? ' checked' : ''}" data-stop-id="${stop.id}" aria-label="Mark visited"><i class="ph ${isVisited ? 'ph-check-circle' : 'ph-circle'}"></i></button>
-          </div>
-          ${stop.address || stop.location ? `<div class="card-address">${stop.address || stop.location}</div>` : ''}
-          <div class="card-meta-row">
-            <span class="tl-card-badge">${typeLabel(getStopType(stop))}</span>
-            ${getStopPriority(stop) > 0 ? `<span class="priority-stars">${priorityStars(getStopPriority(stop))}</span>` : ''}
-            <span class="vcard-rating-loading" data-stopid="${stop.id}"></span>
-            <a class="weather-pill" data-stop-id="${stop.id}" data-lat="${getStopLat(stop)||''}" data-lng="${getStopLng(stop)||''}" href="#" onclick="return false;"></a>
-          </div>
-          <div class="card-reason">${getStopReason(stop)}</div>
-          ${buildTags(stop)}
-          ${hasExplicitDuration(stop) ? `<div data-leaveby="${stop.id}" class="leave-by-pill" style="display:none"></div>` : ''}
-          <div class="tl-actions">${buildIconActions(stop)}</div>
-        </div>
-      </div>
+  const _swipeActionsHtml = `
       <div class="tl-swipe-actions">
         <button class="swipe-skip-btn">${isSkipped ? '<i class="ph ph-arrow-u-up-left"></i> Restore' : '<i class="ph ph-x-circle"></i> Skip'}</button>
+        <button class="swipe-remove-btn"><i class="ph ph-trash"></i> Remove</button>
+      </div>`;
+
+  if (isSkipped) {
+    item.innerHTML = `
+      <div class="tl-left">
+        <button class="tl-time-btn" data-stop-id="${stop.id}">
+          <span>${time}</span>${stop.tz ? `<div class="tl-tz">${stop.tz}</div>` : ''}
+        </button>
       </div>
+      <div class="tl-line-wrap">
+        <div class="tl-dot"></div>
+        ${isLast ? '' : '<div class="tl-line"></div>'}
       </div>
-    </div>`;
+      <div class="tl-swipe-wrap">
+        <div class="tl-swipe-track">
+        <div class="tl-card skipped compact-card" data-stop-id="${stop.id}">
+          <div class="compact-card-inner">
+            <span class="compact-card-icon">${stopTypeIcon(stop)}</span>
+            <span class="compact-card-name">${getStopName(stop)}</span>
+            <span class="card-skipped-badge"><i class="ph ph-x-circle"></i> Skipped</span>
+          </div>
+        </div>
+        ${_swipeActionsHtml}
+        </div>
+      </div>`;
+  } else {
+    item.innerHTML = `
+      <div class="tl-left">
+        <button class="tl-time-btn" data-stop-id="${stop.id}">
+          <span>${time}</span>${stop.tz ? `<div class="tl-tz">${stop.tz}</div>` : ''}
+        </button>
+      </div>
+      <div class="tl-line-wrap">
+        <div class="tl-dot"></div>
+        ${isLast ? '' : '<div class="tl-line"></div>'}
+      </div>
+      <div class="tl-swipe-wrap">
+        <div class="tl-swipe-track">
+        <div class="tl-card${isVisited ? ' visited' : ''}" data-stop-id="${stop.id}">
+          <div class="card-visited-badge">✓</div>
+          ${buildSlider(stop, 'card')}
+          <div class="card-body">
+            <div class="card-top-row">
+              <div class="card-name">${stopTypeIcon(stop)} ${getStopName(stop)}</div>
+              ${ (stop.planStatus === 'conditional' || stop.planStatus === 'weak-vegan') ? '<span class="card-warn-icon"><i class="ph ph-warning"></i></span>' : '' }<button class="check-btn${isVisited ? ' checked' : ''}" data-stop-id="${stop.id}" aria-label="Mark visited"><i class="ph ${isVisited ? 'ph-check-circle' : 'ph-circle'}"></i></button>
+            </div>
+            ${stop.address || stop.location ? `<div class="card-address">${stop.address || stop.location}</div>` : ''}
+            <div class="card-meta-row">
+              <span class="tl-card-badge">${typeLabel(getStopType(stop))}</span>
+              ${getStopPriority(stop) > 0 ? `<span class="priority-stars">${priorityStars(getStopPriority(stop))}</span>` : ''}
+              <span class="vcard-rating-loading" data-stopid="${stop.id}"></span>
+              <a class="weather-pill" data-stop-id="${stop.id}" data-lat="${getStopLat(stop)||''}" data-lng="${getStopLng(stop)||''}" href="#" onclick="return false;"></a>
+            </div>
+            <div class="card-reason">${getStopReason(stop)}</div>
+            ${buildTags(stop)}
+            ${hasExplicitDuration(stop) ? `<div data-leaveby="${stop.id}" class="leave-by-pill" style="display:none"></div>` : ''}
+            <div class="tl-actions">${buildIconActions(stop)}</div>
+          </div>
+        </div>
+        ${_swipeActionsHtml}
+        </div>
+      </div>`;
+  }
 
   if (isEditable) {
     const day = TRIP_DATA.days.find(d => d.id === state.currentDayId);
     item.querySelector('.tl-time-btn').addEventListener('click', () => openTimeModal(stop, day));
   }
-  item.querySelector('.check-btn').addEventListener('click', e => {
+  const _checkBtn = item.querySelector('.check-btn');
+  if (_checkBtn) _checkBtn.addEventListener('click', e => {
     e.stopPropagation();
     toggleCheck(stop.id, item);
   });
@@ -4046,6 +4192,7 @@ function buildTimelineItem(stop, isLast, day, nextStop, prevStop) {
   const card = item.querySelector('.tl-card');
   card.style.cursor = 'pointer';
   card.addEventListener('click', e => {
+    if (isSkipped) return; // compact card — no detail open
     if (e.target.closest('.act-btn, .check-btn')) return;
     openDetail(stop);
   });
@@ -4065,7 +4212,7 @@ function buildTimelineItem(stop, isLast, day, nextStop, prevStop) {
   // Swipe-left to reveal Skip / Restore button
   const swipeWrap  = item.querySelector('.tl-swipe-wrap');
   const swipeTrack = item.querySelector('.tl-swipe-track');
-  const SWIPE_REVEAL = 88;
+  const SWIPE_REVEAL = 160;
   let _sx = 0, _sy = 0, _sActive = false, _sOpen = false, _sMoved = false;
   swipeWrap.addEventListener('touchstart', e => {
     _sx = e.touches[0].clientX; _sy = e.touches[0].clientY;
@@ -4109,6 +4256,25 @@ function buildTimelineItem(stop, isLast, day, nextStop, prevStop) {
     } else {
       skipStop(stop);
     }
+  });
+  // Remove button — moves stop to bucket list
+  item.querySelector('.swipe-remove-btn').addEventListener('click', e => {
+    e.stopPropagation();
+    swipeTrack.style.transition = 'transform .22s ease'; swipeTrack.style.transform = ''; _sOpen = false;
+    const _rDay = TRIP_DATA.days.find(d => d.id === state.currentDayId) || TRIP_DATA.days[0];
+    const isAdded = state.addedStops[_rDay.id] && state.addedStops[_rDay.id].some(s => s.id === stop.id);
+    if (stop.id.startsWith('vegan_') || stop.id.startsWith('gplace_') || isAdded) {
+      if (state.addedStops[_rDay.id]) {
+        state.addedStops[_rDay.id] = state.addedStops[_rDay.id].filter(s => s.id !== stop.id);
+      }
+    } else {
+      state.removed[stop.id] = true;
+    }
+    state.bucketList.unshift({ stop: { ...stop }, dayLabel: getDayLabel(_rDay), originalDayId: _rDay.id, removedAt: Date.now() });
+    delete state.skipped[stop.id];
+    delete state.checked[stop.id];
+    delete state.overrides[stop.id];
+    save(); renderView(false); showToast('Moved to Bucket List');
   });
 
   // Photo slider still handles its own swipe; tap on slider already calls openDetail,
@@ -5049,6 +5215,15 @@ function openDetail(stop) {
           skipStop(stop);
         }
       });
+      const bucketBtn = document.createElement('button');
+      bucketBtn.className = 'travel-action-btn detail-bucket-btn';
+      bucketBtn.innerHTML = '<i class="ph ph-bookmark-simple"></i> Move to Bucket List';
+      bucketBtn.addEventListener('click', () => {
+        moveStopToBucketList(stop);
+        closeDetail();
+        showToast('Moved to Bucket List');
+      });
+      travelActEl.appendChild(bucketBtn);
     } else {
       travelActEl.innerHTML = '';
       travelActEl.classList.add('hidden');
@@ -5449,6 +5624,22 @@ function extendStop(stop, deltaMins) {
   // Duration only — arrival times of other stops are not touched.
   // Use the time modal (ripple) to shift following stops.
   save(); renderView(false);
+}
+
+function moveStopToBucketList(stop) {
+  const day = TRIP_DATA.days.find(d => d.id === state.currentDayId) || TRIP_DATA.days[0];
+  const isAdded = state.addedStops[day.id] && state.addedStops[day.id].some(s => s.id === stop.id);
+  if (stop.id.startsWith('vegan_') || stop.id.startsWith('gplace_') || isAdded) {
+    if (state.addedStops[day.id]) {
+      state.addedStops[day.id] = state.addedStops[day.id].filter(s => s.id !== stop.id);
+    }
+  } else {
+    state.removed[stop.id] = true;
+  }
+  state.bucketList.unshift({ stop: { ...stop }, dayLabel: getDayLabel(day), originalDayId: day.id, removedAt: Date.now() });
+  delete state.skipped[stop.id];
+  delete state.checked[stop.id];
+  save();
 }
 
 async function skipStop(stop) {
@@ -6107,6 +6298,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('.drawer-item[data-action]').forEach(btn =>
     btn.addEventListener('click', () => {
       if (btn.dataset.action === 'home')         { state.currentView = 'day'; renderView(false); closeDrawer(); }
+      if (btn.dataset.action === 'bucket')       { state.currentView = 'bucket'; renderView(false); closeDrawer(); }
       if (btn.dataset.action === 'reset-times')  { state.overrides = {}; state.locOverrides = {}; state.durOverrides = {}; state.typeOverrides = {}; state.priorityOverrides = {}; state.reasonOverrides = {}; state.veganOverrides = {}; save(); renderView(false); closeDrawer(); }
       if (btn.dataset.action === 'reset-checks') { state.checked   = {}; save(); renderView(false); closeDrawer(); }
       if (btn.dataset.action === 'toggle-dark')  {
