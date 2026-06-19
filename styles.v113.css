@@ -2571,6 +2571,16 @@ body.light .cl-text { color: #475569; }
 
 /* ── Detail time strip (v228) ── */
 .detail-time-strip { margin: 16px 0 8px; }
+
+.detail-leg-info {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 14px; margin: 0 0 8px;
+  background: var(--glass-bg); border: 1px solid var(--glass-border);
+  border-radius: 14px; font-size: 15px; color: var(--text2);
+}
+.detail-leg-info i { color: var(--accent); flex-shrink: 0; font-size: 16px; }
+.leg-next-name { font-weight: 600; color: var(--text); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.leg-travel { color: var(--text2); font-size: 14px; white-space: nowrap; flex-shrink: 0; }
 .dts-row { display: flex; gap: 8px; align-items: stretch; }
 .dts-chip {
   flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px;

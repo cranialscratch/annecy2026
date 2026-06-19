@@ -1,7 +1,11 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v242';
+const APP_VERSION = 'v243';
 
 const CHANGELOG = [
+  { version: 'v243', title: 'Ripple fixed, next-leg travel info on stop pages', items: [
+    { type: 'fix', text: 'Ripple when adding a vegan/search stop now correctly shifts following stops by the new stop\'s duration' },
+    { type: 'feature', text: 'Each stop page shows the next stop name, drive time and distance (live from OSRM routing)' },
+  ]},
   { version: 'v242', title: 'Fix false "already on itinerary" on place search', items: [
     { type: 'fix', text: '"Already on itinerary" no longer fires falsely — name-based substring matching removed, proximity check tightened to 80m' },
   ]},
@@ -2840,23 +2844,8 @@ function openVeganAddSheet() {
     state.addedStops[day.id].push(newStop);
 
     if (ripple) {
-      // Shift stops that come after the new time
-      const allStops = getDayStops(day);
-      allStops.forEach(s => {
-        if (s.id === newStop.id) return;
-        const st = getStopTime(s);
-        if (st && st >= time) {
-          const dur = _vdPlace.type === 'fast_food' ? 30 : 45;
-          const [h, m] = time.split(':').map(Number);
-          const shiftedMs = (h * 60 + m + dur) * 60000;
-          const d = new Date(day.date + 'T00:00:00');
-          d.setTime(d.getTime() + shiftedMs);
-          // Simple: just leave ripple to the existing cascade — set newStop order to insert before first later stop
-          const laterStops = allStops.filter(ls => ls.id !== newStop.id && getStopTime(ls) >= time);
-          if (laterStops.length) newStop.order = (laterStops[0].order ?? 999) - 0.5;
-        }
-      });
-      applyTravelAction(day, newStop, time, true);
+      // Shift all stops that come after this one by the new stop's duration
+      cascadeTimeDelta(newStop, newStop.duration);
     }
 
     save();
@@ -4886,6 +4875,56 @@ function renderDetailTimeStrip(stop, container) {
   }
 }
 
+function renderLegInfo(stop) {
+  const el = document.getElementById('detail-leg-info');
+  if (!el) return;
+  el.classList.add('hidden');
+  el.innerHTML = '';
+
+  // Find next non-skipped stop in the day
+  const day = TRIP_DATA.days.find(d => getDayStops(d).some(s => s.id === stop.id));
+  if (!day) return;
+  const sorted = getDayStops(day).sort((a, b) => (a.order ?? 9999) - (b.order ?? 9999));
+  const idx = sorted.findIndex(s => s.id === stop.id);
+  const next = sorted.slice(idx + 1).find(s => !state.skipped[s.id] && s.lat && s.lng);
+  if (!next || !stop.lat || !stop.lng) return;
+
+  const straightKm = haversineM(stop.lat, stop.lng, next.lat, next.lng) / 1000;
+  const depMins  = (timeToMinutes(getStopTime(stop)) ?? 0) + (getStopDuration(stop) ?? 0);
+  const arrMins  = timeToMinutes(getStopTime(next));
+  const gapMins  = arrMins !== null ? arrMins - depMins : null;
+  const gapStr   = gapMins !== null && gapMins > 0
+    ? (gapMins >= 60 ? `${Math.floor(gapMins/60)}h${gapMins%60?gapMins%60+'m':''}` : `${gapMins}m`)
+    : null;
+
+  el.innerHTML = `<i class="ph ph-arrow-right"></i>
+    <span class="leg-next-name">${next.location || getStopName(next)}</span>
+    <span class="leg-travel" id="leg-travel-val">
+      <i class="ph ph-spinner vegan-spin"></i>
+    </span>`;
+  el.classList.remove('hidden');
+
+  // Async: fetch OSRM driving route
+  const url = `https://router.project-osrm.org/route/v1/driving/${stop.lng},${stop.lat};${next.lng},${next.lat}?overview=false`;
+  fetch(url).then(r => r.json()).then(d => {
+    const route = d.routes?.[0];
+    const travelEl = document.getElementById('leg-travel-val');
+    if (!travelEl) return;
+    if (route) {
+      const roadKm   = (route.distance / 1000).toFixed(1);
+      const roadMins = Math.ceil(route.duration / 60);
+      const rH = Math.floor(roadMins / 60), rM = roadMins % 60;
+      const rStr = roadMins >= 60 ? `${rH}h${rM ? rM + 'm' : ''}` : `${roadMins}m`;
+      travelEl.innerHTML = `${rStr} drive &middot; ${roadKm}km`;
+    } else {
+      travelEl.innerHTML = `~${straightKm.toFixed(1)}km${gapStr ? ' &middot; ' + gapStr + ' planned' : ''}`;
+    }
+  }).catch(() => {
+    const travelEl = document.getElementById('leg-travel-val');
+    if (travelEl) travelEl.innerHTML = `~${straightKm.toFixed(1)}km${gapStr ? ' &middot; ' + gapStr : ''}`;
+  });
+}
+
 function openDetail(stop) {
   _detailStop = stop;
   _detailCurrent = 0;
@@ -4986,6 +5025,9 @@ function openDetail(stop) {
     timeStripEl.classList.add('hidden');
     renderDetailTimeStrip(stop, timeStripEl);
   }
+
+  // Leg info — distance + drive time to next stop
+  renderLegInfo(stop);
 
   // Travel action buttons — Skip stop only (time/duration handled by time strip above)
   const travelActEl = document.getElementById('detail-travel-actions');
