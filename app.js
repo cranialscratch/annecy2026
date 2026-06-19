@@ -1,5 +1,5 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v224';
+const APP_VERSION = 'v225';
 const _errorLog = [];
 window.addEventListener('error', e => {
   _errorLog.push({ ts: new Date().toISOString(), msg: e.message || String(e), src: (e.filename||'').split('/').pop() + ':' + (e.lineno||'?') });
@@ -1943,6 +1943,19 @@ async function renderVeganView(container) {
         sub.textContent = `${places.length} place${places.length !== 1 ? 's' : ''} found${fromCache ? ' · pull to refresh' : ''}`;
         nearbySection.appendChild(sub);
         places.forEach(p => nearbySection.appendChild(buildVeganCard(p)));
+        // Background-fetch Google ratings for first 8 places
+        places.slice(0, 8).forEach(p => {
+          if (_placeGoogleCache[p.osmId]) return;
+          fetchGooglePlace(p.name, p.address, p.lat, p.lng).then(gData => {
+            if (!gData) return;
+            _placeGoogleCache[p.osmId] = gData;
+            const el = nearbySection.querySelector(`[data-osmid="${p.osmId}"] .vcard-rating-loading`);
+            if (el && gData.rating) {
+              el.className = 'vcard-rating';
+              el.innerHTML = `<i class="ph ph-star-fill" style="color:#f59e0b"></i> ${gData.rating.toFixed(1)} <span class="vcard-rating-count">(${gData.ratingCount.toLocaleString()})</span>`;
+            }
+          });
+        });
         const hcLink = document.createElement('a');
         hcLink.className = 'vegan-happycow-btn';
         hcLink.href = `https://www.happycow.net/searchmap?lat=${lat}&lng=${lng}&zoom=13`;
@@ -2106,6 +2119,7 @@ function parseOpeningHours(str) {
     const timeSegs = timePart.split(',');
     const ranges = [];
     let openNow = false;
+    let nextOpen = null;
     for (const ts of timeSegs) {
       const tm = ts.trim().match(/(\d{1,2}:\d{2})\s*-\s*(\d{1,2}:\d{2})/);
       if (!tm) continue;
@@ -2113,14 +2127,18 @@ function parseOpeningHours(str) {
       const start = toMins(tm[1]), end = toMins(tm[2]);
       ranges.push(`${tm[1]}–${tm[2]}`);
       if (nowMins >= start && nowMins < end) openNow = true;
+      else if (start > nowMins && (!nextOpen || start < toMins(nextOpen))) nextOpen = tm[1];
     }
     if (ranges.length) {
       todayHours = ranges.join(', ');
       isOpen = openNow;
     }
+    if (!openNow && nextOpen) {
+      return { open: false, todayStr: todayHours, nextOpen };
+    }
   }
 
-  return { open: isOpen, todayStr: todayHours };
+  return { open: isOpen, todayStr: todayHours, nextOpen: null };
 }
 
 /* ── Google Places API ──────────────────────────────────────────────── */
@@ -2166,6 +2184,8 @@ async function gPhotoUrl(photoName, maxWidth = 800) {
 
 async function injectGoogleData(gData, heroEl, bodyEl) {
   if (!gData) return;
+  // Remove any previously injected elements to avoid duplication on re-entry
+  bodyEl.querySelectorAll('.gp-rating-row, .gp-reviews').forEach(el => el.remove());
 
   // Photo — resolve photo URI then set as background
   if (gData.photos.length) {
@@ -2260,17 +2280,28 @@ function findMatchingPlannedStop(place) {
   return null;
 }
 
+function openHoursBadge(open, nextOpen, todayStr) {
+  if (open === true)  return '<span class="vp-open-badge open">Open now</span>';
+  if (nextOpen)       return `<span class="vp-open-badge opening">Opens ${nextOpen}</span>`;
+  if (open === false) return '<span class="vp-open-badge closed">Closed</span>';
+  return '';
+}
+
 function buildVeganCard(place) {
   const card = document.createElement('div');
   card.className = 'vegan-place-card';
+  card.dataset.osmid = place.osmId;
   const distStr = place.dist < 1000 ? `${Math.round(place.dist)}m` : `${(place.dist / 1000).toFixed(1)}km`;
   const typeLabel = { restaurant:'Restaurant', cafe:'Café', bar:'Bar', fast_food:'Takeaway', bakery:'Bakery', pub:'Pub' }[place.type] || place.type;
   const levelLabel = place.veganLevel === 'only' ? 'Fully vegan' : 'Vegan options';
   const levelClass = place.veganLevel === 'only' ? 'full' : '';
-  const { open, todayStr } = parseOpeningHours(place.openingHours);
-  const openBadge = open === true ? '<span class="vp-open-badge open">Open</span>'
-                  : open === false ? '<span class="vp-open-badge closed">Closed</span>' : '';
+  const { open, todayStr, nextOpen } = parseOpeningHours(place.openingHours);
+  const openBadge = openHoursBadge(open, nextOpen, todayStr);
   const planned = findMatchingPlannedStop(place);
+  const cached = _placeGoogleCache[place.osmId];
+  const ratingHtml = cached?.rating
+    ? `<span class="vcard-rating"><i class="ph ph-star-fill" style="color:#f59e0b"></i> ${cached.rating.toFixed(1)} <span class="vcard-rating-count">(${cached.ratingCount.toLocaleString()})</span></span>`
+    : '<span class="vcard-rating vcard-rating-loading" data-osmid="' + place.osmId + '"></span>';
   card.innerHTML = `
     <div class="vegan-place-main">
       <div class="vegan-place-name">${place.name}${planned ? ' <span class="vp-planned-badge"><i class="ph ph-calendar-check"></i> On itinerary</span>' : ''}</div>
@@ -2279,7 +2310,10 @@ function buildVeganCard(place) {
         <span class="alt-card-vegan ${levelClass}">${levelLabel}</span>
         ${openBadge}
       </div>
-      ${todayStr ? `<div class="vegan-place-hours-mini">${todayStr}</div>` : ''}
+      <div class="vcard-bottom-row">
+        ${ratingHtml}
+        ${todayStr ? `<span class="vegan-place-hours-mini">${todayStr}</span>` : ''}
+      </div>
     </div>
     <div class="vegan-place-right">
       <div class="vegan-place-dist">${distStr}</div>
@@ -2293,8 +2327,10 @@ function buildVeganCard(place) {
 let _vdPlace = null;
 let _vdMiniMap = null;
 let _cdMiniMap = null;
-let _veganCache = null;   // { lat, lng, places }
-let _chargerCache = null; // { lat, lng, chargers }
+let _veganCache = null;        // { lat, lng, places }
+let _chargerCache = null;      // { lat, lng, chargers }
+let _placeGoogleCache = {};    // osmId → gData
+let _chargerMinKW = 50;        // minimum kW filter for charger list
 
 function initMiniMap(containerId, lat, lng, mapRef) {
   const el = document.getElementById(containerId);
@@ -2430,8 +2466,13 @@ function openVeganDetail(place) {
 
   overlay.classList.remove('hidden');
 
-  // Async: fetch Google Places data and inject rating, reviews, photos
-  fetchGooglePlace(place.name, place.address, place.lat, place.lng).then(gData => {
+  // Async: fetch Google Places data (use cache if available)
+  const _vdFetch = _placeGoogleCache[place.osmId]
+    ? Promise.resolve(_placeGoogleCache[place.osmId])
+    : fetchGooglePlace(place.name, place.address, place.lat, place.lng);
+  _vdFetch.then(gData => {
+    if (!gData) return;
+    _placeGoogleCache[place.osmId] = gData;
     if (!overlay.classList.contains('hidden') && _vdPlace === place)
       injectGoogleData(gData, hero, document.getElementById('vd-body'));
   });
@@ -2614,6 +2655,23 @@ async function fetchChargersNearby(lat, lng, radiusM) {
   }).filter(Boolean).sort((a, b) => a.dist - b.dist).slice(0, 40);
 }
 
+const TESLA_CONNECTORS = new Set(['CCS', 'Tesla', 'Type 2']);
+
+function isTeslaCompatible(charger) {
+  // Must have at least one CCS, Tesla, or high-power Type 2 connector
+  return charger.connectors.some(c => TESLA_CONNECTORS.has(c.label)) ||
+    (charger.maxKW && charger.maxKW >= _chargerMinKW);
+}
+
+function applyChargerFilters(chargers) {
+  return chargers.filter(c => {
+    const compatible = isTeslaCompatible(c);
+    const kw = c.maxKW || c.connectors.reduce((mx, cn) => Math.max(mx, cn.kw || 0), 0);
+    const meetsKW = kw >= _chargerMinKW;
+    return compatible && meetsKW;
+  });
+}
+
 async function renderChargerView(container) {
   container.innerHTML = '';
 
@@ -2623,9 +2681,52 @@ async function renderChargerView(container) {
   hdr.innerHTML = '<i class="ph ph-lightning"></i> EV Chargers near you';
   container.appendChild(hdr);
 
+  // Min kW filter stepper
+  const KW_STEPS = [22, 50, 75, 100, 150, 350];
+  const filterRow = document.createElement('div');
+  filterRow.className = 'charger-filter-row';
+  const updateStepperLabel = () => `${_chargerMinKW} kW min`;
+  filterRow.innerHTML = `
+    <span class="charger-filter-label"><i class="ph ph-lightning"></i> Min power</span>
+    <div class="charger-kw-stepper">
+      <button class="charger-kw-btn" id="charger-kw-dec"><i class="ph ph-minus"></i></button>
+      <span class="charger-kw-val" id="charger-kw-val">${_chargerMinKW} kW</span>
+      <button class="charger-kw-btn" id="charger-kw-inc"><i class="ph ph-plus"></i></button>
+    </div>
+    <span class="charger-filter-note">Tesla-compatible only</span>`;
+  container.appendChild(filterRow);
+
   const nearbySection = document.createElement('div');
   nearbySection.className = 'vegan-nearby-section';
   container.appendChild(nearbySection);
+
+  const renderFilteredChargers = (allChargers, fromCache) => {
+    const filtered = applyChargerFilters(allChargers);
+    nearbySection.innerHTML = '';
+    if (filtered.length === 0) {
+      nearbySection.innerHTML = `<div class="vegan-empty"><i class="ph ph-charging-station"></i><div>No compatible chargers found at ${_chargerMinKW}kW+.<br>Try lowering the minimum power.</div></div>`;
+    } else {
+      const sub = document.createElement('div');
+      sub.className = 'vegan-nearby-subtitle';
+      sub.textContent = `${filtered.length} station${filtered.length !== 1 ? 's' : ''} found${fromCache ? ' · pull to refresh' : ''}`;
+      nearbySection.appendChild(sub);
+      filtered.forEach(c => nearbySection.appendChild(buildChargerCard(c)));
+    }
+  };
+
+  // Wire stepper buttons — re-filter without re-fetching
+  container.addEventListener('click', e => {
+    const allChargers = _chargerCache?.chargers;
+    if (!allChargers) return;
+    const cidx = KW_STEPS.indexOf(_chargerMinKW);
+    if (e.target.closest('#charger-kw-dec') && cidx > 0) {
+      _chargerMinKW = KW_STEPS[cidx - 1];
+    } else if (e.target.closest('#charger-kw-inc') && cidx < KW_STEPS.length - 1) {
+      _chargerMinKW = KW_STEPS[cidx + 1];
+    } else return;
+    document.getElementById('charger-kw-val').textContent = `${_chargerMinKW} kW`;
+    renderFilteredChargers(allChargers, true);
+  });
 
   if (_userLat === null) {
     nearbySection.innerHTML = `<div class="vegan-no-gps"><i class="ph ph-map-pin-slash"></i><div>Enable location to find chargers near you</div><button class="pill-btn primary" id="charger-gps-btn">Share location</button></div>`;
@@ -2637,26 +2738,14 @@ async function renderChargerView(container) {
     const isCached = _chargerCache &&
       Math.abs(_chargerCache.lat - _userLat) < 0.05 &&
       Math.abs(_chargerCache.lng - _userLng) < 0.05;
-    const doRender = (chargers, fromCache) => {
-      nearbySection.innerHTML = '';
-      if (chargers.length === 0) {
-        nearbySection.innerHTML = `<div class="vegan-empty"><i class="ph ph-charging-station"></i><div>No chargers found within 20 km.</div></div>`;
-      } else {
-        const sub = document.createElement('div');
-        sub.className = 'vegan-nearby-subtitle';
-        sub.textContent = `${chargers.length} station${chargers.length !== 1 ? 's' : ''} found${fromCache ? ' · pull to refresh' : ''}`;
-        nearbySection.appendChild(sub);
-        chargers.forEach(c => nearbySection.appendChild(buildChargerCard(c)));
-      }
-    };
     if (isCached) {
-      doRender(_chargerCache.chargers, true);
+      renderFilteredChargers(_chargerCache.chargers, true);
     } else {
       nearbySection.innerHTML = `<div class="vegan-searching"><i class="ph ph-spinner vegan-spin"></i> Finding chargers within 20 km…</div>`;
       try {
         const chargers = await fetchChargersNearby(_userLat, _userLng, 20000);
         _chargerCache = { lat: _userLat, lng: _userLng, chargers };
-        doRender(chargers, false);
+        renderFilteredChargers(chargers, false);
       } catch {
         nearbySection.innerHTML = `<div class="vegan-empty"><i class="ph ph-wifi-slash"></i><div>Couldn't load chargers — check connection.</div></div>`;
       }
@@ -2706,21 +2795,22 @@ function buildChargerCard(charger) {
   card.className = 'charger-card';
   const distStr = charger.dist < 1000 ? `${Math.round(charger.dist)}m` : `${(charger.dist / 1000).toFixed(1)}km`;
   const brand = chargerBrand(charger.operator);
-  const { open, todayStr } = parseOpeningHours(charger.openingHours);
-  const openBadge = open === true ? '<span class="vp-open-badge open">Open</span>'
-                  : open === false ? '<span class="vp-open-badge closed">Closed</span>' : '';
-  const kwBadge = charger.maxKW ? `<span class="charger-kw-badge">${Math.round(charger.maxKW)}kW</span>` : '';
-  const bays = charger.capacity ? `<span class="charger-bays">${charger.capacity} bay${charger.capacity !== 1 ? 's' : ''}</span>` : '';
+  const { open, todayStr, nextOpen } = parseOpeningHours(charger.openingHours);
+  const openBadge = openHoursBadge(open, nextOpen, todayStr);
+  const kw = charger.maxKW || charger.connectors.reduce((mx, c) => Math.max(mx, c.kw || 0), 0);
+  const kwBadge = kw ? `<span class="charger-kw-badge">${Math.round(kw)} kW</span>` : '';
+  const bays = charger.capacity ? `<span class="charger-bays"><i class="ph ph-charging-station"></i> ${charger.capacity}</span>` : '';
+  const priceBadge = charger.charge ? `<span class="charger-price-badge">${charger.charge}</span>` : (charger.fee === 'no' ? '<span class="charger-price-badge free">Free</span>' : '');
 
-  // Primary display name: use address if name just repeats the operator
   const sameName = !charger.name || charger.name === charger.operator || charger.name === 'Charging station';
   const displayName = sameName ? (charger.address || brand.label + ' station') : charger.name;
   const displayAddr = (sameName || !charger.address) ? '' : charger.address;
 
-  // Connector type chips
-  const connChips = charger.connectors.slice(0, 3).map(c =>
-    `<span class="charger-conn-chip">${c.label}${c.kw ? ' ' + Math.round(c.kw) + 'kW' : ''}</span>`
-  ).join('');
+  const connChips = charger.connectors
+    .filter(c => TESLA_CONNECTORS.has(c.label))
+    .slice(0, 3).map(c =>
+      `<span class="charger-conn-chip">${c.label}${c.kw ? ' · ' + Math.round(c.kw) + 'kW' : ''}</span>`
+    ).join('');
 
   card.innerHTML = `
     <div class="charger-card-row">
@@ -2730,8 +2820,7 @@ function buildChargerCard(charger) {
         </div>
         <div class="charger-card-name">${displayName}</div>
         ${displayAddr ? `<div class="charger-card-addr">${displayAddr}</div>` : ''}
-        <div class="charger-card-chips">${kwBadge}${bays}${openBadge}${connChips}</div>
-        ${charger.charge ? `<div class="charger-price"><i class="ph ph-currency-circle-dollar"></i> ${charger.charge}</div>` : ''}
+        <div class="charger-card-chips">${kwBadge}${bays}${openBadge}${priceBadge}${connChips}</div>
       </div>
       <div class="charger-card-right">
         <div class="vegan-place-dist">${distStr}</div>

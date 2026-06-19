@@ -68,6 +68,7 @@ html, body {
 body {
   min-height: 100lvh;
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Segoe UI', sans-serif;
+  font-size: 17px;
   background: var(--bg); color: var(--text);
   -webkit-font-smoothing: antialiased;
 }
@@ -420,9 +421,9 @@ body.light #app.bg-day  .day-chip.active { color: var(--accent) !important; bord
 .filter-icon { font-size: 28px; flex-shrink: 0; color: var(--text2); }
 .filter-icon i { font-size: 28px; }
 .filter-info { flex: 1; min-width: 0; }
-.filter-day  { font-size: 13px; font-weight: 700; color: var(--accent); text-transform: uppercase; }
-.filter-loc  { font-size: 17px; font-weight: 600; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.filter-reason { font-size: 14px; color: var(--text2); margin-top: 2px; }
+.filter-day  { font-size: 14px; font-weight: 700; color: var(--accent); text-transform: uppercase; }
+.filter-loc  { font-size: 18px; font-weight: 600; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.filter-reason { font-size: 15px; color: var(--text2); margin-top: 3px; }
 
 /* ─── Timeline layout ───────────────────────────────────────────────── */
 .tl-item { display: flex; gap: 0; margin-bottom: 12px; position: relative; }
@@ -645,7 +646,7 @@ body.light .tl-card.skipped {
 .card-meta-row { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
 
 .tl-card-badge {
-  font-size: 12px; font-weight: 700; padding: 3px 9px;
+  font-size: 13px; font-weight: 700; padding: 4px 10px;
   border-radius: 20px; text-transform: uppercase; letter-spacing: .3px;
 }
 .priority-stars { color: var(--amber); font-size: 13px; }
@@ -1091,22 +1092,21 @@ body.light #detail-toolbar {
 .detail-tool-btn {
   flex: 1; background: none; border: none; cursor: pointer; text-decoration: none;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 4px; padding: 10px 4px;
+  gap: 5px; padding: 12px 4px;
   color: rgba(255,255,255,1);
-  font-size: 11px; font-weight: 600; letter-spacing: 0.01em;
-  transition: color .15s, background .15s;
+  font-size: 13px; font-weight: 600; letter-spacing: 0.01em;
+  transition: opacity .15s;
   -webkit-tap-highlight-color: transparent;
   border-radius: 100px;
 }
-body.light .detail-tool-btn { color: rgba(0,0,0,0.5); }
-.detail-tool-btn i { font-size: 22px; line-height: 1; }
-.detail-tool-btn:active { opacity: .65; }
-/* Navigate button — primary accent colour */
-.detail-tool-btn.nav-tool { color: var(--accent); }
-body.light .detail-tool-btn.nav-tool { color: var(--accent); }
-.detail-tool-btn.vegan-tool  { color: var(--green); }
-.detail-tool-btn.charge-tool { color: var(--teal); }
-.detail-tool-btn.maps-tool   { color: var(--rose); }
+body.light .detail-tool-btn { color: rgba(0,0,0,0.75); }
+.detail-tool-btn i { font-size: 24px; line-height: 1; }
+.detail-tool-btn:active { opacity: .5; }
+/* No colour overrides — all toolbar icons are white in dark mode */
+.detail-tool-btn.nav-tool   { color: inherit; }
+.detail-tool-btn.vegan-tool { color: inherit; }
+.detail-tool-btn.charge-tool { color: inherit; }
+.detail-tool-btn.maps-tool  { color: inherit; }
 
 /* ── Nearby POI carousel ───────────────────────────────────────────── */
 .detail-section-title {
@@ -2130,13 +2130,13 @@ body.light .detail-alts-toggle-count { background: rgba(0,0,0,.08); }
 .vegan-view-header i { font-size: 24px; }
 .vegan-nearby-section { padding: 4px 0 8px; }
 .vegan-nearby-subtitle {
-  font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase;
-  color: var(--text3); padding: 0 16px 10px;
+  font-size: 14px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase;
+  color: var(--text3); padding: 0 16px 12px;
 }
 .vegan-plan-header {
   display: flex; align-items: center; gap: 8px;
-  font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
-  color: var(--text3); padding: 20px 16px 10px;
+  font-size: 14px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+  color: var(--text3); padding: 22px 16px 12px;
   border-top: 1px solid var(--glass-border); margin-top: 8px;
 }
 .vegan-no-gps, .vegan-searching, .vegan-empty {
@@ -2366,87 +2366,117 @@ body.light .charger-card { background: rgba(255,255,255,.7); }
   padding-bottom: var(--safe-bot); max-height: 80vh; overflow-y: auto;
 }
 
-/* ── v221 fixes ─────────────────────────────────────────────────────── */
-
-/* Toolbar icon colours — force override base rgba */
-#detail-toolbar .detail-tool-btn.nav-tool,
-#vd-toolbar .detail-tool-btn.nav-tool,
-#cd-toolbar .detail-tool-btn.nav-tool { color: var(--accent) !important; }
-#vd-toolbar .vd-add-tool,
-#cd-toolbar .vd-add-tool { color: var(--green) !important; }
-.detail-tool-btn.vegan-tool  { color: var(--green)  !important; }
-.detail-tool-btn.charge-tool { color: var(--teal)   !important; }
-.detail-tool-btn.maps-tool   { color: var(--rose)   !important; }
-.detail-tool-btn i,
-.vd-add-tool i { font-size: 24px !important; }
+/* ── Toolbar — all white, no colour ─────────────────────────────────── */
+.detail-tool-btn,
+.vd-add-tool,
+#detail-toolbar .detail-tool-btn,
+#vd-toolbar .detail-tool-btn,
+#cd-toolbar .detail-tool-btn {
+  color: rgba(255,255,255,1) !important;
+}
+body.light .detail-tool-btn,
+body.light .vd-add-tool,
+body.light #detail-toolbar .detail-tool-btn,
+body.light #vd-toolbar .detail-tool-btn,
+body.light #cd-toolbar .detail-tool-btn {
+  color: rgba(0,0,0,0.8) !important;
+}
+.detail-tool-btn i, .vd-add-tool i { font-size: 26px !important; }
 
 /* Mini-map hero */
 #vd-hero, #cd-hero { overflow: hidden; }
 #vd-mini-map, #cd-mini-map { z-index: 0; }
 .leaflet-container { background: var(--glass-bg); }
 
-/* Larger text in vegan/charger detail body */
+/* ── Detail page — bigger text ──────────────────────────────────────── */
 #vd-name, #cd-name { font-size: 32px !important; font-weight: 800; }
-#vd-meta-row, #cd-meta-row { font-size: 14px !important; }
+#vd-meta-row, #cd-meta-row { font-size: 15px !important; gap: 8px !important; }
 #vd-body .vd-hours-row,
-#cd-body .vd-hours-row { font-size: 16px; }
+#cd-body .vd-hours-row { font-size: 17px; }
 #vd-body .vd-info-line,
-#cd-body .vd-info-line { font-size: 16px; margin-bottom: 12px; }
+#cd-body .vd-info-line { font-size: 17px; margin-bottom: 12px; }
 #vd-body .vd-links-label,
-#cd-body .vd-links-label { font-size: 15px; display: flex; align-items: center; gap: 6px; }
-.gp-rating-row { font-size: 16px; margin-bottom: 14px; }
-.gp-rating-num { font-size: 20px; font-weight: 800; }
-.gp-rating-count { font-size: 13px; color: var(--text3); }
-.gp-review-card { font-size: 15px; }
-.gp-review-author { font-size: 14px; font-weight: 700; }
-.gp-review-text { font-size: 14px; line-height: 1.5; }
-
-/* Bigger, taller link buttons with sub-label */
-.vd-link-btn { padding: 14px 16px !important; gap: 12px; align-items: center; }
-.vd-link-btn i { font-size: 24px; flex-shrink: 0; }
-.vd-link-btn > div { display: flex; flex-direction: column; gap: 1px; }
-.vd-link-title { font-size: 15px; font-weight: 700; }
-.vd-link-sub { font-size: 11px; opacity: .65; }
-
-/* Charger card — new layout */
-.charger-card-row { display: flex; align-items: center; padding: 12px 14px; gap: 10px; }
-.charger-card-left { flex: 1; min-width: 0; }
-.charger-card-right { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex-shrink: 0; }
-.charger-brand-pill {
-  display: inline-flex; align-items: center; gap: 5px;
-  font-size: 11px; font-weight: 800; padding: 3px 9px; border-radius: 20px;
-  margin-bottom: 5px;
-}
-.charger-brand-pill i { font-size: 13px; }
-.charger-card-name { font-size: 14px; font-weight: 700; margin-bottom: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.charger-card-addr { font-size: 12px; color: var(--text3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 5px; }
-.charger-card-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 4px; }
-.charger-conn-chip {
-  font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 20px;
-  background: rgba(255,255,255,.08); color: var(--text2);
-}
-/* Remove old brand-bar / body stacked layout */
-.charger-brand-bar { display: none !important; }
-.charger-card-body { display: none !important; }
-.charger-card > .vegan-place-right { display: none !important; }
+#cd-body .vd-links-label { font-size: 16px; display: flex; align-items: center; gap: 6px; }
 
 /* ── Google Places — ratings & reviews ─────────────────────────────── */
 .gp-rating-row {
-  display: flex; align-items: center; gap: 5px; flex-wrap: wrap;
-  padding: 12px 0 16px; border-bottom: 1px solid var(--glass-border); margin-bottom: 14px;
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  padding: 14px 0 18px; border-bottom: 1px solid var(--glass-border); margin-bottom: 16px;
 }
-.gp-rating-row i { font-size: 20px; }
-.gp-rating-num { font-size: 22px; font-weight: 800; letter-spacing: -.5px; margin-left: 4px; }
-.gp-rating-count { font-size: 13px; color: var(--text3); font-weight: 500; }
+.gp-rating-row i { font-size: 22px; }
+.gp-rating-num { font-size: 24px; font-weight: 800; letter-spacing: -.5px; margin-left: 2px; }
+.gp-rating-count { font-size: 15px; color: var(--text3); font-weight: 500; }
 .gp-reviews { margin-bottom: 20px; }
 .gp-review-card {
-  padding: 14px 16px; margin-bottom: 10px;
+  padding: 16px 18px; margin-bottom: 12px;
   background: var(--glass-bg); border: 1px solid var(--glass-border);
   border-radius: 16px; box-shadow: inset 0 1px 0 var(--glass-hi);
 }
 body.light .gp-review-card { background: rgba(255,255,255,.6); }
-.gp-review-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
-.gp-review-author { font-size: 13px; font-weight: 700; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.gp-review-stars { font-size: 13px; color: #f59e0b; letter-spacing: 1px; flex-shrink: 0; }
-.gp-review-time { font-size: 11px; color: var(--text3); flex-shrink: 0; }
-.gp-review-text { font-size: 14px; color: var(--text2); line-height: 1.55; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+.gp-review-header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+.gp-review-author { font-size: 15px; font-weight: 700; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gp-review-stars { font-size: 15px; color: #f59e0b; letter-spacing: 1px; flex-shrink: 0; }
+.gp-review-time { font-size: 13px; color: var(--text3); flex-shrink: 0; }
+.gp-review-text { font-size: 15px; color: var(--text2); line-height: 1.55; display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* ── Link buttons ───────────────────────────────────────────────────── */
+.vd-link-btn { padding: 16px 18px !important; gap: 14px; align-items: center; }
+.vd-link-btn i { font-size: 26px; flex-shrink: 0; }
+.vd-link-btn > div { display: flex; flex-direction: column; gap: 2px; }
+.vd-link-title { font-size: 16px; font-weight: 700; }
+.vd-link-sub { font-size: 13px; opacity: .65; }
+
+/* ── Vegan card rating inline ───────────────────────────────────────── */
+.vcard-bottom-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 5px; }
+.vcard-rating { font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 4px; color: var(--text2); }
+.vcard-rating i { color: #f59e0b; }
+.vcard-rating-count { font-size: 13px; font-weight: 400; color: var(--text3); }
+.vcard-rating-loading { display: none; }
+
+/* ── Open hours badges ──────────────────────────────────────────────── */
+.vp-open-badge.opening { background: rgba(251,191,36,.15); color: #fbbf24; }
+
+/* ── Charger card — layout ──────────────────────────────────────────── */
+.charger-card-row { display: flex; align-items: center; padding: 14px 16px; gap: 12px; }
+.charger-card-left { flex: 1; min-width: 0; }
+.charger-card-right { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex-shrink: 0; }
+.charger-brand-pill {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 12px; font-weight: 800; padding: 4px 10px; border-radius: 20px;
+  margin-bottom: 6px;
+}
+.charger-brand-pill i { font-size: 14px; }
+.charger-card-name { font-size: 16px; font-weight: 700; margin-bottom: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.charger-card-addr { font-size: 14px; color: var(--text3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 6px; }
+.charger-card-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 5px; }
+.charger-conn-chip {
+  font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 20px;
+  background: rgba(56,189,248,.12); color: var(--teal);
+}
+.charger-price-badge {
+  font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 20px;
+  background: rgba(52,211,153,.12); color: var(--green);
+}
+.charger-price-badge.free { background: rgba(52,211,153,.2); }
+/* Remove old stacked layout */
+.charger-brand-bar { display: none !important; }
+.charger-card-body { display: none !important; }
+.charger-card > .vegan-place-right { display: none !important; }
+
+/* ── Charger kW filter ──────────────────────────────────────────────── */
+.charger-filter-row {
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;
+  padding: 12px 20px 8px; margin-bottom: 4px;
+}
+.charger-filter-label { font-size: 15px; font-weight: 600; color: var(--text2); display: flex; align-items: center; gap: 6px; }
+.charger-filter-label i { color: var(--teal); }
+.charger-filter-note { font-size: 13px; color: var(--text3); }
+.charger-kw-stepper { display: flex; align-items: center; gap: 10px; }
+.charger-kw-btn {
+  width: 34px; height: 34px; border-radius: 50%; border: 1.5px solid var(--glass-border);
+  background: var(--glass-bg); color: var(--text); cursor: pointer; display: flex;
+  align-items: center; justify-content: center; font-size: 18px;
+  -webkit-tap-highlight-color: transparent;
+}
+.charger-kw-btn:active { opacity: .6; }
+.charger-kw-val { font-size: 17px; font-weight: 800; min-width: 70px; text-align: center; color: var(--teal); }
