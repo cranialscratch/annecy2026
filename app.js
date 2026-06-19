@@ -1,5 +1,50 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v225';
+const APP_VERSION = 'v226';
+
+const CHANGELOG = [
+  {
+    version: 'v226',
+    title: 'Version panel with changelog',
+    items: [
+      { type: 'feature', text: 'Version menu now shows What\'s new — fix/feature/design entries per release' },
+      { type: 'feature', text: 'Current release highlighted; older releases listed below' },
+      { type: 'design',  text: 'System status section below changelog with async push refresh' },
+    ],
+  },
+  {
+    version: 'v225',
+    title: 'Reviews, ratings & charger filter',
+    items: [
+      { type: 'fix',     text: 'Reviews no longer duplicate when revisiting a place' },
+      { type: 'fix',     text: '"Opens HH:MM" shown when closed mid-day (not just "Closed")' },
+      { type: 'feature', text: 'Star ratings and review counts shown on vegan list cards' },
+      { type: 'feature', text: 'Charger min-kW stepper (default 50 kW); Tesla-compatible only' },
+      { type: 'feature', text: 'Charger cards show connector types, price badge, bay count' },
+      { type: 'design',  text: 'All toolbar icons white in dark mode — no accent colours' },
+      { type: 'design',  text: 'Body base font raised to 17px; badges/labels all bumped up' },
+    ],
+  },
+  {
+    version: 'v224',
+    title: 'Session cache & unified cards',
+    items: [
+      { type: 'feature', text: 'Vegan & charger results cached for session — instant on return' },
+      { type: 'feature', text: 'Pull-to-refresh clears cache and re-fetches' },
+      { type: 'design',  text: 'Itinerary stops use same card layout as nearby results' },
+      { type: 'design',  text: 'Card names 17px, detail name 32px, badges 12px' },
+    ],
+  },
+  {
+    version: 'v223',
+    title: 'Photos, toolbar pinned & reviews',
+    items: [
+      { type: 'fix',     text: 'Google Place photos now display correctly' },
+      { type: 'fix',     text: 'Pill toolbar always visible — no longer scrolls away' },
+      { type: 'fix',     text: 'Reviews sorted latest-first (not by relevance)' },
+      { type: 'design',  text: 'Toolbar icon base colour raised to full white' },
+    ],
+  },
+];
 const _errorLog = [];
 window.addEventListener('error', e => {
   _errorLog.push({ ts: new Date().toISOString(), msg: e.message || String(e), src: (e.filename||'').split('/').pop() + ':' + (e.lineno||'?') });
@@ -479,46 +524,72 @@ function getFeatureStatuses() {
   ];
 }
 
+function renderChangelogHtml() {
+  const typeIcon  = { fix:'ph-wrench', feature:'ph-sparkle', design:'ph-paint-brush' };
+  const typeLabel = { fix:'Fix', feature:'New', design:'Design' };
+  const typeClass = { fix:'cl-fix', feature:'cl-feature', design:'cl-design' };
+  return CHANGELOG.map((rel, i) => `
+    <div class="cl-release${i === 0 ? ' cl-release-latest' : ''}">
+      <div class="cl-release-header">
+        <span class="cl-ver">${rel.version}</span>
+        <span class="cl-title">${rel.title}</span>
+        ${i === 0 ? '<span class="cl-current-badge">Current</span>' : ''}
+      </div>
+      <div class="cl-items">
+        ${rel.items.map(item => `
+          <div class="cl-item">
+            <span class="cl-badge ${typeClass[item.type] || ''}"><i class="ph ${typeIcon[item.type] || 'ph-dot'}"></i> ${typeLabel[item.type] || item.type}</span>
+            <span class="cl-text">${item.text}</span>
+          </div>`).join('')}
+      </div>
+    </div>`).join('');
+}
+
+function renderFeatureStatusHtml(statuses) {
+  const cats   = [...new Set(statuses.map(f => f.cat))];
+  const iconMap = { ok:'ph-check-circle', warn:'ph-warning', error:'ph-x-circle' };
+  const colMap  = { ok:'vs-ok', warn:'vs-warn', error:'vs-error' };
+  return cats.map(cat => {
+    const items = statuses.filter(f => f.cat === cat);
+    return `<div class="vs-cat-label">${cat}</div>${items.map(f => `
+      <div class="vs-item">
+        <i class="ph ${iconMap[f.status]} ${colMap[f.status]}"></i>
+        <div class="vs-item-text">
+          <div class="vs-item-name">${f.name}</div>
+          <div class="vs-item-note">${f.note}</div>
+        </div>
+      </div>`).join('')}`;
+  }).join('');
+}
+
 function showVersionPanel() {
   const panel = document.getElementById('version-overlay');
   if (!panel) return;
   panel.classList.remove('hidden');
   requestAnimationFrame(() => panel.classList.add('open'));
 
-  // Populate feature list (refresh push status first, then re-render)
   const body = document.getElementById('version-body');
   if (!body) return;
-  refreshServerPushStatus().then(() => {
-    const statuses = getFeatureStatuses();
-    const cats = [...new Set(statuses.map(f => f.cat))];
-    const iconMap = { ok:'ph-check-circle', warn:'ph-warning', error:'ph-x-circle' };
-    const colMap  = { ok:'vs-ok', warn:'vs-warn', error:'vs-error' };
-    body.innerHTML = cats.map(cat => {
-      const items = statuses.filter(f => f.cat === cat);
-      return `<div class="vs-cat-label">${cat}</div>${items.map(f =>
-        `<div class="vs-row ${colMap[f.status]||'vs-warn'}"><i class="ph ${iconMap[f.status]||'ph-warning'}"></i><div><div class="vs-name">${f.name}</div><div class="vs-note">${f.note}</div></div></div>`
-      ).join('')}`;
-    }).join('');
-  });
+
+  // Render changelog immediately, then feature status (async push check)
   const statuses = getFeatureStatuses();
-  const cats = [...new Set(statuses.map(f => f.cat))];
+  body.innerHTML =
+    `<div class="cl-section-label">What's new</div>` +
+    renderChangelogHtml() +
+    `<div class="cl-section-label cl-section-status">System status</div>` +
+    renderFeatureStatusHtml(statuses);
 
-  const iconMap = { ok:'ph-check-circle', warn:'ph-warning', error:'ph-x-circle' };
-  const colMap  = { ok:'vs-ok', warn:'vs-warn', error:'vs-error' };
-
-  body.innerHTML = cats.map(cat => {
-    const items = statuses.filter(f => f.cat === cat);
-    return `
-      <div class="vs-cat-label">${cat}</div>
-      ${items.map(f => `
-        <div class="vs-item">
-          <i class="ph ${iconMap[f.status]} ${colMap[f.status]}"></i>
-          <div class="vs-item-text">
-            <div class="vs-item-name">${f.name}</div>
-            <div class="vs-item-note">${f.note}</div>
-          </div>
-        </div>`).join('')}`;
-  }).join('');
+  // Refresh push status async and update status section only
+  refreshServerPushStatus().then(() => {
+    const updated = getFeatureStatuses();
+    const statusSection = body.querySelector('.cl-section-status');
+    if (statusSection) {
+      // Replace everything from status label onwards
+      const idx = [...body.children].indexOf(statusSection);
+      while (body.children.length > idx + 1) body.lastChild.remove();
+      body.insertAdjacentHTML('beforeend', renderFeatureStatusHtml(updated));
+    }
+  });
 }
 
 function hideVersionPanel() {
