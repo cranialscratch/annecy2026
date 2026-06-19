@@ -1,7 +1,14 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v227';
+const APP_VERSION = 'v228';
 
 const CHANGELOG = [
+  { version: 'v228', title: 'Stop detail consistency & time strip', items: [
+    { type: 'fix', text: 'Arrived / Duration / Departed time strip now works on stop pages' },
+    { type: 'fix', text: 'Map pins for vegan & charger spots now render from session cache' },
+    { type: 'fix', text: 'PlugShare and HappyCow removed from drawer menu' },
+    { type: 'feature', text: 'HappyCow and Google Maps links added to food/vegan stop pages' },
+    { type: 'design', text: 'Day-view cards show address subtitle for consistency with search results' },
+  ]},
   { version: 'v227', title: 'Navigation, palette & stop timing', items: [
     { type: 'feature', text: 'Apple Maps navigation (switch to Google Maps in settings)' },
     { type: 'feature', text: 'Arrived / Duration / Departed time strip on stop pages' },
@@ -1941,6 +1948,27 @@ function renderMapView() {
     m.on('click', () => openDetail(stop));
   });
 
+  // Vegan POI pins from session cache
+  if (_veganCache?.places?.length) {
+    _veganCache.places.forEach(p => {
+      const icon = L.divIcon({
+        html: `<div class="map-marker-poi vegan-poi"><i class="ph ph-leaf"></i></div>`,
+        className: '', iconSize: [28, 28], iconAnchor: [14, 14]
+      });
+      L.marker([p.lat, p.lng], { icon }).addTo(markerGroup).on('click', () => openVeganDetail(p));
+    });
+  }
+  // Charger POI pins from session cache
+  if (_chargerCache?.chargers?.length) {
+    applyChargerFilters(_chargerCache.chargers).forEach(c => {
+      const icon = L.divIcon({
+        html: `<div class="map-marker-poi charger-poi"><i class="ph ph-lightning"></i></div>`,
+        className: '', iconSize: [28, 28], iconAnchor: [14, 14]
+      });
+      L.marker([c.lat, c.lng], { icon }).addTo(markerGroup).on('click', () => openChargerDetail(c));
+    });
+  }
+
   // ── Route: remove old polyline, fetch fresh (active stops only) ───
   if (_mapRouteLayer) { _mapRouteLayer.remove(); _mapRouteLayer = null; }
   const routeColor = isDark ? '#38bdf8' : '#0284c7';
@@ -3796,6 +3824,7 @@ function buildTimelineItem(stop, isLast, day, nextStop, prevStop) {
             <div class="card-name">${stopTypeIcon(stop)} ${getStopName(stop)}</div>
             ${ (stop.planStatus === 'conditional' || stop.planStatus === 'weak-vegan') ? '<span class="card-warn-icon"><i class="ph ph-warning"></i></span>' : '' }<button class="check-btn${isVisited ? ' checked' : ''}" data-stop-id="${stop.id}" aria-label="Mark visited"><i class="ph ${isVisited ? 'ph-check-circle' : 'ph-circle'}"></i></button>
           </div>
+          ${stop.address || stop.location ? `<div class="card-address">${stop.address || stop.location}</div>` : ''}
           <div class="card-meta-row">
             <span class="tl-card-badge">${typeLabel(getStopType(stop))}</span>
             ${getStopPriority(stop) > 0 ? `<span class="priority-stars">${priorityStars(getStopPriority(stop))}</span>` : ''}
@@ -4489,6 +4518,78 @@ function switchToAlternative(primaryStop, alt) {
   showToast(`Switched to ${alt.location}`);
 }
 
+function renderDetailTimeStrip(stop, container) {
+  const todayStr = localDateStr();
+  const today = TRIP_DATA.days.find(d => getDayStops(d).some(s => s.id === stop.id));
+  const isToday = today && today.date === todayStr;
+  const stopType = getStopType(stop);
+  const interactive = isToday && stopType !== 'depart';
+
+  const arrival = getStopTime(stop) || '—';
+  const durMins = getStopDuration(stop) || 0;
+  const durH = Math.floor(durMins / 60);
+  const durM = durMins % 60;
+  const durStr = durH > 0 ? `${durH}h${durM > 0 ? durM + 'm' : ''}` : `${durMins}m`;
+  const departMins = (timeToMinutes(arrival) || 0) + durMins;
+  const depart = durMins > 0 ? minutesToTime(departMins) : '—';
+
+  container.innerHTML = `
+    <div class="dts-row">
+      <button class="dts-chip${interactive ? ' dts-interactive' : ''}" id="dts-arrived" ${!interactive ? 'disabled' : ''}>
+        <span class="dts-label">Arrived</span>
+        <span class="dts-time">${arrival}</span>
+      </button>
+      <button class="dts-chip dts-dur${interactive ? ' dts-interactive' : ''}" id="dts-dur" ${!interactive ? 'disabled' : ''}>
+        <i class="ph ph-timer"></i>
+        <span class="dts-time">${durStr}</span>
+      </button>
+      <button class="dts-chip${interactive ? ' dts-interactive' : ''}" id="dts-departed" ${!interactive ? 'disabled' : ''}>
+        <span class="dts-label">Depart</span>
+        <span class="dts-time">${depart}</span>
+      </button>
+    </div>`;
+  container.classList.remove('hidden');
+
+  if (!interactive) return;
+
+  document.getElementById('dts-arrived')?.addEventListener('click', () => openTravelAction(stop, 'arrive'));
+  document.getElementById('dts-departed')?.addEventListener('click', () => openTravelAction(stop, 'depart'));
+
+  document.getElementById('dts-dur')?.addEventListener('click', () => {
+    const chip = document.getElementById('dts-dur');
+    if (!chip || chip.querySelector('.dts-dur-controls')) return;
+    const ctrl = document.createElement('div');
+    ctrl.className = 'dts-dur-controls';
+    ctrl.innerHTML = `
+      <button class="dts-adj-btn" data-delta="-15">−15m</button>
+      <button class="dts-adj-btn" data-delta="-5">−5m</button>
+      <button class="dts-adj-btn dts-now-btn" data-now="1">Now</button>
+      <button class="dts-adj-btn" data-delta="5">+5m</button>
+      <button class="dts-adj-btn" data-delta="15">+15m</button>
+      <button class="dts-adj-btn dts-skip-btn" data-skip="1">Skip</button>`;
+    container.appendChild(ctrl);
+    ctrl.addEventListener('click', e => {
+      const btn = e.target.closest('[data-delta],[data-now],[data-skip]');
+      if (!btn) return;
+      saveUndoSnapshot();
+      if (btn.dataset.skip) {
+        state.skipped[stop.id] = true;
+      } else if (btn.dataset.now) {
+        const nowMins = timeToMinutes(new Date().toLocaleTimeString('en-GB', {hour:'2-digit',minute:'2-digit'}));
+        const arrMins = timeToMinutes(getStopTime(stop)) || 0;
+        const newDur = Math.max(0, nowMins - arrMins);
+        state.durOverrides[stop.id] = newDur;
+      } else {
+        const delta = parseInt(btn.dataset.delta);
+        const cur = getStopDuration(stop);
+        state.durOverrides[stop.id] = Math.max(0, (cur || 0) + delta);
+      }
+      save();
+      renderView(false);
+    });
+  });
+}
+
 function openDetail(stop) {
   _detailStop = stop;
   _detailCurrent = 0;
@@ -4534,8 +4635,8 @@ function openDetail(stop) {
   // Time strip
   const timeStripEl = document.getElementById('detail-time-strip');
   if (timeStripEl) {
-    timeStripEl.classList.add('hidden');
     timeStripEl.innerHTML = '';
+    timeStripEl.classList.add('hidden');
     renderDetailTimeStrip(stop, timeStripEl);
   }
 
@@ -4647,6 +4748,20 @@ function openDetail(stop) {
         }
       });
     }
+  }
+
+  // Add HappyCow / Google links for food & vegan stops
+  if (stopType === 'food' || stopType === 'vegan' || stopType === 'hotel') {
+    const linksRow = document.createElement('div');
+    linksRow.className = 'detail-links-row';
+    if (stop.lat && stop.lng) {
+      const hcUrl = `https://www.happycow.net/searchmap?lat=${stop.lat}&lng=${stop.lng}&zoom=15`;
+      linksRow.innerHTML = `
+      <a class="detail-ext-link" href="${hcUrl}" target="_blank" rel="noopener"><i class="ph ph-leaf"></i> HappyCow</a>
+      <a class="detail-ext-link" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((stop.name || '') + ' ' + (stop.address || ''))}" target="_blank" rel="noopener"><i class="ph ph-magnifying-glass"></i> Google</a>`;
+    }
+    const bodyEl = document.getElementById('detail-body');
+    if (bodyEl && linksRow.children.length) bodyEl.appendChild(linksRow);
   }
 
   // Fetch wiki + Places data; refresh slides + description when done
