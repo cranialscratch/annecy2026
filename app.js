@@ -1,7 +1,12 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v239';
+const APP_VERSION = 'v240';
 
 const CHANGELOG = [
+  { version: 'v240', title: 'Toolbar fixed, time picker stays open, Now buttons', items: [
+    { type: 'fix', text: 'Toolbar now truly fixed to viewport bottom on planned stop pages (detail-overlay scroll restructured)' },
+    { type: 'fix', text: 'Native time picker no longer closes mid-scroll — inputs update in-place without re-rendering the strip' },
+    { type: 'fix', text: '"Arrived now" and "Departed now" are two clear buttons below the time strip (force-update if you still see the old layout)' },
+  ]},
   { version: 'v239', title: 'Arrived/Departed now buttons, hotel cascade stop', items: [
     { type: 'fix', text: '"Arrived now" and "Departed now" are now two visible buttons below the time strip — no longer hidden as tiny icons' },
     { type: 'fix', text: 'Cascade stops at hotel/sleep stops — arriving early no longer incorrectly shifts next morning\'s departure' },
@@ -4672,67 +4677,75 @@ function renderDetailTimeStrip(stop, container) {
 
     const arrInput = document.getElementById('dts-arr-input');
     const depInput = document.getElementById('dts-dep-input');
+    const durVal   = document.getElementById('dts-dur-val');
 
-    const commit = (newArrMins, newDurMins, toast) => {
-      saveUndoSnapshot();
-      const oldArrMins = timeToMinutes(getStopTime(stop)) ?? newArrMins;
-      const delta = newArrMins - oldArrMins;
-      state.overrides[stop.id]    = minutesToTime(newArrMins);
-      state.durOverrides[stop.id] = Math.max(0, newDurMins);
-      cascadeTimeDelta(stop, delta);
-      save(); renderView(false); renderDetailTimeStrip(stop, container);
-      if (toast) showUndoToast(toast);
+    // Update dep input and duration display in-place — avoids destroying the
+    // native iOS time picker by never calling renderDetailTimeStrip during input.
+    const refreshDisplay = () => {
+      const arr = timeToMinutes(getStopTime(stop));
+      const dur = getStopDuration(stop) || 0;
+      const h = Math.floor(dur / 60), m = dur % 60;
+      if (durVal) durVal.textContent = h > 0 ? `${h}h${m > 0 ? m + 'm' : ''}` : `${dur}m`;
+      if (depInput && arr !== null && dur > 0) depInput.value = minutesToTime(arr + dur);
     };
 
     arrInput?.addEventListener('change', () => {
       const newArr = timeToMinutes(arrInput.value);
       if (newArr === null) return;
-      commit(newArr, getStopDuration(stop) || 0, 'Arrival updated');
+      saveUndoSnapshot();
+      const oldArr = timeToMinutes(getStopTime(stop)) ?? newArr;
+      const delta  = newArr - oldArr;
+      state.overrides[stop.id] = minutesToTime(newArr);
+      cascadeTimeDelta(stop, delta);
+      save(); renderView(false); refreshDisplay();
+      showUndoToast('Arrival updated — times rippled');
     });
 
     depInput?.addEventListener('change', () => {
       const newDep = timeToMinutes(depInput.value);
       if (newDep === null) return;
+      saveUndoSnapshot();
       const curArr = timeToMinutes(getStopTime(stop));
       if (curArr !== null) state.durOverrides[stop.id] = Math.max(0, newDep - curArr);
-      saveUndoSnapshot();
       cascadeFromDeparture(stop, newDep);
-      save(); renderView(false); renderDetailTimeStrip(stop, container);
+      save(); renderView(false); refreshDisplay();
       showUndoToast('Departure updated — times rippled');
     });
 
     document.getElementById('dts-arr-now')?.addEventListener('click', () => {
       const now = new Date();
       const nowMins = now.getHours() * 60 + now.getMinutes();
-      commit(nowMins, getStopDuration(stop) || 0, 'Arrival set to now — times updated');
+      saveUndoSnapshot();
+      const oldArr = timeToMinutes(getStopTime(stop)) ?? nowMins;
+      state.overrides[stop.id] = minutesToTime(nowMins);
+      cascadeTimeDelta(stop, nowMins - oldArr);
+      save(); renderView(false); renderDetailTimeStrip(stop, container);
+      showUndoToast('Arrival set to now — times updated');
     });
 
     document.getElementById('dts-dep-now')?.addEventListener('click', () => {
       const now = new Date();
       const nowMins = now.getHours() * 60 + now.getMinutes();
+      saveUndoSnapshot();
       const curArr = timeToMinutes(getStopTime(stop));
       if (curArr !== null) state.durOverrides[stop.id] = Math.max(0, nowMins - curArr);
-      saveUndoSnapshot();
       cascadeFromDeparture(stop, nowMins);
       save(); renderView(false); renderDetailTimeStrip(stop, container);
       showUndoToast('Departed now — times updated');
     });
 
     document.getElementById('dts-dur-minus')?.addEventListener('click', () => {
-      const curArr = timeToMinutes(getStopTime(stop)) ?? 0;
-      const newDur = Math.max(0, (getStopDuration(stop) || 0) - 5);
       saveUndoSnapshot();
-      state.durOverrides[stop.id] = newDur;
+      state.durOverrides[stop.id] = Math.max(0, (getStopDuration(stop) || 0) - 5);
       cascadeTimeDelta(stop, -5);
-      save(); renderView(false); renderDetailTimeStrip(stop, container);
+      save(); renderView(false); refreshDisplay();
     });
 
     document.getElementById('dts-dur-plus')?.addEventListener('click', () => {
-      const newDur = (getStopDuration(stop) || 0) + 5;
       saveUndoSnapshot();
-      state.durOverrides[stop.id] = newDur;
+      state.durOverrides[stop.id] = (getStopDuration(stop) || 0) + 5;
       cascadeTimeDelta(stop, 5);
-      save(); renderView(false); renderDetailTimeStrip(stop, container);
+      save(); renderView(false); refreshDisplay();
     });
 
   } else {
@@ -4761,7 +4774,7 @@ function openDetail(stop) {
   _detailStop = stop;
   _detailCurrent = 0;
   const overlay = document.getElementById('detail-overlay');
-  overlay.scrollTop = 0;
+  document.getElementById('detail-page').scrollTop = 0;
   overlay.classList.remove('hidden');
   requestAnimationFrame(() => requestAnimationFrame(() => overlay.classList.add('open')));
 
