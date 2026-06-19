@@ -1,5 +1,5 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v221';
+const APP_VERSION = 'v222';
 const _errorLog = [];
 window.addEventListener('error', e => {
   _errorLog.push({ ts: new Date().toISOString(), msg: e.message || String(e), src: (e.filename||'').split('/').pop() + ':' + (e.lineno||'?') });
@@ -2106,6 +2106,101 @@ function parseOpeningHours(str) {
   return { open: isOpen, todayStr: todayHours };
 }
 
+/* ── Google Places API ──────────────────────────────────────────────── */
+const GPLACES_KEY = 'AIzaSyCiV3X0vUMJBkIpU_UgBWwyPzIAjyjJM9I';
+
+async function fetchGooglePlace(name, address, lat, lng) {
+  try {
+    const query = [name, address].filter(Boolean).join(', ');
+    const res = await fetch('https://places.googleapis.com/v1/places:searchText', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': GPLACES_KEY,
+        'X-Goog-FieldMask': 'places.id,places.rating,places.userRatingCount,places.reviews,places.photos,places.currentOpeningHours',
+      },
+      body: JSON.stringify({
+        textQuery: query,
+        locationBias: { circle: { center: { latitude: lat, longitude: lng }, radius: 300 } },
+        maxResultCount: 1,
+        languageCode: 'en',
+      }),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const p = data.places?.[0];
+    if (!p) return null;
+    return {
+      rating:      p.rating || null,
+      ratingCount: p.userRatingCount || 0,
+      reviews:     (p.reviews || []).slice(0, 3),
+      photos:      (p.photos || []).slice(0, 5),
+      hours:       p.currentOpeningHours?.weekdayDescriptions || [],
+    };
+  } catch { return null; }
+}
+
+function gPhotoUrl(photoName, maxWidth = 800) {
+  return `https://places.googleapis.com/v1/${photoName}/media?maxWidthPx=${maxWidth}&key=${GPLACES_KEY}&skipHttpRedirect=true`;
+}
+
+async function injectGoogleData(gData, heroEl, bodyEl) {
+  if (!gData) return;
+
+  // Photo — fetch first photo URL then update hero
+  if (gData.photos.length) {
+    try {
+      const photoRes = await fetch(gPhotoUrl(gData.photos[0].name));
+      if (photoRes.ok) {
+        const blob = await photoRes.blob();
+        const objUrl = URL.createObjectURL(blob);
+        heroEl.style.background = `url(${objUrl}) center/cover no-repeat`;
+        heroEl.innerHTML = '<div class="vd-hero-scrim"></div>';
+      }
+    } catch {}
+  }
+
+  // Rating row
+  if (gData.rating) {
+    const stars = Math.round(gData.rating * 2) / 2;
+    const filled = Math.floor(stars);
+    const half   = stars % 1 >= 0.5 ? 1 : 0;
+    const empty  = 5 - filled - half;
+    const starHtml =
+      '<i class="ph ph-star-fill" style="color:#f59e0b"></i>'.repeat(filled) +
+      (half ? '<i class="ph ph-star-half" style="color:#f59e0b"></i>' : '') +
+      '<i class="ph ph-star" style="color:rgba(255,255,255,.25)"></i>'.repeat(empty);
+    const ratingEl = document.createElement('div');
+    ratingEl.className = 'gp-rating-row';
+    ratingEl.innerHTML = `${starHtml} <span class="gp-rating-num">${gData.rating.toFixed(1)}</span> <span class="gp-rating-count">(${gData.ratingCount.toLocaleString()} reviews)</span>`;
+    bodyEl.insertBefore(ratingEl, bodyEl.firstChild);
+  }
+
+  // Reviews
+  if (gData.reviews.length) {
+    const reviewsEl = document.createElement('div');
+    reviewsEl.className = 'gp-reviews';
+    reviewsEl.innerHTML = '<div class="vd-links-label" style="margin-bottom:10px"><i class="ph ph-quotes"></i> Recent reviews</div>';
+    gData.reviews.forEach(r => {
+      const div = document.createElement('div');
+      div.className = 'gp-review-card';
+      const rStars = '★'.repeat(r.rating || 0) + '☆'.repeat(5 - (r.rating || 0));
+      div.innerHTML = `
+        <div class="gp-review-header">
+          <span class="gp-review-author">${r.authorAttribution?.displayName || 'Guest'}</span>
+          <span class="gp-review-stars">${rStars}</span>
+          <span class="gp-review-time">${r.relativePublishTimeDescription || ''}</span>
+        </div>
+        <div class="gp-review-text">${r.text?.text || ''}</div>`;
+      reviewsEl.appendChild(div);
+    });
+    // Insert before links row
+    const linksRow = bodyEl.querySelector('#vd-links-row,#cd-links-row');
+    if (linksRow) bodyEl.insertBefore(reviewsEl, linksRow);
+    else bodyEl.appendChild(reviewsEl);
+  }
+}
+
 /* ── Maps URL helpers ───────────────────────────────────────────────── */
 function mapsSearchUrl(name, address, lat, lng) {
   const q = [name, address].filter(Boolean).join(', ');
@@ -2314,6 +2409,12 @@ function openVeganDetail(place) {
   };
 
   overlay.classList.remove('hidden');
+
+  // Async: fetch Google Places data and inject rating, reviews, photos
+  fetchGooglePlace(place.name, place.address, place.lat, place.lng).then(gData => {
+    if (!overlay.classList.contains('hidden') && _vdPlace === place)
+      injectGoogleData(gData, hero, document.getElementById('vd-body'));
+  });
 }
 
 /* ── Add vegan place to trip ────────────────────────────────────────── */
@@ -2703,6 +2804,12 @@ function openChargerDetail(charger) {
 
   document.getElementById('cd-back').onclick = () => { overlay.classList.add('hidden'); _cdPlace = null; };
   overlay.classList.remove('hidden');
+
+  // Async: fetch Google Places data for charger (ratings/photos where available)
+  fetchGooglePlace(charger.name, charger.address, charger.lat, charger.lng).then(gData => {
+    if (!overlay.classList.contains('hidden') && _cdPlace === charger)
+      injectGoogleData(gData, hero, document.getElementById('cd-body'));
+  });
 }
 
 function openChargerAddSheet() {
