@@ -1,7 +1,13 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v230';
+const APP_VERSION = 'v231';
 
 const CHANGELOG = [
+  { version: 'v231', title: 'Navigation fix, time strip, map refresh', items: [
+    { type: 'fix', text: 'navUrl function restored — Navigate buttons now work (were throwing ReferenceError)' },
+    { type: 'fix', text: 'Apple Maps is the default; switch to Google Maps in Settings drawer' },
+    { type: 'fix', text: 'Arrived/Depart chips now correctly open the time-entry sheet' },
+    { type: 'fix', text: 'Pull-to-refresh on map view clears both vegan and charger caches' },
+  ]},
   { version: 'v230', title: 'Google data, ratings on cards, font fixes', items: [
     { type: 'fix', text: 'Google photo now loads on planned stop detail pages' },
     { type: 'fix', text: 'Google rating shows in correct position (below name, not at top)' },
@@ -96,6 +102,7 @@ const state = {
   cardView: 'full',
   notifsEnabled: false,
   useMetric: true,
+  navApp: 'apple',      // 'apple' | 'google'
   overrides: {},        // stopId → time string
   checked: {},          // stopId → bool (visited)
   skipped: {},          // stopId → bool (deliberately skipped)
@@ -1497,8 +1504,17 @@ function getPhotos(stop) {
 }
 
 /* ── Nav URLs ──────────────────────────────────────────────────────── */
+function navUrl(name, address, lat, lng) {
+  const dest = [name, address].filter(Boolean).join(', ');
+  if (state.navApp !== 'google') {
+    const q = encodeURIComponent(dest || `${lat},${lng}`);
+    return `maps://?daddr=${q}&dirflg=d`;
+  }
+  const gdest = dest ? encodeURIComponent(dest) : `${lat},${lng}`;
+  return `https://www.google.com/maps/dir/?api=1&destination=${gdest}&travelmode=driving`;
+}
 function teslaNavUrl(stop) {
-  return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(stop.location)}`;
+  return navUrl(stop.name, stop.address, stop.lat, stop.lng);
 }
 function chargingNearbyUrl(stop) {
   return `https://www.plugshare.com/?latitude=${stop.lat}&longitude=${stop.lng}&spanLat=0.2&spanLng=0.2`;
@@ -4610,8 +4626,8 @@ function renderDetailTimeStrip(stop, container) {
 
   if (!interactive) return;
 
-  document.getElementById('dts-arrived')?.addEventListener('click', () => openTravelAction(stop, 'arrive'));
-  document.getElementById('dts-departed')?.addEventListener('click', () => openTravelAction(stop, 'depart'));
+  document.getElementById('dts-arrived')?.addEventListener('click', () => openTravelAction(stop, 'arrived'));
+  document.getElementById('dts-departed')?.addEventListener('click', () => openTravelAction(stop, 'departed'));
 
   const adjustDur = (delta) => {
     saveUndoSnapshot();
@@ -5484,6 +5500,7 @@ function initPullToRefresh() {
     try {
       if (state.currentView === 'vegan') { _veganCache = null; }
       else if (state.currentView === 'charging') { _chargerCache = null; }
+      else if (state.currentView === 'map') { _veganCache = null; _chargerCache = null; }
       const day = TRIP_DATA.days.find(d => d.id === state.currentDayId);
       if (day && state.currentView !== 'vegan' && state.currentView !== 'charging') {
         _weatherCache.delete(day.id);
@@ -5638,6 +5655,20 @@ document.addEventListener('DOMContentLoaded', () => {
         // Do NOT unregister the SW — that destroys the push subscription
       } catch (e) { /* ignore */ }
       window.location.reload(true);
+    });
+
+    // Nav app preference (Apple Maps / Google Maps)
+    try { const saved = localStorage.getItem('annecy_nav_app'); if (saved === 'google') state.navApp = 'google'; } catch {}
+    function updateNavAppBtn() {
+      const lbl = document.getElementById('nav-app-label');
+      if (lbl) lbl.textContent = state.navApp === 'google' ? 'Navigate with Google Maps' : 'Navigate with Apple Maps';
+    }
+    updateNavAppBtn();
+    const navAppBtn = document.getElementById('nav-app-btn');
+    if (navAppBtn) navAppBtn.addEventListener('click', () => {
+      state.navApp = state.navApp === 'apple' ? 'google' : 'apple';
+      try { localStorage.setItem('annecy_nav_app', state.navApp); } catch {}
+      updateNavAppBtn();
     });
 
     // Units toggle (km / miles)
