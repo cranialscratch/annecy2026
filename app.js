@@ -1,7 +1,11 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v237';
+const APP_VERSION = 'v238';
 
 const CHANGELOG = [
+  { version: 'v238', title: 'Fix departure cascade — anchor to original plan', items: [
+    { type: 'fix', text: 'Departure cascade now anchors downstream stops to actual departure + original travel gaps — no longer compounds errors from earlier arrival cascades' },
+    { type: 'fix', text: 'Setting departure to 11:24 with 1h55m travel to next stop now correctly shows next arrival as 13:19' },
+  ]},
   { version: 'v237', title: 'Departure now + departure ripple fix', items: [
     { type: 'fix', text: 'Departure chip now has a "Now" clock button — sets departure to current time and ripples following stops' },
     { type: 'fix', text: 'Changing departure time now correctly ripples following stops (was only updating duration, not cascading)' },
@@ -4682,14 +4686,11 @@ function renderDetailTimeStrip(stop, container) {
 
     depInput?.addEventListener('change', () => {
       const newDep = timeToMinutes(depInput.value);
+      if (newDep === null) return;
       const curArr = timeToMinutes(getStopTime(stop));
-      if (newDep === null || curArr === null) return;
-      const oldDur = getStopDuration(stop) || 0;
-      const newDur = Math.max(0, newDep - curArr);
-      const durDelta = newDur - oldDur;
+      if (curArr !== null) state.durOverrides[stop.id] = Math.max(0, newDep - curArr);
       saveUndoSnapshot();
-      state.durOverrides[stop.id] = newDur;
-      cascadeTimeDelta(stop, durDelta);
+      cascadeFromDeparture(stop, newDep);
       save(); renderView(false); renderDetailTimeStrip(stop, container);
       showUndoToast('Departure updated — times rippled');
     });
@@ -4703,13 +4704,10 @@ function renderDetailTimeStrip(stop, container) {
     document.getElementById('dts-dep-now')?.addEventListener('click', () => {
       const now = new Date();
       const nowMins = now.getHours() * 60 + now.getMinutes();
-      const curArr = timeToMinutes(getStopTime(stop)) ?? nowMins;
-      const oldDur = getStopDuration(stop) || 0;
-      const newDur = Math.max(0, nowMins - curArr);
-      const durDelta = newDur - oldDur;
+      const curArr = timeToMinutes(getStopTime(stop));
+      if (curArr !== null) state.durOverrides[stop.id] = Math.max(0, nowMins - curArr);
       saveUndoSnapshot();
-      state.durOverrides[stop.id] = newDur;
-      cascadeTimeDelta(stop, durDelta);
+      cascadeFromDeparture(stop, nowMins);
       save(); renderView(false); renderDetailTimeStrip(stop, container);
       showUndoToast('Departed now — times updated');
     });
@@ -5395,6 +5393,46 @@ function closeTravelAction() {
 
 // Cascade a time delta to all following stops on the same day, stopping at fixed stops.
 // skipSet: Set of stop ids to skip over (already-skipped stops stay un-updated but don't block cascade).
+// Departure cascade: anchors all following stops to actualDepMins using ORIGINAL
+// data times as the base. Avoids compounding errors from earlier arrival cascades.
+function cascadeFromDeparture(fromStop, actualDepMins) {
+  // Use original (data) departure as the reference, not whatever overrides exist
+  const origArr = timeToMinutes(fromStop.time);
+  const origDur = fromStop.duration ?? 30;
+  if (origArr === null) {
+    // Added stop with no original time — fall back to current state departure
+    const curArr = timeToMinutes(getStopTime(fromStop));
+    if (curArr === null) return;
+    const curDur = getStopDuration(fromStop);
+    cascadeTimeDelta(fromStop, actualDepMins - (curArr + curDur));
+    return;
+  }
+  const origDep = origArr + origDur;
+  const delta = actualDepMins - origDep;
+
+  const day = TRIP_DATA.days.find(d => d.stops.concat(state.addedStops?.[d.id] || []).some(s => s.id === fromStop.id));
+  if (!day) return;
+  const days = TRIP_DATA.days;
+  const dayIdx = days.findIndex(d => d.id === day.id);
+  if (!state.crossDayMoves) state.crossDayMoves = {};
+  const allStops = [...day.stops, ...(state.addedStops?.[day.id] || [])];
+  const sorted = [...allStops].sort((a, b) => (a.order ?? 9999) - (b.order ?? 9999));
+  let found = false;
+  for (const s of sorted) {
+    if (!found) { if (s.id === fromStop.id) found = true; continue; }
+    if (s.fixed) break;
+    if (state.skipped[s.id]) continue;
+    // Use ORIGINAL data time so we don't compound previous arrival cascades
+    const origTime = timeToMinutes(s.time) ?? timeToMinutes(getStopTime(s));
+    if (origTime === null) continue;
+    const newAbsolute = dayIdx * 1440 + origTime + delta;
+    const targetDayIdx = Math.min(Math.max(0, Math.floor(newAbsolute / 1440)), days.length - 1);
+    state.overrides[s.id] = minutesToTime(newAbsolute);
+    if (targetDayIdx !== dayIdx) state.crossDayMoves[s.id] = days[targetDayIdx].id;
+    else delete state.crossDayMoves[s.id];
+  }
+}
+
 function cascadeTimeDelta(fromStop, delta, skipSet = new Set()) {
   if (!delta) return;
   const day = TRIP_DATA.days.find(d => d.stops.concat(state.addedStops?.[d.id] || []).some(s => s.id === fromStop.id));
