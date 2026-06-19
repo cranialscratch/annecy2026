@@ -2,6 +2,8 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -10,10 +12,19 @@
   <title>Annecy 2026</title>
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="icons/icon-180.png">
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="anonymous">
   <link rel="stylesheet" href="styles.v113.css">
 </head>
 <body>
+  <!-- Offline banner — shown when navigator.onLine is false -->
+  <div id="offline-banner" style="display:none">
+    <i class="ph ph-wifi-slash"></i> No internet — showing cached content
+  </div>
+  <!-- Update banner — shown when a new SW version has activated -->
+  <div id="sw-update-banner" style="display:none">
+    <span><i class="ph ph-arrow-clockwise"></i> Update available</span>
+    <button onclick="window.location.reload()">Reload</button>
+  </div>
   <div id="app">
     <div id="bg-clip"><div id="bg-layer"></div></div>
     <header id="app-header">
@@ -65,8 +76,8 @@
       <button class="drawer-item" data-action="home"><i class="ph ph-house drawer-icon"></i> Home</button>
       <a class="drawer-item" href="https://www.annecy.org/festival" target="_blank" rel="noopener"><i class="ph ph-film-slate drawer-icon"></i> Festival website</a>
       <a class="drawer-item" href="https://www.le-shuttle.com" target="_blank" rel="noopener"><i class="ph ph-train drawer-icon"></i> LeShuttle</a>
-      <a class="drawer-item" href="https://www.plugshare.com" target="_blank" rel="noopener"><i class="ph ph-plug drawer-icon"></i> PlugShare</a>
-      <a class="drawer-item" href="https://www.happycow.net" target="_blank" rel="noopener"><i class="ph ph-leaf drawer-icon"></i> HappyCow</a>
+      <button class="drawer-item" data-action="bucket"><i class="ph ph-bookmark-simple drawer-icon"></i> Bucket List <span id="bucket-badge" class="drawer-badge"></span></button>
+
     </nav>
     <div class="drawer-bottom">
       <button class="drawer-item" data-action="toggle-dark" id="dark-mode-btn"><i class="ph ph-moon drawer-icon" id="dark-mode-icon"></i> <span id="dark-mode-label">Dark mode</span></button>
@@ -79,6 +90,8 @@
           <button class="drawer-item drawer-sub-item" id="gyro-btn"><i class="ph ph-compass drawer-icon"></i> <span id="gyro-label">Motion disabled</span></button>
           <button class="drawer-item drawer-sub-item" id="notif-btn"><i class="ph ph-bell drawer-icon"></i> <span id="notif-label">Departure alerts off</span></button>
           <button class="drawer-item drawer-sub-item" id="notif-test-btn" style="display:none"><i class="ph ph-paper-plane-tilt drawer-icon"></i> Send test push</button>
+          <button class="drawer-item drawer-sub-item" id="version-btn"><i class="ph ph-info drawer-icon"></i> Version <span id="version-badge" class="version-badge"></span></button>
+          <button class="drawer-item drawer-sub-item" id="nav-app-btn"><i class="ph ph-navigation-arrow drawer-icon"></i> <span id="nav-app-label">Navigate with Apple Maps</span></button>
           <button class="drawer-item drawer-sub-item" id="units-btn"><i class="ph ph-ruler drawer-icon"></i> <span id="units-label">Distances in km</span></button>
           <button class="drawer-item drawer-sub-item" data-action="reset-times"><i class="ph ph-clock-counter-clockwise drawer-icon"></i> Reset all times</button>
           <button class="drawer-item drawer-sub-item" data-action="reset-checks"><i class="ph ph-check-square drawer-icon"></i> Clear visited</button>
@@ -86,6 +99,28 @@
       </div>
     </div>
   </aside>
+
+  <!-- Version panel -->
+  <div id="version-overlay" class="hidden">
+    <div id="version-panel">
+      <div class="version-panel-header">
+        <div class="version-panel-title-wrap">
+          <div class="version-panel-app">Annecy 2026</div>
+          <div class="version-panel-ver">Version <strong id="version-number"></strong></div>
+        </div>
+        <button id="version-close" class="icon-btn glass-btn"><i class="ph ph-x"></i></button>
+      </div>
+      <div class="version-panel-body" id="version-body"></div>
+      <div class="version-panel-footer">
+        <button class="pill-btn primary full-width" id="copy-dev-data-btn">
+          <i class="ph ph-clipboard-text"></i> Copy Dev Data
+        </button>
+        <button class="pill-btn secondary full-width" id="force-update-btn" style="margin-top:10px">
+          <i class="ph ph-arrow-clockwise"></i> Force update
+        </button>
+      </div>
+    </div>
+  </div>
 
   <!-- Time edit modal -->
   <div id="modal-overlay" class="hidden">
@@ -104,12 +139,45 @@
           <button class="time-adj" data-delta="60">+1h</button>
         </div>
         <label class="cascade-label">
-          <input type="checkbox" id="modal-cascade"> Shift all following stops by the same amount
+          <input type="checkbox" id="modal-cascade"> Ripple — shift all following stops by the same amount
         </label>
       </div>
       <div class="modal-footer">
+        <button id="modal-reset-day" class="pill-btn secondary" title="Clear all time overrides for this day">Reset day</button>
         <button id="modal-cancel" class="pill-btn secondary">Cancel</button>
         <button id="modal-save" class="pill-btn primary">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Travel action sheet (Departed / Arrived) -->
+  <div id="travel-action-overlay" class="hidden">
+    <div id="travel-action-sheet">
+      <div class="modal-header">
+        <h3 id="travel-action-title"></h3>
+        <button id="travel-action-close" class="icon-btn"><i class="ph ph-x"></i></button>
+      </div>
+      <p id="travel-action-summary" style="padding:0 20px 10px;font-size:14px;color:var(--text2)"></p>
+      <div id="travel-action-skip-list"></div>
+      <div class="modal-footer" style="flex-direction:column;gap:8px">
+        <button id="travel-action-ripple" class="pill-btn primary" style="width:100%"><i class="ph ph-arrows-clockwise"></i> Ripple delay to following stops</button>
+        <button id="travel-action-done" class="pill-btn secondary" style="width:100%">Record time only</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Skip-prompt sheet -->
+  <div id="skip-prompt-overlay" class="hidden">
+    <div id="skip-prompt-sheet">
+      <div class="modal-header">
+        <h3>⏰ Stops may be closed</h3>
+        <button id="skip-prompt-close" class="icon-btn"><i class="ph ph-x"></i></button>
+      </div>
+      <p style="padding: 0 20px 10px; font-size:14px; color:var(--text2)">These stops may be closed at their new times. Tick any you want to skip.</p>
+      <div id="skip-prompt-list"></div>
+      <div class="modal-footer">
+        <button id="skip-prompt-cancel" class="pill-btn secondary">Keep all</button>
+        <button id="skip-prompt-confirm" class="pill-btn primary">Skip selected</button>
       </div>
     </div>
   </div>
@@ -124,6 +192,7 @@
           <button id="detail-check-btn" class="check-pill">Mark visited</button>
         </div>
       </div>
+      <div id="detail-hero" class="vd-hero hidden"></div>
       <div id="detail-slider-wrap">
         <div id="detail-slides"></div>
         <div id="detail-dots"></div>
@@ -136,14 +205,118 @@
           <span id="detail-stars" class="priority-stars"></span>
         </div>
         <h2 id="detail-name"></h2>
+        <div id="detail-grating"></div>
         <div id="detail-weather" class="detail-weather-row hidden"></div>
         <p id="detail-reason"></p>
         <div id="detail-tags"></div>
-        <div id="detail-actions"></div>
+        <div id="detail-hours-row" class="hidden"></div>
+        <div id="detail-address-row" class="hidden"></div>
+        <div id="detail-info-rows" class="hidden"></div>
+        <div id="detail-ext-links" class="hidden"></div>
+        <div id="detail-plan-section" class="hidden"></div>
+        <div id="detail-alts-section" class="hidden"></div>
+        <div id="detail-time-strip" class="detail-time-strip hidden"></div>
+        <div id="detail-leg-info" class="detail-leg-info hidden"></div>
+        <div id="detail-travel-actions" class="detail-travel-actions hidden"></div>
         <div id="detail-poi-section" class="hidden">
           <div class="detail-section-title"><i class="ph ph-map-pin"></i> Nearby</div>
           <div id="detail-poi-carousel"></div>
         </div>
+      </div>
+    </div>
+    <div id="detail-toolbar"></div>
+  </div>
+
+  <!-- Vegan place detail overlay -->
+  <div id="vd-overlay" class="hidden">
+    <div id="vd-page">
+      <div class="vd-topbar">
+        <button id="vd-back" class="icon-btn glass-btn"><i class="ph ph-arrow-left"></i></button>
+        <div class="vd-topbar-right">
+          <a id="vd-maps-link" class="icon-btn glass-btn" target="_blank" rel="noopener" title="Open in Google Maps"><i class="ph ph-google-logo"></i></a>
+        </div>
+      </div>
+      <div id="vd-hero"></div>
+      <div id="vd-body">
+        <div id="vd-meta-row"></div>
+        <h2 id="vd-name"></h2>
+        <div id="vd-hours-row"></div>
+        <div id="vd-address"></div>
+        <div id="vd-info-rows"></div>
+        <div id="vd-links-row"></div>
+      </div>
+    </div>
+    <div id="vd-toolbar"></div>
+  </div>
+
+  <!-- Charger detail overlay -->
+  <div id="cd-overlay" class="hidden">
+    <div id="cd-page">
+      <div class="vd-topbar">
+        <button id="cd-back" class="icon-btn glass-btn"><i class="ph ph-arrow-left"></i></button>
+        <div class="vd-topbar-right">
+          <a id="cd-maps-link" class="icon-btn glass-btn" target="_blank" rel="noopener" title="Open in Google Maps"><i class="ph ph-google-logo"></i></a>
+        </div>
+      </div>
+      <div id="cd-hero"></div>
+      <div id="cd-body">
+        <div id="cd-meta-row"></div>
+        <h2 id="cd-name"></h2>
+        <div id="cd-hours-row"></div>
+        <div id="cd-address"></div>
+        <div id="cd-info-rows"></div>
+        <div id="cd-links-row"></div>
+      </div>
+    </div>
+    <div id="cd-toolbar"></div>
+  </div>
+
+  <!-- Charger add-to-trip sheet -->
+  <div id="cd-add-overlay" class="hidden">
+    <div id="cd-add-sheet">
+      <div class="edit-sheet-handle"></div>
+      <div class="edit-sheet-header">
+        <h3 class="edit-sheet-title">Add charger to trip</h3>
+        <button id="cd-add-close" class="icon-btn"><i class="ph ph-x"></i></button>
+      </div>
+      <div class="vd-add-body">
+        <div class="edit-section-label">Day</div>
+        <div id="cd-add-days" class="vd-add-days"></div>
+        <div class="edit-section-label" style="margin-top:16px">Arrival time</div>
+        <input type="time" id="cd-add-time" class="edit-input" value="12:00">
+        <label class="edit-toggle-row" style="margin-top:12px">
+          <div><div class="edit-toggle-label">Ripple times forward</div><div class="edit-toggle-sub">Shift later stops to make room</div></div>
+          <input type="checkbox" id="cd-add-ripple" class="edit-toggle-cb" checked>
+        </label>
+      </div>
+      <div class="modal-footer">
+        <button id="cd-add-cancel" class="pill-btn secondary">Cancel</button>
+        <button id="cd-add-confirm" class="pill-btn primary">Add stop</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Vegan add-to-trip sheet -->
+  <div id="vd-add-overlay" class="hidden">
+    <div id="vd-add-sheet">
+      <div class="edit-sheet-handle"></div>
+      <div class="edit-sheet-header">
+        <h3 class="edit-sheet-title">Add to trip</h3>
+        <button id="vd-add-close" class="icon-btn"><i class="ph ph-x"></i></button>
+      </div>
+      <div class="vd-add-body">
+        <div class="edit-section-label">Day</div>
+        <div id="vd-add-days" class="vd-add-days"></div>
+        <div class="edit-section-label" style="margin-top:16px">Time</div>
+        <input type="time" id="vd-add-time" class="edit-input" value="12:00">
+        <label class="edit-toggle-row" style="margin-top:12px">
+          <div><div class="edit-toggle-label">Ripple times forward</div><div class="edit-toggle-sub">Shift later stops to make room</div></div>
+          <input type="checkbox" id="vd-add-ripple" class="edit-toggle-cb" checked>
+        </label>
+      </div>
+      <div class="modal-footer">
+        <button id="vd-add-cancel" class="pill-btn secondary">Cancel</button>
+        <button id="vd-add-confirm" class="pill-btn primary">Add stop</button>
       </div>
     </div>
   </div>
@@ -235,42 +408,46 @@
     </div>
   </div>
 
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
-  <script src="https://unpkg.com/@phosphor-icons/web@2.1.1"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@phosphor-icons/web@2.1.1" crossorigin="anonymous"></script>
   <script>
     // window.innerHeight is the true physical screen height in standalone
     // PWA mode — more reliable than any CSS unit on iOS WebKit
-    (function() {
-      // Measure header height so #main-content padding-top clears it.
-      // Called after fonts/icons load and on resize.
-      function updateHeaderHeight() {
-        var hdr = document.getElementById('app-header');
-        if (hdr) document.documentElement.style.setProperty('--header-h', hdr.offsetHeight + 'px');
-      }
-      // Run once DOM is ready, again after a short delay for icon fonts
-      document.addEventListener('DOMContentLoaded', function() {
-        updateHeaderHeight();
-        setTimeout(updateHeaderHeight, 300);
-      });
-      window.addEventListener('resize', updateHeaderHeight);
-    })();
+    window.updateHeaderHeight = function() {
+      var hdr = document.getElementById('app-header');
+      if (hdr) document.documentElement.style.setProperty('--header-h', hdr.offsetHeight + 'px');
+    };
+    document.addEventListener('DOMContentLoaded', function() {
+      updateHeaderHeight();
+      setTimeout(updateHeaderHeight, 300);
+    });
+    window.addEventListener('resize', updateHeaderHeight);
   </script>
   <script>
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.addEventListener('message', e => {
-        if (e.data?.type === 'SW_UPDATED') window.location.reload();
+        if (e.data?.type !== 'SW_UPDATED') return;
+        // Show a non-disruptive banner rather than auto-reloading mid-journey
+        var b = document.getElementById('sw-update-banner');
+        if (b) b.style.display = 'flex';
       });
-      // updateViaCache:'none' bypasses HTTP cache when fetching sw.js itself,
-      // so standalone PWAs always pick up new versions without needing a cache clear
       navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' })
         .then(reg => reg.update());
     }
+    // Offline / online indicator
+    function setOnlineBanner(online) {
+      var b = document.getElementById('offline-banner');
+      if (b) b.style.display = online ? 'none' : 'flex';
+    }
+    window.addEventListener('online',  function() { setOnlineBanner(true); });
+    window.addEventListener('offline', function() { setOnlineBanner(false); });
+    document.addEventListener('DOMContentLoaded', function() { setOnlineBanner(navigator.onLine); });
   </script>
   <!-- Firebase (compat SDK — no bundler needed) -->
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
-  <script src="data.js"></script>
-  <script src="sync.js"></script>
-  <script src="app.js"></script>
+  <script src="data.js?v=204"></script>
+  <script src="sync.js?v=204"></script>
+  <script src="app.js?v=204"></script>
 </body>
 </html>

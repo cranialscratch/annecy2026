@@ -1,3 +1,163 @@
+/* ── Version & error capture ───────────────────────────────────────── */
+const APP_VERSION = 'v244';
+
+const CHANGELOG = [
+  { version: 'v244', title: 'Swipe to Skip or Remove, compact skipped cards, Bucket List', items: [
+    { type: 'feature', text: 'Swipe left on any stop to reveal two options: Skip (or Restore) and Remove' },
+    { type: 'feature', text: 'Skipped stops collapse to a compact single-line card; tap Restore via swipe to expand' },
+    { type: 'feature', text: 'Remove sends a stop to the Bucket List — accessible from the drawer menu' },
+    { type: 'feature', text: 'Bucket List shows removed stops; tap + to re-add to any day, or trash to delete permanently (with confirmation)' },
+    { type: 'feature', text: '"Move to Bucket List" and "Delete permanently" actions available inside each stop\'s detail page' },
+  ]},
+  { version: 'v243', title: 'Ripple fixed, next-leg travel info on stop pages', items: [
+    { type: 'fix', text: 'Ripple when adding a vegan/search stop now correctly shifts following stops by the new stop\'s duration' },
+    { type: 'feature', text: 'Each stop page shows the next stop name, drive time and distance (live from OSRM routing)' },
+  ]},
+  { version: 'v242', title: 'Fix false "already on itinerary" on place search', items: [
+    { type: 'fix', text: '"Already on itinerary" no longer fires falsely — name-based substring matching removed, proximity check tightened to 80m' },
+  ]},
+  { version: 'v241', title: 'Search for any place and add to stops', items: [
+    { type: 'feature', text: 'Search bar at top of Vegan view — type any place name to find it via Google Places' },
+    { type: 'feature', text: 'Search results show rating, address, type and distance, then open the full detail page with photos, hours, reviews' },
+    { type: 'feature', text: 'From the detail page, use "Add to day" to add the found place to your itinerary as a stop' },
+  ]},
+  { version: 'v240', title: 'Toolbar fixed, time picker stays open, Now buttons', items: [
+    { type: 'fix', text: 'Toolbar now truly fixed to viewport bottom on planned stop pages (detail-overlay scroll restructured)' },
+    { type: 'fix', text: 'Native time picker no longer closes mid-scroll — inputs update in-place without re-rendering the strip' },
+    { type: 'fix', text: '"Arrived now" and "Departed now" are two clear buttons below the time strip (force-update if you still see the old layout)' },
+  ]},
+  { version: 'v239', title: 'Arrived/Departed now buttons, hotel cascade stop', items: [
+    { type: 'fix', text: '"Arrived now" and "Departed now" are now two visible buttons below the time strip — no longer hidden as tiny icons' },
+    { type: 'fix', text: 'Cascade stops at hotel/sleep stops — arriving early no longer incorrectly shifts next morning\'s departure' },
+  ]},
+  { version: 'v238', title: 'Fix departure cascade — anchor to original plan', items: [
+    { type: 'fix', text: 'Departure cascade now anchors downstream stops to actual departure + original travel gaps — no longer compounds errors from earlier arrival cascades' },
+    { type: 'fix', text: 'Setting departure to 11:24 with 1h55m travel to next stop now correctly shows next arrival as 13:19' },
+  ]},
+  { version: 'v237', title: 'Departure now + departure ripple fix', items: [
+    { type: 'fix', text: 'Departure chip now has a "Now" clock button — sets departure to current time and ripples following stops' },
+    { type: 'fix', text: 'Changing departure time now correctly ripples following stops (was only updating duration, not cascading)' },
+  ]},
+  { version: 'v236', title: 'Inline time picker, fixed stops, cascade fix', items: [
+    { type: 'feature', text: 'Arrived and Depart chips now show inline time inputs — tap to pick a time using the native picker, or tap the clock to set to now' },
+    { type: 'feature', text: 'Changing arrival auto-updates departure (keeps duration); changing departure auto-updates duration' },
+    { type: 'fix', text: 'Teams Presentation at 16:00 is now a fixed anchor — cascade stops there and will not move it' },
+    { type: 'fix', text: 'Cascade logic extracted into shared helper used by all time-editing flows' },
+  ]},
+  { version: 'v235', title: 'Arrived now ripples following stops', items: [
+    { type: 'fix', text: '"Arrived now" now cascades the time delta to all following stops on the day' },
+    { type: 'fix', text: 'Duration stepper (±5 min) now ripples following stops by the same amount' },
+  ]},
+  { version: 'v234', title: 'Toolbar fix, arrived-now, broader vegan search', items: [
+    { type: 'fix', text: 'Toolbar now fixed to bottom of screen on vegan and charger detail pages' },
+    { type: 'fix', text: '"Arrived now" sets your arrival time to the current time (was wrongly calculating duration)' },
+    { type: 'fix', text: 'Travel action strip simplified — Skip stop only; time/duration handled by time strip' },
+    { type: 'fix', text: 'Google Maps button readable in dark mode (was unreadable with brand-colour SVG)' },
+    { type: 'fix', text: 'Vegan search now finds health food shops and cuisine=vegan venues (e.g. Hemp in Troyes)' },
+  ]},
+  { version: 'v233', title: 'Fix icons — safe CDN caching', items: [
+    { type: 'fix', text: 'Icons restored — CDN fetch interception removed (was breaking Phosphor script loading)' },
+    { type: 'feature', text: 'Leaflet and Phosphor pre-cached at SW install for offline use (cache-first on match)' },
+    { type: 'feature', text: 'crossorigin=anonymous on CDN scripts so cached CORS responses are matched correctly' },
+  ]},
+  { version: 'v232', title: 'Offline resilience — icons & map cached', items: [
+    { type: 'feature', text: 'Leaflet map library and Phosphor icons now cached offline at install' },
+    { type: 'feature', text: 'CDN fonts/assets cached on first use — survive loss of signal' },
+    { type: 'feature', text: 'Orange "No internet" banner when offline — shows cached content continues working' },
+    { type: 'fix', text: 'App updates no longer auto-reload mid-journey — blue banner with Reload button instead' },
+  ]},
+  { version: 'v231', title: 'Navigation fix, time strip, map refresh', items: [
+    { type: 'fix', text: 'navUrl function restored — Navigate buttons now work (were throwing ReferenceError)' },
+    { type: 'fix', text: 'Apple Maps is the default; switch to Google Maps in Settings drawer' },
+    { type: 'fix', text: 'Arrived/Depart chips now correctly open the time-entry sheet' },
+    { type: 'fix', text: 'Pull-to-refresh on map view clears both vegan and charger caches' },
+  ]},
+  { version: 'v230', title: 'Google data, ratings on cards, font fixes', items: [
+    { type: 'fix', text: 'Google photo now loads on planned stop detail pages' },
+    { type: 'fix', text: 'Google rating shows in correct position (below name, not at top)' },
+    { type: 'fix', text: 'Removed duplicate HappyCow/Google links on stop pages' },
+    { type: 'feature', text: 'Star ratings from Google shown on day-view cards for food/vegan stops' },
+    { type: 'design', text: 'Font sizes increased on vegan search result cards' },
+    { type: 'design', text: 'Address, phone, website, opening hours use consistent styling on stop pages' },
+  ]},
+  { version: 'v229', title: 'Stop detail matches search results', items: [
+    { type: 'fix', text: 'Toolbar Vegan/Charge buttons now open own search views (not PlugShare/HappyCow)' },
+    { type: 'fix', text: 'Duration stepper: +/− buttons always visible, each tap commits immediately' },
+    { type: 'fix', text: 'Time strip no longer duplicates rows on repeated taps' },
+    { type: 'feature', text: 'Stop detail pages now show address, opening hours, phone, website' },
+    { type: 'feature', text: 'HappyCow and Google Maps links shown in stop detail body' },
+    { type: 'design', text: '"Set duration to now" button below time strip' },
+  ]},
+  { version: 'v228', title: 'Stop detail consistency & time strip', items: [
+    { type: 'fix', text: 'Arrived / Duration / Departed time strip now works on stop pages' },
+    { type: 'fix', text: 'Map pins for vegan & charger spots now render from session cache' },
+    { type: 'fix', text: 'PlugShare and HappyCow removed from drawer menu' },
+    { type: 'feature', text: 'HappyCow and Google Maps links added to food/vegan stop pages' },
+    { type: 'design', text: 'Day-view cards show address subtitle for consistency with search results' },
+  ]},
+  { version: 'v227', title: 'Navigation, palette & stop timing', items: [
+    { type: 'feature', text: 'Apple Maps navigation (switch to Google Maps in settings)' },
+    { type: 'feature', text: 'Arrived / Duration / Departed time strip on stop pages' },
+    { type: 'feature', text: 'Vegan & charger pins shown on map view' },
+    { type: 'feature', text: 'Google Places data (photos, reviews) shown on planned food/vegan stops' },
+    { type: 'design', text: 'Simplified colour palette — reduced accent colours throughout' },
+    { type: 'design', text: 'Improved text contrast (text2/text3 opacity bumped)' },
+    { type: 'design', text: 'Nearest stop chip now visible with strong glass background' },
+    { type: 'fix', text: 'Removed PlugShare and HappyCow from drawer (use own lookup + per-page link)' },
+  ]},
+  {
+    version: 'v226',
+    title: 'Version panel with changelog',
+    items: [
+      { type: 'feature', text: 'Version menu now shows What\'s new — fix/feature/design entries per release' },
+      { type: 'feature', text: 'Current release highlighted; older releases listed below' },
+      { type: 'design',  text: 'System status section below changelog with async push refresh' },
+    ],
+  },
+  {
+    version: 'v225',
+    title: 'Reviews, ratings & charger filter',
+    items: [
+      { type: 'fix',     text: 'Reviews no longer duplicate when revisiting a place' },
+      { type: 'fix',     text: '"Opens HH:MM" shown when closed mid-day (not just "Closed")' },
+      { type: 'feature', text: 'Star ratings and review counts shown on vegan list cards' },
+      { type: 'feature', text: 'Charger min-kW stepper (default 50 kW); Tesla-compatible only' },
+      { type: 'feature', text: 'Charger cards show connector types, price badge, bay count' },
+      { type: 'design',  text: 'All toolbar icons white in dark mode — no accent colours' },
+      { type: 'design',  text: 'Body base font raised to 17px; badges/labels all bumped up' },
+    ],
+  },
+  {
+    version: 'v224',
+    title: 'Session cache & unified cards',
+    items: [
+      { type: 'feature', text: 'Vegan & charger results cached for session — instant on return' },
+      { type: 'feature', text: 'Pull-to-refresh clears cache and re-fetches' },
+      { type: 'design',  text: 'Itinerary stops use same card layout as nearby results' },
+      { type: 'design',  text: 'Card names 17px, detail name 32px, badges 12px' },
+    ],
+  },
+  {
+    version: 'v223',
+    title: 'Photos, toolbar pinned & reviews',
+    items: [
+      { type: 'fix',     text: 'Google Place photos now display correctly' },
+      { type: 'fix',     text: 'Pill toolbar always visible — no longer scrolls away' },
+      { type: 'fix',     text: 'Reviews sorted latest-first (not by relevance)' },
+      { type: 'design',  text: 'Toolbar icon base colour raised to full white' },
+    ],
+  },
+];
+const _errorLog = [];
+window.addEventListener('error', e => {
+  _errorLog.push({ ts: new Date().toISOString(), msg: e.message || String(e), src: (e.filename||'').split('/').pop() + ':' + (e.lineno||'?') });
+  if (_errorLog.length > 30) _errorLog.shift();
+});
+window.addEventListener('unhandledrejection', e => {
+  _errorLog.push({ ts: new Date().toISOString(), msg: String(e.reason) });
+  if (_errorLog.length > 30) _errorLog.shift();
+});
+
 /* ── State ─────────────────────────────────────────────────────────── */
 const state = {
   currentDayId: null,
@@ -6,8 +166,10 @@ const state = {
   cardView: 'full',
   notifsEnabled: false,
   useMetric: true,
+  navApp: 'apple',      // 'apple' | 'google'
   overrides: {},        // stopId → time string
-  checked: {},          // stopId → bool
+  checked: {},          // stopId → bool (visited)
+  skipped: {},          // stopId → bool (deliberately skipped)
   locOverrides: {},     // stopId → { name, lat, lng }
   durOverrides: {},     // stopId → minutes
   typeOverrides: {},    // stopId → type string
@@ -15,6 +177,7 @@ const state = {
   reasonOverrides: {},  // stopId → string
   veganOverrides: {},   // stopId → bool
   addedStops: {},       // dayId → [stop, ...]
+  crossDayMoves: {},    // stopId → dayId (stops moved to a different day by cascade overflow)
 };
 
 /* ── Helpers ───────────────────────────────────────────────────────── */
@@ -47,6 +210,7 @@ const TYPE_ICON = {
   experience:   'ph-star',
   scenic:       'ph-mountains',
   historic:     'ph-castle-turret',
+  work:         'ph-laptop',
   festival:     'ph-film-slate',
 };
 function stopTypeIcon(stop) {
@@ -67,8 +231,14 @@ function getDayLabel(day) {
   const names = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
   return names[new Date(day.date + 'T00:00:00').getDay()];
 }
+/* Local-timezone date string — avoids UTC offset shifting "today" by hours */
+function localDateStr(d) {
+  const dt = d || new Date();
+  return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
+}
+
 function findTodayDayId() {
-  const today = new Date().toISOString().slice(0,10);
+  const today = localDateStr();
   // Exact date match first (test days, travel days) — before countdown catch-all
   for (const day of TRIP_DATA.days) {
     if (day.date === today) return day.id;
@@ -97,7 +267,7 @@ let _trafficLastFired    = {};   // stopId → timestamp of last alert
 function findNextDrivingLeg() {
   // Returns { from: {lat,lng}, to: stop } for the next stop we're driving to,
   // based on current time vs today's itinerary. Returns null if not a driving day.
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateStr();
   const day = TRIP_DATA.days.find(d =>
     d.date === today || (d.isFestival && today >= d.date && today <= (d.dateEnd || d.date))
   );
@@ -256,7 +426,7 @@ function notifGranted() {
 }
 
 /* ── Web Push (server-side delivery so notifications fire when backgrounded) */
-const VAPID_PUBLIC_KEY = 'BAWWgB9Fd6E6bRrhjgYfbDIwi1uHpKWVeBW9QyZLOz6WtYw4FvIJRUXGsaWYXKbspGfzCCg8-QMF_ONzsAdYhtI';
+const VAPID_PUBLIC_KEY = 'BNvSQJpqlgvQw-dEAH21uUZR-ehcDFYoq77I40RgNMppVbkFmGbOi7QClKANJ51ShZ4FQ5ajncmvPumLLp93K0Q';
 
 function getDeviceId() {
   let id = localStorage.getItem('annecy_device_id');
@@ -277,12 +447,20 @@ async function subscribePush() {
   if (!('PushManager' in window) || !_db) return;
   try {
     const reg = await navigator.serviceWorker.ready;
+    // Re-subscribe whenever VAPID key changes — track by full key hash
+    const storedKeyVer = localStorage.getItem('vapid_key_ver');
+    const currentKeyVer = 'v2-' + VAPID_PUBLIC_KEY.slice(-8);
     let sub = await reg.pushManager.getSubscription();
+    if (sub && storedKeyVer !== currentKeyVer) {
+      await sub.unsubscribe();
+      sub = null;
+    }
     if (!sub) {
       sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlB64ToUint8(VAPID_PUBLIC_KEY),
       });
+      localStorage.setItem('vapid_key_ver', currentKeyVer);
     }
     await _db.ref(`pushSubs/${getDeviceId()}`).set(JSON.parse(JSON.stringify(sub)));
   } catch (e) { console.warn('Push subscribe failed', e); }
@@ -293,20 +471,63 @@ async function writePushQueue() {
   const now = new Date();
   const nowMs = now.getTime();
   const todayStartMs = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-  const queue = {};
+  const newEntries = {};
   collectTodayLeaveEvents().forEach(({ stop, notifMins, label }) => {
     if (notifMins < 0) return;
     const fireMs = todayStartMs + notifMins * 60000;
-    if (fireMs < nowMs - 60000) return; // already well past
-    queue[stop.id + '_' + notifMins] = {
+    if (fireMs < nowMs - 60000) return;
+    newEntries['sched_' + stop.id + '_' + notifMins] = {
       fireAt: fireMs,
       title: '🕐 Departure reminder',
       body: label,
       tag: `depart-${stop.id}`,
     };
   });
-  await _db.ref(`pushQueue/${getDeviceId()}`).set(Object.keys(queue).length ? queue : null);
+  // Use update() so test_* and countdown_* entries are never wiped
+  const deviceRef = _db.ref(`pushQueue/${getDeviceId()}`);
+  const snap = await deviceRef.once('value');
+  const existing = snap.val() || {};
+  const updates = {};
+  // Remove stale sched_ entries not in the new set
+  Object.keys(existing).filter(k => k.startsWith('sched_') && !newEntries[k]).forEach(k => { updates[k] = null; });
+  Object.assign(updates, newEntries);
+  if (Object.keys(updates).length) await deviceRef.update(updates);
 }
+
+async function scheduleHourlyCountdown() {
+  if (!_db || !state.notifsEnabled || !notifGranted()) return;
+  const day1 = TRIP_DATA.days.find(d => d.id === 'day1');
+  if (!day1) return;
+  // Departure = first stop of Day 1 (read its time field)
+  const firstStop = day1.stops?.[0];
+  const firstTime = firstStop?.time || '10:30';
+  const departureMs = new Date(day1.date + 'T' + firstTime + ':00').getTime();
+  const nowMs = Date.now();
+  if (nowMs >= departureMs) return;
+
+  const deviceRef = _db.ref(`pushQueue/${getDeviceId()}`);
+  const snap = await deviceRef.once('value');
+  const existing = snap.val() || {};
+  const updates = {};
+  // Clear stale countdown_ entries
+  Object.keys(existing).filter(k => k.startsWith('countdown_')).forEach(k => { updates[k] = null; });
+
+  // Generate one entry per hour from next full hour until departure
+  const start = new Date(); start.setMinutes(0, 0, 0); start.setHours(start.getHours() + 1);
+  for (let t = start.getTime(); t < departureMs; t += 3600000) {
+    const h = new Date(t).getHours();
+    if (h >= 0 && h < 8) continue; // skip midnight–8am
+    const hoursLeft = Math.max(1, Math.floor((departureMs - t) / 3600000));
+    updates[`countdown_${t}`] = {
+      fireAt: t,
+      title: '🚗 Departure countdown',
+      body: `${hoursLeft} hour${hoursLeft !== 1 ? 's' : ''} to go until we leave for Annecy!`,
+      tag: 'countdown',
+    };
+  }
+  if (Object.keys(updates).length) await deviceRef.update(updates);
+}
+
 
 function updateNotifBtn() {
   const btn = document.getElementById('notif-btn');
@@ -342,6 +563,230 @@ async function testServerPush() {
   showToast('Test sent + queued for server delivery');
 }
 
+/* ── Version panel ─────────────────────────────────────────────────── */
+let _serverPushStatus = 'warn';
+let _serverPushNote   = 'Checking…';
+async function refreshServerPushStatus() {
+  try {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+      _serverPushStatus = 'error'; _serverPushNote = 'Push not supported'; return;
+    }
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    if (!sub) {
+      _serverPushStatus = 'warn'; _serverPushNote = 'No push subscription — tap "Send test push" to subscribe'; return;
+    }
+    if (_db) {
+      const snap = await _db.ref(`pushSubs/${getDeviceId()}`).once('value');
+      if (snap.exists()) {
+        _serverPushStatus = 'ok'; _serverPushNote = 'Subscribed + registered in Firebase';
+      } else {
+        _serverPushStatus = 'warn'; _serverPushNote = 'Local subscription exists but not in Firebase';
+      }
+    } else {
+      _serverPushStatus = 'warn'; _serverPushNote = 'Subscribed locally — Firebase not connected';
+    }
+  } catch (e) {
+    _serverPushStatus = 'warn'; _serverPushNote = 'Cannot verify — use test push to check';
+  }
+}
+
+function getFeatureStatuses() {
+  const placesTotal      = Object.keys(_placesCache).length;
+  const placesWithPhotos = Object.values(_placesCache).filter(v => v?.photos?.length).length;
+  const wikiCached       = Object.keys(_wikiCache).filter(k => _wikiCache[k] != null).length;
+  const weatherCached    = Object.keys(_weatherCache).filter(k => _weatherCache[k] != null).length;
+  const notifPerm        = typeof Notification !== 'undefined' ? Notification.permission : 'unsupported';
+  const hasPush          = 'PushManager' in window;
+  const swCtrl           = !!navigator.serviceWorker?.controller;
+  const hasSW            = 'serviceWorker' in navigator;
+
+  return [
+    { cat:'UI',            name:'Timeline / full-card view',        status:'ok',                                                         note:'Always available' },
+    { cat:'UI',            name:'Compact view',                     status:'ok',                                                         note:'Always available' },
+    { cat:'UI',            name:'Calendar view',                    status:'ok',                                                         note:'Fixed v164 — DOM insertBefore crash' },
+    { cat:'UI',            name:'Festival calendar (date+weather)', status:'ok',                                                         note:'Redesigned v161' },
+    { cat:'UI',            name:'Dark / light mode toggle',         status:'ok',                                                         note:'Always available' },
+    { cat:'UI',            name:'Detail overlay',                   status:'ok',                                                         note:'Always available' },
+    { cat:'UI',            name:'Leave-by countdown pills',         status:'ok',                                                         note:'Always available' },
+    { cat:'UI',            name:'Edit times + ripple cascade',      status:'ok',                                                         note:'Always available' },
+    { cat:'UI',            name:'Add / edit stops',                 status:'ok',                                                         note:'Always available' },
+    { cat:'UI',            name:'Map view (Leaflet)',               status: typeof L !== 'undefined' ? 'ok' : 'warn',                    note: typeof L !== 'undefined' ? 'Leaflet loaded' : 'Leaflet not yet loaded — loads on first use' },
+    { cat:'Data',          name:'Trip itinerary',                   status: TRIP_DATA?.days?.length > 3 ? 'ok' : 'error',               note: `${TRIP_DATA?.days?.length || 0} days in TRIP_DATA` },
+    { cat:'Data',          name:'Firebase sync',                    status: _db ? 'ok' : 'error',                                       note: _db ? 'Connected — shared state live' : 'Not connected' },
+    { cat:'Photos',        name:'Google Places photo pipeline',     status: placesTotal === 0 ? 'warn' : placesWithPhotos > 0 ? 'ok' : 'warn', note: `${placesWithPhotos} of ${placesTotal} stops have photos cached` },
+    { cat:'Photos',        name:'Wikipedia article photos',         status: wikiCached > 0 ? 'ok' : 'warn',                            note: `${wikiCached} articles cached` },
+    { cat:'Photos',        name:'Street View / Satellite fallback', status:'ok',                                                         note:'Always available via Google Static Maps' },
+    { cat:'Weather',       name:'Open-Meteo forecast',              status: weatherCached > 0 ? 'ok' : 'warn',                          note: `${weatherCached} day(s) cached` },
+    { cat:'Notifications', name:'Notification permission',          status: notifPerm === 'granted' ? 'ok' : notifPerm === 'denied' ? 'error' : 'warn', note: notifPerm },
+    { cat:'Notifications', name:'Departure alerts',                 status: state.notifsEnabled && notifPerm === 'granted' ? 'ok' : 'warn', note: state.notifsEnabled ? 'Enabled' : 'Disabled in settings' },
+    { cat:'Notifications', name:'Push API (browser support)',       status: hasPush ? 'ok' : 'error',                                   note: hasPush ? 'PushManager available' : 'PushManager not available' },
+    { cat:'Notifications', name:'Server push (Cloud Function)',     status: _serverPushStatus, note: _serverPushNote },
+    { cat:'SW / Cache',    name:'Service Worker support',           status: hasSW ? 'ok' : 'error',                                     note: hasSW ? 'serviceWorker in navigator' : 'Not supported' },
+    { cat:'SW / Cache',    name:'Service Worker active',            status: swCtrl ? 'ok' : 'warn',                                     note: swCtrl ? `Active (cache ${APP_VERSION})` : 'Not yet controlling — reload after first install' },
+    { cat:'SW / Cache',    name:'Offline / PWA cache',              status: swCtrl ? 'ok' : 'warn',                                     note: swCtrl ? 'Core assets cached' : 'SW not active yet' },
+  ];
+}
+
+function renderChangelogHtml() {
+  const typeIcon  = { fix:'ph-wrench', feature:'ph-sparkle', design:'ph-paint-brush' };
+  const typeLabel = { fix:'Fix', feature:'New', design:'Design' };
+  const typeClass = { fix:'cl-fix', feature:'cl-feature', design:'cl-design' };
+  return CHANGELOG.map((rel, i) => `
+    <div class="cl-release${i === 0 ? ' cl-release-latest' : ''}">
+      <div class="cl-release-header">
+        <span class="cl-ver">${rel.version}</span>
+        <span class="cl-title">${rel.title}</span>
+        ${i === 0 ? '<span class="cl-current-badge">Current</span>' : ''}
+      </div>
+      <div class="cl-items">
+        ${rel.items.map(item => `
+          <div class="cl-item">
+            <span class="cl-badge ${typeClass[item.type] || ''}"><i class="ph ${typeIcon[item.type] || 'ph-dot'}"></i> ${typeLabel[item.type] || item.type}</span>
+            <span class="cl-text">${item.text}</span>
+          </div>`).join('')}
+      </div>
+    </div>`).join('');
+}
+
+function renderFeatureStatusHtml(statuses) {
+  const cats   = [...new Set(statuses.map(f => f.cat))];
+  const iconMap = { ok:'ph-check-circle', warn:'ph-warning', error:'ph-x-circle' };
+  const colMap  = { ok:'vs-ok', warn:'vs-warn', error:'vs-error' };
+  return cats.map(cat => {
+    const items = statuses.filter(f => f.cat === cat);
+    return `<div class="vs-cat-label">${cat}</div>${items.map(f => `
+      <div class="vs-item">
+        <i class="ph ${iconMap[f.status]} ${colMap[f.status]}"></i>
+        <div class="vs-item-text">
+          <div class="vs-item-name">${f.name}</div>
+          <div class="vs-item-note">${f.note}</div>
+        </div>
+      </div>`).join('')}`;
+  }).join('');
+}
+
+function showVersionPanel() {
+  const panel = document.getElementById('version-overlay');
+  if (!panel) return;
+  panel.classList.remove('hidden');
+  requestAnimationFrame(() => panel.classList.add('open'));
+
+  const body = document.getElementById('version-body');
+  if (!body) return;
+
+  // Render changelog immediately, then feature status (async push check)
+  const statuses = getFeatureStatuses();
+  body.innerHTML =
+    `<div class="cl-section-label">What's new</div>` +
+    renderChangelogHtml() +
+    `<div class="cl-section-label cl-section-status">System status</div>` +
+    renderFeatureStatusHtml(statuses);
+
+  // Refresh push status async and update status section only
+  refreshServerPushStatus().then(() => {
+    const updated = getFeatureStatuses();
+    const statusSection = body.querySelector('.cl-section-status');
+    if (statusSection) {
+      // Replace everything from status label onwards
+      const idx = [...body.children].indexOf(statusSection);
+      while (body.children.length > idx + 1) body.lastChild.remove();
+      body.insertAdjacentHTML('beforeend', renderFeatureStatusHtml(updated));
+    }
+  });
+}
+
+function hideVersionPanel() {
+  const panel = document.getElementById('version-overlay');
+  if (!panel) return;
+  panel.classList.remove('open');
+  setTimeout(() => panel.classList.add('hidden'), 280);
+}
+
+async function copyDevData() {
+  let statuses, pushEndpoint = null;
+  try { statuses = getFeatureStatuses(); } catch(e) { showToast('getFeatureStatuses error: ' + e.message); return; }
+  try {
+    const reg = await navigator.serviceWorker?.getRegistration?.();
+    const sub = await reg?.pushManager?.getSubscription?.();
+    if (sub) pushEndpoint = '…' + sub.endpoint.slice(-40);
+  } catch {}
+
+  const data = {
+    version: APP_VERSION,
+    timestamp: new Date().toISOString(),
+    userAgent: navigator.userAgent,
+    platform: navigator.platform || navigator.userAgentData?.platform || 'unknown',
+    online: navigator.onLine,
+    today: localDateStr(),
+    currentDayId: state.currentDayId,
+    cardView: state.cardView,
+    notifsEnabled: state.notifsEnabled,
+    notifPermission: typeof Notification !== 'undefined' ? Notification.permission : 'N/A',
+    pushAPISupported: 'PushManager' in window,
+    pushEndpoint,
+    firebaseConnected: !!_db,
+    swController: !!navigator.serviceWorker?.controller,
+    placesCacheStops: Object.keys(_placesCache).length,
+    placesWithPhotos: Object.values(_placesCache).filter(v => v?.photos?.length).length,
+    wikiCached: Object.keys(_wikiCache).filter(k => _wikiCache[k] != null).length,
+    weatherDaysCached: Object.keys(_weatherCache).filter(k => _weatherCache[k] != null).length,
+    tripDays: TRIP_DATA?.days?.length,
+    features: statuses.map(f => ({ cat: f.cat, name: f.name, status: f.status, note: f.note })),
+    recentErrors: _errorLog.slice(-15),
+  };
+
+  // Read push diagnostics from Firebase
+  if (_db) {
+    try {
+      const deviceId = getDeviceId();
+      const [subSnap, qSnap] = await Promise.all([
+        _db.ref(`pushSubs/${deviceId}`).once('value'),
+        _db.ref(`pushQueue/${deviceId}`).once('value'),
+      ]);
+      const errSnap = await _db.ref(`pushErrors/${deviceId}`).limitToLast(5).once('value');
+      data.pushSubInFirebase  = subSnap.exists() ? '…' + (subSnap.val()?.endpoint || '').slice(-40) : null;
+      data.pushQueueEntries   = qSnap.exists() ? Object.keys(qSnap.val() || {}).length : 0;
+      data.pushErrors         = errSnap.exists() ? Object.values(errSnap.val()) : [];
+    } catch(e) { data.pushFirebaseReadError = e.message; }
+  }
+
+  let text;
+  try { text = JSON.stringify(data, null, 2); } catch(e) { showToast('JSON error: ' + e.message); return; }
+
+  // Show full-screen copyable text overlay
+  let box = document.getElementById('devdata-overlay');
+  if (!box) {
+    box = document.createElement('div');
+    box.id = 'devdata-overlay';
+    box.innerHTML = `
+      <div id="devdata-panel">
+        <div id="devdata-header">
+          <span>Dev Data — select all &amp; copy</span>
+          <button id="devdata-close" class="icon-btn glass-btn"><i class="ph ph-x"></i></button>
+        </div>
+        <textarea id="devdata-ta" spellcheck="false" autocorrect="off" autocomplete="off"></textarea>
+        <div id="devdata-footer">
+          <button class="pill-btn primary full-width" id="devdata-copy-btn"><i class="ph ph-clipboard-text"></i> Copy to clipboard</button>
+        </div>
+      </div>`;
+    document.getElementById('app').appendChild(box);
+    document.getElementById('devdata-close').addEventListener('click', () => box.classList.add('hidden'));
+    document.getElementById('devdata-copy-btn').addEventListener('click', () => {
+      const ta = document.getElementById('devdata-ta');
+      ta.select();
+      ta.setSelectionRange(0, 99999);
+      try { navigator.clipboard.writeText(ta.value).then(() => showToast('Copied!')).catch(() => {}); } catch {}
+      try { document.execCommand('copy'); showToast('Copied!'); } catch {}
+    });
+  }
+  const ta = document.getElementById('devdata-ta');
+  ta.value = text;
+  box.classList.remove('hidden');
+  // Select all text so it's ready to copy on devices that support it
+  setTimeout(() => { ta.focus(); ta.select(); ta.setSelectionRange(0, 99999); }, 100);
+}
+
 function showToast(msg, durationMs = 2800) {
   let el = document.getElementById('app-toast');
   if (!el) {
@@ -353,6 +798,20 @@ function showToast(msg, durationMs = 2800) {
   el.classList.add('visible');
   clearTimeout(el._t);
   el._t = setTimeout(() => el.classList.remove('visible'), durationMs);
+}
+
+let _detailConfirmTimer = null;
+function showDetailConfirm(container, msg) {
+  let el = container.querySelector('.detail-confirm-msg');
+  if (!el) {
+    el = document.createElement('span');
+    el.className = 'detail-confirm-msg';
+    container.appendChild(el);
+  }
+  el.textContent = msg;
+  el.classList.add('visible');
+  clearTimeout(_detailConfirmTimer);
+  _detailConfirmTimer = setTimeout(() => el.classList.remove('visible'), 2000);
 }
 
 async function enableNotifs() {
@@ -384,7 +843,7 @@ function disableNotifs() {
 }
 
 function collectTodayLeaveEvents() {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateStr();
   const events = [];
   for (const day of TRIP_DATA.days) {
     const covers = day.date === today ||
@@ -463,6 +922,7 @@ function scheduleNotifs() {
 
   // Write queue to Firebase for server-side delivery while backgrounded
   writePushQueue();
+  scheduleHourlyCountdown();
 
   // Reset fired set at midnight
   clearTimeout(_notifMidnightTimer);
@@ -499,33 +959,6 @@ function updateAllLeaveBy() {
   const detailEl = document.getElementById('detail-leaveby');
   if (detailEl && _detailStop) renderLeaveByEl(detailEl, _detailStop);
 
-  // Update tl-card--past classes on today's timeline cards
-  const _todayStr2 = new Date().toISOString().slice(0, 10);
-  const _curDay2 = TRIP_DATA.days.find(d => d.id === state.currentDayId);
-  const _isToday2 = _curDay2 && (_curDay2.date === _todayStr2 ||
-    (_curDay2.isFestival && _todayStr2 >= _curDay2.date && _todayStr2 <= (_curDay2.dateEnd || _curDay2.date)));
-  {
-    const nowM = nowMinutes();
-    const _isPastDay2 = _curDay2 && _curDay2.date && _curDay2.date < _todayStr2;
-    document.querySelectorAll('.tl-card[data-stop-id]').forEach(cardEl => {
-      const stop = findStop(cardEl.dataset.stopId);
-      if (!stop) return;
-      if (cardEl.classList.contains('visited')) { cardEl.classList.remove('tl-card--past'); return; }
-      const stopMins = timeToMinutes(getStopTime(stop));
-      const depMins = stopMins !== null ? stopMins + getStopDuration(stop) : null;
-      const isPast = _isPastDay2 || (_isToday2 && depMins !== null && depMins < nowM);
-      cardEl.classList.toggle('tl-card--past', isPast);
-    });
-    document.querySelectorAll('.cal-card[id^="cal-"]').forEach(cardEl => {
-      const stopId = cardEl.id.replace('cal-', '');
-      const stop = findStop(stopId);
-      if (!stop) return;
-      if (cardEl.classList.contains('visited')) { cardEl.classList.remove('cal-card--past'); return; }
-      const stopMins = timeToMinutes(getStopTime(stop));
-      const depMins = stopMins !== null ? stopMins + getStopDuration(stop) : null;
-      cardEl.classList.toggle('cal-card--past', _isPastDay2 || (_isToday2 && depMins !== null && depMins < nowM));
-    });
-  }
   // Keep Now pill time current
   const nowPill = document.getElementById('tl-now-time');
   if (nowPill) nowPill.textContent = minutesToTime(nowMinutes());
@@ -545,116 +978,277 @@ function buildTags(stop) {
 }
 
 /* ── Wikipedia article titles per stop (free API, no key needed) ───── */
+// Explicit Wikipedia article per stop. Only stops listed here get a Wikipedia photo.
+// Everything else falls through to Street View (unique per GPS coordinate, no duplicates).
 const WIKI_TITLES = {
+  // Day 1
+  'd1s3':  'Eurotunnel_Le_Shuttle',
+  'd1s4':  'Eurotunnel_Le_Shuttle',
+  'd1s5':  'Calais',
   'd1s6':  'Saint-Valery-sur-Somme',
-  'd1s10': 'Amiens_Cathedral',
+  // Day 2
   'd2s2':  "Hortillonnages_d'Amiens",
-  'd2s5':  'Gerberoy',
-  'd2s8':  'Troyes',
-  'd2s9':  'Ruelle_des_Chats',
-  'd2s10': 'Troyes_Cathedral',
+  'd2s6':  'Gerberoy',
+  'd2s10': 'Ruelle_des_Chats',
+  // Day 3
   'd3s2':  'Flavigny-sur-Ozerain',
-  'd3s3':  'Fontenay_Abbey',
-  'd3s4':  'Semur-en-Auxois',
-  'd3s5':  'Clos_de_Vougeot',
-  'd3s6':  'Route_des_Grands_Crus',
-  'd3s7':  'Vosne-Romanée',
-  'd3s8':  "Saint-Romain,_Côte-d'Or",
+  'd3s4':  'Fontenay_Abbey',
   'd3s10': 'Hospices_de_Beaune',
-  'd4s4':  'Lake_Annecy',
+  // Day 4
+  'd4s4':  'Menthon-Saint-Bernard',
+  'd4s5':  'Geneva_Airport',
+  // Festival
+  'fs1':   'Annecy_International_Animation_Film_Festival',
+  'fs2':   'Menthon-Saint-Bernard',
   'fs3':   'Lake_Annecy',
   'fs4':   'Annecy',
   'fs5':   "Château_d'Annecy",
   'fs6':   'Château_de_Menthon-Saint-Bernard',
   'fs7':   'Talloires',
   'fs8':   'Gorges_du_Fier',
+  'fs9':   'Château_de_Thorens',
+  'fs10':  'Pont_des_Amours,_Annecy',
   'fs14':  "Palais_de_l'Isle",
+  // Day 5
   'd5s2':  'Royal_Saltworks_of_Arc-et-Senans',
-  'd5s5':  'Besançon',
-  'd5s6':  'Citadel_of_Besançon',
+  'd5s5':  'Citadel_of_Besançon',
+  // Day 6
   'd6s3':  'Giverny',
-  'd6s4':  'Rouen',
   'd6s5':  'Rouen_Cathedral',
+  // Day 7
+  'd7s3':  'Calais',
+  'd7s4':  'Eurotunnel_Le_Shuttle',
+  'd7s5':  'Folkestone',
 };
+
+function wikiSearchName(stop) {
+  const t = WIKI_TITLES[stop.id];
+  if (t) return t.replace(/_/g, ' ');
+  return stop.placesQuery || stop.location || null;
+}
 
 /* ── Wikipedia data cache ──────────────────────────────────────────── */
 const _wikiCache = {}; // stopId → { img, extract } | null
 const _poiCache  = {}; // stopId → [{ title, img, dist, url }]
 
+/* ── Google Places photo cache ─────────────────────────────────────── */
+// _placesCache[stopId] = { placeId, photos:[url,...], attributions:[str,...], ts }
+const _placesCache = {};
+function loadPlacesCache() {
+  try { const s = localStorage.getItem('annecy_places_v2'); if (s) Object.assign(_placesCache, JSON.parse(s)); } catch {}
+}
+function savePlacesCache() {
+  try { localStorage.setItem('annecy_places_v2', JSON.stringify(_placesCache)); } catch {}
+}
+
+function _scorePlacesPhoto(ref, idx) {
+  const w = ref.widthPx || 0, h = ref.heightPx || 0;
+  let s = Math.min(w, 2000) / 20;
+  if (w > h)    s += 40;   // landscape
+  if (w > 1400) s += 20;   // high-res
+  if (idx === 0) s += 30;  // Google's cover photo
+  if (w < 400 || h < 300) s -= 60;
+  return s;
+}
+
+async function fetchPlacesPhotos(stop) {
+  const cached = _placesCache[stop.id];
+  // Return cached if < 7 days old
+  if (cached?.photos?.length && cached.ts && Date.now() - cached.ts < 7 * 86400_000) return cached.photos;
+
+  const type = getStopType(stop);
+  if (type === 'charging' || type === 'depart') return [];
+
+  try {
+    // Step 1: Text Search to resolve Place ID
+    const searchRes = await fetch('https://places.googleapis.com/v1/places:searchText', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': GKEY,
+        'X-Goog-FieldMask': 'places.id,places.location',
+      },
+      body: JSON.stringify({
+        textQuery: stop.placesQuery || stop.location,
+        locationBias: { circle: { center: { latitude: stop.lat, longitude: stop.lng }, radius: 3000 } },
+        maxResultCount: 3,
+      }),
+    });
+    if (!searchRes.ok) return [];
+    const searchData = await searchRes.json();
+    const candidates = searchData.places || [];
+    if (!candidates.length) return [];
+
+    // Pick closest candidate to stop coordinates
+    let best = candidates[0], bestDist = Infinity;
+    for (const p of candidates) {
+      const d = Math.hypot((p.location?.latitude||0) - stop.lat, (p.location?.longitude||0) - stop.lng);
+      if (d < bestDist) { bestDist = d; best = p; }
+    }
+    const placeId = best.id;
+
+    // Step 2: Place Details to get photo references + opening hours
+    const detailRes = await fetch(`https://places.googleapis.com/v1/places/${placeId}`, {
+      headers: { 'X-Goog-Api-Key': GKEY, 'X-Goog-FieldMask': 'photos,regularOpeningHours' },
+    });
+    if (!detailRes.ok) return [];
+    const detailData = await detailRes.json();
+    const refs = detailData.photos || [];
+    const openingHours = detailData.regularOpeningHours?.periods || null;
+    if (!refs.length) return [];
+
+    // Step 3: Score, sort, cap at 20
+    const scored = refs
+      .map((ref, idx) => ({ ref, score: _scorePlacesPhoto(ref, idx) }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 20);
+
+    const photos = scored.map(({ ref }) =>
+      `https://places.googleapis.com/v1/${ref.name}/media?maxWidthPx=1200&key=${GKEY}`
+    );
+    const attributions = scored.map(({ ref }) =>
+      (ref.authorAttributions || []).map(a => a.displayName).filter(Boolean).join(', ')
+    );
+
+    _placesCache[stop.id] = { placeId, photos, attributions, openingHours, ts: Date.now() };
+    savePlacesCache();
+    return photos;
+  } catch { return []; }
+}
+
+/* Returns 'open'|'closed'|'unknown' for a stop at a given "HH:MM" time on a given JS Date */
+function isStopOpenAt(stop, timeStr, date) {
+  const periods = _placesCache[stop.id]?.openingHours;
+  if (!periods) return 'unknown';
+  const mins = timeToMinutes(timeStr);
+  if (mins === null) return 'unknown';
+  const dayOfWeek = date.getDay(); // 0=Sun
+  const h = Math.floor(mins / 60), m = mins % 60;
+  const nowTotal = h * 60 + m;
+
+  for (const p of periods) {
+    const openDay  = p.open?.day  ?? -1;
+    const openH    = p.open?.hour ?? 0;
+    const openM    = p.open?.minute ?? 0;
+    const closeDay = p.close?.day ?? p.open?.day ?? -1;
+    const closeH   = p.close?.hour ?? 23;
+    const closeM   = p.close?.minute ?? 59;
+
+    if (openDay !== dayOfWeek) continue;
+    const openTotal  = openH  * 60 + openM;
+    const closeTotal = closeH * 60 + closeM + (closeDay !== openDay ? 1440 : 0);
+    if (nowTotal >= openTotal && nowTotal <= closeTotal) return 'open';
+  }
+  // No period matched
+  return 'closed';
+}
+
+/* Fetch opening hours for a stop that already has a placeId but no hours cached */
+async function fetchOpeningHours(stop) {
+  const cached = _placesCache[stop.id];
+  if (!cached?.placeId) return null;
+  if (cached.openingHours !== undefined) return cached.openingHours;
+  try {
+    const res = await fetch(`https://places.googleapis.com/v1/places/${cached.placeId}`, {
+      headers: { 'X-Goog-Api-Key': GKEY, 'X-Goog-FieldMask': 'regularOpeningHours' },
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const periods = data.regularOpeningHours?.periods || null;
+    _placesCache[stop.id] = { ...cached, openingHours: periods };
+    savePlacesCache();
+    return periods;
+  } catch { return null; }
+}
+
+function getPlacesAttribution(stop, idx) {
+  return _placesCache[stop.id]?.attributions?.[idx] || '';
+}
+
 function loadWikiCache() {
   try {
-    const saved = localStorage.getItem('annecy_wiki_v5');
+    const saved = localStorage.getItem('annecy_wiki_v6');
     if (saved) Object.assign(_wikiCache, JSON.parse(saved));
   } catch {}
 }
 function saveWikiCache() {
-  try { localStorage.setItem('annecy_wiki_v5', JSON.stringify(_wikiCache)); } catch {}
+  try { localStorage.setItem('annecy_wiki_v6', JSON.stringify(_wikiCache)); } catch {}
 }
 
-function wikiSearchName(stop) {
-  // Explicit override always wins
-  if (WIKI_TITLES[stop.id]) return WIKI_TITLES[stop.id];
+/* ── Google Places photos ──────────────────────────────────────────── */
+const _googlePhotos = {}; // stopId → [url, ...] | null
 
-  const loc = stop.location;
+function loadGooglePhotos() {
+  try {
+    const saved = localStorage.getItem('annecy_gplaces_v2');
+    if (saved) Object.assign(_googlePhotos, JSON.parse(saved));
+  } catch {}
+}
+function saveGooglePhotos() {
+  try { localStorage.setItem('annecy_gplaces_v2', JSON.stringify(_googlePhotos)); } catch {}
+}
 
-  // Food/café: search by city/area (after comma), never by meal name
-  if (stop.type === 'food') {
-    const city = loc.split(',').slice(1).join(',').trim();
-    return city || null; // null → skip to geosearch
+function googleSearchQuery(stop) {
+  const type = getStopType(stop);
+  if (type === 'charging') return null; // satellite used instead
+  if (type === 'depart')   return null; // no photo on depart rows
+  // Use the location name as-is — it's specific enough for Places search
+  return stop.location;
+}
+
+async function fetchGooglePlacesPhotos(stop) {
+  // null = no photos found (retry allowed); undefined = never fetched
+  if (_googlePhotos[stop.id]?.length) return _googlePhotos[stop.id];
+  const query = googleSearchQuery(stop);
+  if (!query) { _googlePhotos[stop.id] = []; return []; }
+  try {
+    // Text search for the place
+    const searchRes = await fetch(`https://places.googleapis.com/v1/places:searchText`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': GKEY,
+        'X-Goog-FieldMask': 'places.photos,places.id',
+      },
+      body: JSON.stringify({
+        textQuery: query,
+        locationBias: { circle: { center: { latitude: stop.lat, longitude: stop.lng }, radius: 5000 } },
+        maxResultCount: 1,
+      }),
+    });
+    if (!searchRes.ok) { _googlePhotos[stop.id] = []; saveGooglePhotos(); return []; }
+    const searchData = await searchRes.json();
+    const place = searchData.places?.[0];
+    if (!place?.photos?.length) { _googlePhotos[stop.id] = null; saveGooglePhotos(); return []; }
+    // Take up to 5 photos, build display URLs
+    const urls = place.photos.slice(0, 5).map(photo =>
+      `https://places.googleapis.com/v1/${photo.name}/media?maxWidthPx=800&key=${GKEY}`
+    );
+    _googlePhotos[stop.id] = urls;
+    saveGooglePhotos();
+    return urls;
+  } catch {
+    // Don't cache failures — retry next load
+    return [];
   }
-
-  // Charging: strip "Tesla Supercharger" prefix and parentheticals
-  if (stop.type === 'charging') {
-    return loc.replace(/Tesla Supercharger\s*/i, '').replace(/\s*\(.*\)/, '').trim();
-  }
-
-  // Depart: strip leading "Depart " verb
-  if (stop.type === 'depart') {
-    return loc.replace(/^Depart\s+/i, '').split(',')[0].trim();
-  }
-
-  // Hotel: use last meaningful word (usually city), e.g. "Moxy Amiens" → "Amiens"
-  if (stop.type === 'hotel') {
-    const words = loc.replace(/\b(hotel|moxy|ibis|novotel|b&b|inn|centre|center)\b/gi, '').trim().split(/\s+/);
-    return words[words.length - 1] || loc;
-  }
-
-  // Default: name before the comma
-  return loc.split(',')[0].trim();
 }
 
 async function fetchWikiData(stop) {
   if (_wikiCache[stop.id] !== undefined) return _wikiCache[stop.id];
 
-  const name = wikiSearchName(stop);
+  // Only fetch Wikipedia for stops with an explicit article assigned.
+  // Everything else uses Street View — no geosearch fallback, no duplicates.
+  const article = WIKI_TITLES[stop.id];
+  if (!article) { _wikiCache[stop.id] = null; saveWikiCache(); return null; }
+
   let result = null;
-
-  // 1. Named lookup (skip if name is null — food stops with no city part)
-  if (name) {
-    try {
-      const r = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(name.replace(/\s+/g,'_'))}`);
-      if (r.ok) {
-        const d = await r.json();
-        if (d.type !== 'disambiguation') result = { img: d.thumbnail?.source || null, extract: d.extract || null };
-      }
-    } catch {}
-  }
-
-  // 2. Geosearch fallback — nearest article within 2 km
-  if (!result?.img && !result?.extract) {
-    try {
-      const gr = await fetch(`https://en.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord=${stop.lat}|${stop.lng}&gsradius=2000&gslimit=3&format=json&origin=*`);
-      const gd = await gr.json();
-      const nearest = gd.query?.geosearch?.[0];
-      if (nearest) {
-        const sr = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(nearest.title)}`);
-        if (sr.ok) {
-          const sd = await sr.json();
-          result = { img: sd.thumbnail?.source || null, extract: sd.extract || null };
-        }
-      }
-    } catch {}
-  }
+  try {
+    const r = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(article.replace(/\s+/g,'_'))}`);
+    if (r.ok) {
+      const d = await r.json();
+      if (d.type !== 'disambiguation') result = { img: d.thumbnail?.source || null, extract: d.extract || null };
+    }
+  } catch {}
 
   _wikiCache[stop.id] = result;
   saveWikiCache();
@@ -696,7 +1290,31 @@ function findStop(stopId) {
 
 function getDayStops(day) {
   const added = (state.addedStops || {})[day.id] || [];
-  const all = [...day.stops, ...added];
+  const crossMoves = state.crossDayMoves || {};
+
+  // Base stops for this day, excluding any moved to a different day or removed to bucket list
+  const baseStops = day.stops.filter(s => {
+    if (state.removed[s.id]) return false;
+    const movedTo = crossMoves[s.id];
+    return !movedTo || movedTo === day.id;
+  });
+  const addedFiltered = added.filter(s => {
+    const movedTo = crossMoves[s.id];
+    return !movedTo || movedTo === day.id;
+  });
+
+  // Stops moved INTO this day from another day
+  const movedIn = [];
+  Object.entries(crossMoves).forEach(([stopId, targetDayId]) => {
+    if (targetDayId !== day.id) return;
+    for (const d of TRIP_DATA.days) {
+      const s = d.stops.find(s => s.id === stopId)
+             || ((state.addedStops || {})[d.id] || []).find(s => s.id === stopId);
+      if (s) { movedIn.push(s); return; }
+    }
+  });
+
+  const all = [...baseStops, ...addedFiltered, ...movedIn];
   return all.sort((a, b) => {
     const ta = timeToMinutes(getStopTime(a)), tb = timeToMinutes(getStopTime(b));
     if (ta === null && tb === null) return 0;
@@ -706,14 +1324,14 @@ function getDayStops(day) {
   });
 }
 
-function injectWikiPhoto(stopId) {
-  const data = _wikiCache[stopId];
-  const commons = _commonsCache[stopId] || [];
-  if (!data?.img && !commons.length) return;
+function injectStopPhotos(stopId) {
   const item = document.getElementById(`stop-${stopId}`);
   if (!item) return;
   const stop = findStop(stopId);
   if (!stop) return;
+  const photos = getPhotos(stop);
+  // Only inject if we have real photos (not just satellite fallback placeholder)
+  if (!photos.length) return;
   const oldSlider = item.querySelector('.card-slider');
   if (!oldSlider) return;
   const tmp = document.createElement('div');
@@ -723,20 +1341,21 @@ function injectWikiPhoto(stopId) {
   initSlider(newSlider, stop, 'card');
 }
 
+// Keep old name as alias for detail page calls
+const injectWikiPhoto = injectStopPhotos;
+
 function lazyLoadWikiImages(stops) {
   stops.forEach(stop => {
-    const wikiDone = _wikiCache[stop.id] !== undefined;
-    const commonsDone = _commonsCache[stop.id] !== undefined;
-
-    if (wikiDone && commonsDone) {
-      if (_wikiCache[stop.id]?.img || _commonsCache[stop.id]?.length) injectWikiPhoto(stop.id);
-      return;
+    const type = getStopType(stop);
+    if (type === 'depart' || type === 'charging') return;
+    // Kick off Places fetch; inject photos when it resolves
+    if (_placesCache[stop.id]?.photos?.length) {
+      injectStopPhotos(stop.id);
+    } else {
+      fetchPlacesPhotos(stop).then(() => injectStopPhotos(stop.id));
     }
-
-    const tasks = [];
-    if (!wikiDone)    tasks.push(fetchWikiData(stop));
-    if (!commonsDone) tasks.push(fetchCommonsPhotos(stop));
-    Promise.all(tasks).then(() => injectWikiPhoto(stop.id));
+    // Also fetch wiki in parallel (for extract text)
+    if (_wikiCache[stop.id] === undefined) fetchWikiData(stop);
   });
 }
 
@@ -758,15 +1377,52 @@ const TYPE_GRAD = {
 };
 
 /* ── Get slides for a stop ─────────────────────────────────────────── */
-const GKEY = 'AIzaSyBDIpPyqjOtvh1y-1nwyJgIj9TVjQFD_Jo';
+const GKEY = 'AIzaSyCiV3X0vUMJBkIpU_UgBWwyPzIAjyjJM9I';
 
 // Satellite aerial as a fallback — much more interesting than Street View
 function satelliteUrl(stop) {
   return `https://maps.googleapis.com/maps/api/staticmap?center=${stop.lat},${stop.lng}&zoom=16&size=640x380&maptype=satellite&key=${GKEY}`;
 }
+function streetViewUrl(stop) {
+  return `https://maps.googleapis.com/maps/api/streetview?size=640x380&location=${stop.lat},${stop.lng}&fov=90&pitch=10&key=${GKEY}`;
+}
 
 /* ── Weather cache & fetch (Open-Meteo — free, no key needed) ───────── */
-const _weatherCache = {}; // dayId → Map<dateString, {icon, tempC, nightIcon, nightTempC, conditionText}>
+// dayId → { ts: fetchedAt, map: Map<dateString, Map<hour, {tempC, icon, conditionText}>> }
+const _weatherCache = {};
+
+function saveWeatherCache() {
+  try {
+    const serialisable = {};
+    for (const [dayId, entry] of Object.entries(_weatherCache)) {
+      if (!entry.map) continue;
+      const mapObj = {};
+      entry.map.forEach((hourMap, date) => {
+        mapObj[date] = {};
+        hourMap.forEach((w, hour) => { mapObj[date][hour] = w; });
+      });
+      serialisable[dayId] = { ts: entry.ts, map: mapObj };
+    }
+    localStorage.setItem('annecy_weather_v1', JSON.stringify(serialisable));
+  } catch(e) {}
+}
+
+function loadWeatherCache() {
+  try {
+    const saved = localStorage.getItem('annecy_weather_v1');
+    if (!saved) return;
+    const parsed = JSON.parse(saved);
+    for (const [dayId, entry] of Object.entries(parsed)) {
+      const map = new Map();
+      for (const [date, hours] of Object.entries(entry.map)) {
+        const hourMap = new Map();
+        for (const [hour, w] of Object.entries(hours)) hourMap.set(Number(hour), w);
+        map.set(date, hourMap);
+      }
+      _weatherCache[dayId] = { ts: entry.ts, map };
+    }
+  } catch(e) {}
+}
 
 // WMO weather code → Phosphor icon
 // WMO code → {icon (day), icon (night), label}
@@ -794,63 +1450,70 @@ function isNightTime(timeStr) {
 }
 
 async function fetchWeatherForDay(day) {
-  if (_weatherCache[day.id] !== undefined) return _weatherCache[day.id];
+  const TWO_HOURS = 2 * 60 * 60 * 1000;
+  const cached = _weatherCache[day.id];
+  if (cached && (Date.now() - cached.ts) < TWO_HOURS) return cached.map;
+
   let lat = day.lat, lng = day.lng;
   if (lat == null || lng == null) {
-    for (const s of day.stops) {
+    for (const s of (day.stops || [])) {
       const sLat = getStopLat(s), sLng = getStopLng(s);
       if (sLat && sLng) { lat = sLat; lng = sLng; break; }
     }
   }
-  if (lat == null || lng == null) { _weatherCache[day.id] = null; return null; }
-
-  // Determine date range: single day or festival span
-  const startDate = day.date;
-  const endDate   = day.dateEnd || day.date;
+  if (lat == null || lng == null) { _weatherCache[day.id] = { ts: Date.now(), map: null }; return null; }
 
   try {
+    // Hourly data gives accurate temperature for each stop's specific time
     const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}` +
-      `&daily=weathercode,temperature_2m_max,temperature_2m_min` +
-      `&timezone=auto&forecast_days=16`;
+      `&hourly=temperature_2m,weathercode&timezone=auto&forecast_days=16`;
     const res = await fetch(url);
-    if (!res.ok) { _weatherCache[day.id] = null; return null; }
+    if (!res.ok) { _weatherCache[day.id] = { ts: Date.now(), map: null }; return null; }
     const data = await res.json();
+
+    // map: dateString → Map<hour(0-23), {tempC, icon, conditionText}>
     const map = new Map();
-    const dates = data.daily?.time || [];
-    dates.forEach((d, i) => {
-      const code    = data.daily.weathercode[i];
-      const tempMax = Math.round(data.daily.temperature_2m_max[i]);
-      const tempMin = Math.round(data.daily.temperature_2m_min[i]);
-      const dayW    = wmoToWeather(code, false);
-      const nightW  = wmoToWeather(code, true);
-      map.set(d, {
-        icon: dayW.icon, tempC: tempMax,
-        nightIcon: nightW.icon, nightTempC: tempMin,
-        conditionText: dayW.label,
-      });
+    (data.hourly?.time || []).forEach((t, i) => {
+      const [date, hStr] = t.split('T');
+      const hour  = parseInt(hStr, 10);
+      const tempC = Math.round(data.hourly.temperature_2m[i]);
+      const isNight = hour >= 20 || hour < 6;
+      const w = wmoToWeather(data.hourly.weathercode[i], isNight);
+      if (!map.has(date)) map.set(date, new Map());
+      map.get(date).set(hour, { tempC, icon: w.icon, conditionText: w.label });
     });
-    _weatherCache[day.id] = map;
+
+    _weatherCache[day.id] = { ts: Date.now(), map };
+    saveWeatherCache();
     return map;
   } catch (e) {
-    _weatherCache[day.id] = null;
+    _weatherCache[day.id] = { ts: Date.now(), map: null };
     return null;
   }
 }
 
+// Look up hourly weather from map for a given date + time string
+function lookupHourlyWeather(wMap, dateStr, timeStr) {
+  if (!wMap) return null;
+  const hourMap = wMap.get(dateStr);
+  if (!hourMap) return null;
+  const hour = parseInt((timeStr || '12:00').split(':')[0], 10);
+  return hourMap.get(hour) || hourMap.get(Math.min(23, hour + 1)) || hourMap.get(Math.max(0, hour - 1)) || [...hourMap.values()][0] || null;
+}
+
 function getWeatherForStop(weatherMap, stop) {
   if (!weatherMap) return null;
-  // Find the day this stop belongs to
-  const day = TRIP_DATA.days.find(d => d.id === state.currentDayId || d.stops?.some(s => s.id === stop.id));
-  const dateStr = day?.date || '';
-  const entry = weatherMap.get(dateStr);
-  if (!entry) return null;
-  const night = isNightTime(getStopTime(stop));
-  return {
-    icon: night ? entry.nightIcon : entry.icon,
-    tempC: night ? entry.nightTempC : entry.tempC,
-    conditionText: entry.conditionText,
-    conditionType: entry.conditionType,
-  };
+  const day = TRIP_DATA.days.find(d => d.stops?.some(s => s.id === stop.id));
+  // For festival/multi-day spans use today's date so weather is current
+  const today = localDateStr();
+  const dateStr = (day?.isFestival) ? today : (day?.date || today);
+  const hourMap = weatherMap.get(dateStr);
+  if (!hourMap) return null;
+
+  const timeStr = getStopTime(stop) || '12:00';
+  const hour = parseInt(timeStr.split(':')[0], 10);
+  // Exact hour match, or nearest available
+  return hourMap.get(hour) || hourMap.get(Math.min(23, hour + 1)) || hourMap.get(Math.max(0, hour - 1)) || [...hourMap.values()][0] || null;
 }
 
 const _commonsCache = {}; // stopId → [url, ...]
@@ -887,20 +1550,36 @@ async function fetchCommonsPhotos(stop) {
 }
 
 function getPhotos(stop) {
-  const wiki    = _wikiCache[stop.id]?.img;
-  const commons = _commonsCache[stop.id] || [];
-  // Best photo first (Wikipedia thumbnail), then Wikimedia Commons extras,
-  // then satellite aerial as final fallback — no Street View
+  const type = getStopType(stop);
+  if (type === 'charging') return [satelliteUrl(stop), streetViewUrl(stop)];
+
+  // Stop-level override (e.g. custom local image set in data.js)
+  if (stop.photos?.length) return stop.photos;
+
+  // Google Places photos — venue-specific, quality-scored
+  const gp = _placesCache[stop.id]?.photos;
+  if (gp?.length) return gp;
+
+  // Fallback while Places loads: Wikipedia thumbnail + Street View
   const photos = [];
+  const wiki = _wikiCache[stop.id]?.img;
   if (wiki) photos.push(wiki);
-  for (const u of commons) { if (u !== wiki) photos.push(u); }
-  if (!photos.length) photos.push(satelliteUrl(stop));
+  photos.push(streetViewUrl(stop));
   return photos;
 }
 
 /* ── Nav URLs ──────────────────────────────────────────────────────── */
+function navUrl(name, address, lat, lng) {
+  const dest = [name, address].filter(Boolean).join(', ');
+  if (state.navApp !== 'google') {
+    const q = encodeURIComponent(dest || `${lat},${lng}`);
+    return `maps://?daddr=${q}&dirflg=d`;
+  }
+  const gdest = dest ? encodeURIComponent(dest) : `${lat},${lng}`;
+  return `https://www.google.com/maps/dir/?api=1&destination=${gdest}&travelmode=driving`;
+}
 function teslaNavUrl(stop) {
-  return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(stop.location)}`;
+  return navUrl(stop.name, stop.address, stop.lat, stop.lng);
 }
 function chargingNearbyUrl(stop) {
   return `https://www.plugshare.com/?latitude=${stop.lat}&longitude=${stop.lng}&spanLat=0.2&spanLng=0.2`;
@@ -917,6 +1596,7 @@ function localSave() {
   try {
     localStorage.setItem('annecy_overrides',          JSON.stringify(state.overrides));
     localStorage.setItem('annecy_checked',            JSON.stringify(state.checked));
+    localStorage.setItem('annecy_skipped',            JSON.stringify(state.skipped));
     localStorage.setItem('annecy_loc_overrides',      JSON.stringify(state.locOverrides));
     localStorage.setItem('annecy_dur_overrides',      JSON.stringify(state.durOverrides));
     localStorage.setItem('annecy_type_overrides',     JSON.stringify(state.typeOverrides));
@@ -924,6 +1604,7 @@ function localSave() {
     localStorage.setItem('annecy_reason_overrides',   JSON.stringify(state.reasonOverrides));
     localStorage.setItem('annecy_vegan_overrides',    JSON.stringify(state.veganOverrides));
     localStorage.setItem('annecy_added_stops',        JSON.stringify(state.addedStops));
+    localStorage.setItem('annecy_cross_day_moves',    JSON.stringify(state.crossDayMoves || {}));
   } catch {}
 }
 function save() {
@@ -943,6 +1624,7 @@ function load() {
     const as = localStorage.getItem('annecy_added_stops');
     if (o)  state.overrides         = JSON.parse(o);
     if (c)  state.checked           = JSON.parse(c);
+    const sk = localStorage.getItem('annecy_skipped'); if (sk) state.skipped = JSON.parse(sk);
     if (lo) state.locOverrides      = JSON.parse(lo);
     if (du) state.durOverrides      = JSON.parse(du);
     if (ty) state.typeOverrides     = JSON.parse(ty);
@@ -950,6 +1632,12 @@ function load() {
     if (re) state.reasonOverrides   = JSON.parse(re);
     if (ve) state.veganOverrides    = JSON.parse(ve);
     if (as) state.addedStops        = JSON.parse(as);
+    const cdm = localStorage.getItem('annecy_cross_day_moves');
+    if (cdm) state.crossDayMoves = JSON.parse(cdm);
+    const rm = localStorage.getItem('annecy_removed');
+    if (rm) state.removed = JSON.parse(rm);
+    const bl = localStorage.getItem('annecy_bucket_list');
+    if (bl) state.bucketList = JSON.parse(bl);
   } catch {}
   try {
     if (localStorage.getItem('annecy_theme') === 'light') document.body.classList.add('light');
@@ -977,7 +1665,7 @@ function buildDayStrip() {
     const chip = document.createElement('button');
     chip.className = 'day-chip';
     chip.dataset.dayId = day.id;
-    const today = new Date().toISOString().slice(0,10);
+    const today = localDateStr();
     const isTodayChip = day.isCountdown
       ? today <= day.dateEnd
       : day.isFestival
@@ -992,6 +1680,7 @@ function buildDayStrip() {
     strip.appendChild(chip);
   });
   updateDayStrip();
+  if (typeof updateHeaderHeight === 'function') updateHeaderHeight();
 }
 function updateDayStrip() {
   document.querySelectorAll('.day-chip').forEach(c =>
@@ -1048,11 +1737,26 @@ function renderView(scrollToNow) {
     mapEl.classList.add('hidden');
     mainEl.classList.remove('map-active');
     tl.classList.remove('hidden');
-    if (state.currentView === 'overview')      { setBgClass(null); renderOverview(tl); }
-    else if (state.currentView === 'vegan')    { setBgClass(null); renderFilterList(tl, 'vegan'); }
-    else if (state.currentView === 'charging') { setBgClass(null); renderFilterList(tl, 'charging'); }
+    // Update bucket badge
+    const _bucketBadge = document.getElementById('bucket-badge');
+    if (_bucketBadge) _bucketBadge.textContent = state.bucketList.length > 0 ? state.bucketList.length : '';
+    if (state.currentView === 'bucket')        { setBgClass(null); renderBucketView(tl); return; }
+    else if (state.currentView === 'overview') { setBgClass(null); renderOverview(tl); }
+    else if (state.currentView === 'vegan')    { setBgClass(null); renderVeganView(tl); }
+    else if (state.currentView === 'charging') { setBgClass(null); renderChargerView(tl); }
     else if (state.cardView === 'calendar') renderCalView(tl);
-    else renderTimeline(tl, scrollToNow);
+    else {
+      // Inject GPS chip before timeline if not present
+      let _gpsChip = document.getElementById('gps-nearest-chip');
+      if (!_gpsChip) {
+        _gpsChip = document.createElement('div');
+        _gpsChip.id = 'gps-nearest-chip';
+        _gpsChip.className = 'gps-nearest-chip hidden';
+        tl.parentElement.insertBefore(_gpsChip, tl);
+      }
+      renderNearestStopChip();
+      renderTimeline(tl, scrollToNow);
+    }
   }
 }
 
@@ -1077,6 +1781,15 @@ function startLocationWatch() {
     _userLng = pos.coords.longitude;
     updateLocMarker(pos.coords.accuracy);
     refreshMapCarouselOrder();
+    renderNearestStopChip();
+    // On first fix: refresh vegan/charger view if open (renders before GPS is ready)
+    if (firstFix && (state.currentView === 'vegan' || state.currentView === 'charging')) {
+      const tl = document.getElementById('timeline');
+      if (tl) {
+        if (state.currentView === 'vegan') renderVeganView(tl);
+        else renderChargerView(tl);
+      }
+    }
     // On first fix: re-fetch countdown POIs (which used fallback coords)
     if (firstFix && _leafletMap) {
       const day = TRIP_DATA.days.find(d => d.id === state.currentDayId);
@@ -1093,6 +1806,25 @@ function startLocationWatch() {
       }
     }
   }, null, { enableHighAccuracy: true, maximumAge: 20000, timeout: 15000 });
+}
+
+function renderNearestStopChip() {
+  const chip = document.getElementById('gps-nearest-chip');
+  if (!chip || _userLat === null) { chip?.classList.add('hidden'); return; }
+  const today = TRIP_DATA.days.find(d => d.id === state.currentDayId);
+  if (!today || today.isCountdown) { chip.classList.add('hidden'); return; }
+  const active = getDayStops(today).filter(s => !state.skipped[s.id] && s.lat && s.lng);
+  if (!active.length) { chip.classList.add('hidden'); return; }
+  let nearest = null, bestDist = Infinity;
+  active.forEach(s => {
+    const d = haversineM(_userLat, _userLng, s.lat, s.lng);
+    if (d < bestDist) { bestDist = d; nearest = s; }
+  });
+  if (!nearest || bestDist > 50000) { chip.classList.add('hidden'); return; }
+  const distStr = bestDist < 1000 ? `${Math.round(bestDist)}m` : `${(bestDist / 1000).toFixed(1)}km`;
+  chip.classList.remove('hidden');
+  chip.innerHTML = `<i class="ph ph-map-pin-simple-area"></i> ${distStr} from ${getStopName(nearest)}`;
+  chip.onclick = () => openDetail(nearest);
 }
 
 function updateLocMarker(accuracy) {
@@ -1223,73 +1955,90 @@ async function fetchDayRoute(stops) {
   } catch { return null; }
 }
 
+// Tracked Leaflet layers so we can update them in-place
+let _mapMarkerLayer  = null;
+let _mapRouteLayer   = null;
+
 function renderMapView() {
   const day = TRIP_DATA.days.find(d => d.id === state.currentDayId);
   if (!day) return;
 
   const container = document.getElementById('map-container');
 
-  // Destroy old map if day changed
+  // All stops for this day (base + user-added), in original order
+  const allDayStops = [...(day.stops || []), ...(state.addedStops?.[day.id] || [])]
+    .sort((a, b) => (a.order ?? 9999) - (b.order ?? 9999));
+
+  const stops       = allDayStops.filter(s => s.lat && s.lng);
+  const activeStops = stops.filter(s => !state.skipped[s.id]);
+
+  // Destroy map only when the day changes
   if (_leafletMap && _mapDayId !== state.currentDayId) {
     _leafletMap.remove();
-    _leafletMap = null;
+    _leafletMap = null; _mapMarkerLayer = null; _mapRouteLayer = null;
     _locMarker = null; _locCircle = null;
     container.innerHTML = '';
   }
-
-  if (_leafletMap) {
-    _leafletMap.invalidateSize();
-    return;
-  }
-
-  _mapDayId = state.currentDayId;
-  startLocationWatch();
 
   const isDark = !document.body.classList.contains('light');
   const tileUrl = isDark
     ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
     : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
 
-  const stops = day.stops.filter(s => s.lat && s.lng);
-
   // Countdown day: no route stops, just show user location
   if (!stops.length) {
-    const fallback = L.map(container, { zoomControl: false, attributionControl: false });
-    _leafletMap = fallback;
-    L.tileLayer(tileUrl, { maxZoom: 19, subdomains: 'abcd' }).addTo(fallback);
-    L.control.zoom({ position: 'topright' }).addTo(fallback);
-    fallback.setView([51.0333, -2.5333], 10); // North Cadbury as default
-    if (_userLat !== null) {
-      fallback.setView([_userLat, _userLng], 13);
-      updateLocMarker(500);
+    if (!_leafletMap) {
+      const fallback = L.map(container, { zoomControl: false, attributionControl: false });
+      _leafletMap = fallback;
+      _mapDayId   = state.currentDayId;
+      L.tileLayer(tileUrl, { maxZoom: 19, subdomains: 'abcd' }).addTo(fallback);
+      L.control.zoom({ position: 'topright' }).addTo(fallback);
+      fallback.setView([51.0333, -2.5333], 10);
+      if (_userLat !== null) { fallback.setView([_userLat, _userLng], 13); updateLocMarker(500); }
+      buildAndAppendPOIWrap(container, day);
+      startLocationWatch();
+    } else {
+      _leafletMap.invalidateSize();
     }
-    buildAndAppendPOIWrap(container, day);
     return;
   }
 
-  const map = L.map(container, { zoomControl: false, attributionControl: false });
-  _leafletMap = map;
+  // ── First build ────────────────────────────────────────────────────
+  if (!_leafletMap) {
+    const map = L.map(container, { zoomControl: false, attributionControl: false });
+    _leafletMap = map;
+    _mapDayId   = state.currentDayId;
+    L.tileLayer(tileUrl, { maxZoom: 19, subdomains: 'abcd' }).addTo(map);
+    L.control.zoom({ position: 'topright' }).addTo(map);
+    if (_userLat !== null) updateLocMarker(200);
+    startLocationWatch();
+    buildAndAppendPOIWrap(container, day);
+  } else {
+    _leafletMap.invalidateSize();
+  }
 
-  L.tileLayer(tileUrl, { maxZoom: 19, subdomains: 'abcd' }).addTo(map);
-  L.control.zoom({ position: 'topright' }).addTo(map);
+  const map = _leafletMap;
 
-  // Fit bounds — leave room for the POI carousel at bottom
-  const bounds = L.latLngBounds(stops.map(s => [getStopLat(s), getStopLng(s)]));
-  map.fitBounds(bounds, { paddingTopLeft: [32, 48], paddingBottomRight: [32, 160] });
+  // ── Fit bounds to active stops ─────────────────────────────────────
+  const boundsStops = activeStops.length >= 2 ? activeStops : stops;
+  map.fitBounds(
+    L.latLngBounds(boundsStops.map(s => [getStopLat(s), getStopLng(s)])),
+    { paddingTopLeft: [32, 48], paddingBottomRight: [32, 160] }
+  );
 
-  // If we already have a user location, add the marker immediately
-  if (_userLat !== null) updateLocMarker(200);
+  // ── Markers: remove old layer, draw fresh (active stops only) ───────
+  if (_mapMarkerLayer) { _mapMarkerLayer.remove(); _mapMarkerLayer = null; }
+  const markerGroup = L.layerGroup().addTo(map);
+  _mapMarkerLayer = markerGroup;
 
-  // Determine next unvisited stop
   const now = nowMinutes();
   let nextStopId = null;
-  for (const s of stops) {
+  for (const s of activeStops) {
     const t = timeToMinutes(getStopTime(s));
     if (t !== null && t >= now && !state.checked[s.id]) { nextStopId = s.id; break; }
   }
 
-  // Draw stop markers
-  stops.forEach((stop, idx) => {
+  activeStops.forEach((stop, idx) => {
     const visited = !!state.checked[stop.id];
     const isNext  = stop.id === nextStopId;
     const icon = L.divIcon({
@@ -1300,20 +2049,39 @@ function renderMapView() {
              </div>`,
       iconSize: [36,36], iconAnchor: [18,18], popupAnchor: [0,-20],
     });
-    const m = L.marker([getStopLat(stop), getStopLng(stop)], { icon }).addTo(map);
+    const m = L.marker([getStopLat(stop), getStopLng(stop)], { icon }).addTo(markerGroup);
     m.on('click', () => openDetail(stop));
   });
 
-  // Road route
-  fetchDayRoute(stops).then(latlngs => {
-    if (!latlngs || _mapDayId !== state.currentDayId) return;
-    L.polyline(latlngs, {
-      color: !document.body.classList.contains('light') ? '#38bdf8' : '#0284c7',
-      weight: 4, opacity: 0.7,
-    }).addTo(map);
-  });
+  // Vegan POI pins from session cache
+  if (_veganCache?.places?.length) {
+    _veganCache.places.forEach(p => {
+      const icon = L.divIcon({
+        html: `<div class="map-marker-poi vegan-poi"><i class="ph ph-leaf"></i></div>`,
+        className: '', iconSize: [28, 28], iconAnchor: [14, 14]
+      });
+      L.marker([p.lat, p.lng], { icon }).addTo(markerGroup).on('click', () => openVeganDetail(p));
+    });
+  }
+  // Charger POI pins from session cache
+  if (_chargerCache?.chargers?.length) {
+    applyChargerFilters(_chargerCache.chargers).forEach(c => {
+      const icon = L.divIcon({
+        html: `<div class="map-marker-poi charger-poi"><i class="ph ph-lightning"></i></div>`,
+        className: '', iconSize: [28, 28], iconAnchor: [14, 14]
+      });
+      L.marker([c.lat, c.lng], { icon }).addTo(markerGroup).on('click', () => openChargerDetail(c));
+    });
+  }
 
-  buildAndAppendPOIWrap(container, day);
+  // ── Route: remove old polyline, fetch fresh (active stops only) ───
+  if (_mapRouteLayer) { _mapRouteLayer.remove(); _mapRouteLayer = null; }
+  const routeColor = isDark ? '#38bdf8' : '#0284c7';
+  fetchDayRoute(activeStops).then(latlngs => {
+    if (!latlngs || _mapDayId !== state.currentDayId) return;
+    if (_mapRouteLayer) { _mapRouteLayer.remove(); }
+    _mapRouteLayer = L.polyline(latlngs, { color: routeColor, weight: 4, opacity: 0.7 }).addTo(map);
+  });
 }
 
 function buildAndAppendPOIWrap(container, day) {
@@ -1354,7 +2122,1286 @@ function renderOverview(c) {
   c.appendChild(grid);
 }
 
+/* ── Bucket List view ──────────────────────────────────────────────── */
+function renderBucketView(container) {
+  container.innerHTML = '';
+  const hdr = document.createElement('div');
+  hdr.className = 'vegan-view-header';
+  hdr.innerHTML = '<i class="ph ph-bookmark-simple"></i> Bucket List';
+  container.appendChild(hdr);
+
+  if (!state.bucketList.length) {
+    container.innerHTML += '<div class="vegan-no-gps" style="margin:40px 16px"><i class="ph ph-smiley"></i><div>Nothing here yet — remove a stop from the itinerary to save it here</div></div>';
+    return;
+  }
+
+  state.bucketList.forEach((entry, idx) => {
+    const { stop, dayLabel } = entry;
+    const card = document.createElement('div');
+    card.className = 'vegan-place-card bucket-card';
+    card.innerHTML = `
+      <div class="vegan-place-main">
+        <div class="vegan-place-name">${stopTypeIcon(stop)} ${stop.location || stop.name || 'Unnamed'}</div>
+        <div class="vegan-place-meta">
+          <span class="vegan-place-type">${typeLabel(getStopType(stop))}</span>
+          <span class="vd-dist-label" style="margin-left:auto">From: ${dayLabel}</span>
+        </div>
+        ${stop.reason ? `<div class="vegan-place-hours-mini" style="margin-top:4px;font-size:13px;color:var(--text3)">${stop.reason.slice(0,80)}${stop.reason.length>80?'…':''}</div>` : ''}
+      </div>
+      <div class="vegan-place-right">
+        <button class="bucket-add-btn" title="Add to a day"><i class="ph ph-calendar-plus"></i></button>
+        <button class="bucket-delete-btn" title="Delete permanently"><i class="ph ph-trash"></i></button>
+      </div>`;
+
+    card.querySelector('.bucket-add-btn').addEventListener('click', e => {
+      e.stopPropagation();
+      openBucketAddSheet(entry, idx);
+    });
+
+    const deleteBtn = card.querySelector('.bucket-delete-btn');
+    deleteBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      const confirmDiv = document.createElement('div');
+      confirmDiv.className = 'bucket-delete-confirm';
+      confirmDiv.innerHTML = 'Delete permanently? <button class="bucket-confirm-yes">Yes</button> <button class="bucket-confirm-no">No</button>';
+      card.appendChild(confirmDiv);
+      confirmDiv.querySelector('.bucket-confirm-yes').addEventListener('click', ev => {
+        ev.stopPropagation();
+        state.bucketList.splice(idx, 1);
+        save(); renderView(false);
+        showToast('Deleted permanently');
+      });
+      confirmDiv.querySelector('.bucket-confirm-no').addEventListener('click', ev => {
+        ev.stopPropagation();
+        confirmDiv.remove();
+      });
+    });
+
+    container.appendChild(card);
+  });
+}
+
+function openBucketAddSheet(entry, idx) {
+  const sheet = document.getElementById('vd-add-overlay');
+  if (!sheet) return;
+  const daysEl = document.getElementById('vd-add-days');
+  daysEl.innerHTML = '';
+  let selectedDayId = entry.originalDayId || state.currentDayId;
+  TRIP_DATA.days.filter(d => !d.isCountdown).forEach(day => {
+    const btn = document.createElement('button');
+    btn.className = 'vd-day-btn' + (day.id === selectedDayId ? ' selected' : '');
+    btn.dataset.dayId = day.id;
+    btn.innerHTML = `<span class="vd-day-btn-name">${getDayLabel(day)}</span><span class="vd-day-btn-date">${formatDate(day.date)}</span>`;
+    btn.addEventListener('click', () => {
+      daysEl.querySelectorAll('.vd-day-btn').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+      selectedDayId = day.id;
+    });
+    daysEl.appendChild(btn);
+  });
+  setTimeout(() => daysEl.querySelector('.selected')?.scrollIntoView({ block:'nearest', behavior:'smooth' }), 50);
+  document.getElementById('vd-add-close').onclick = () => sheet.classList.add('hidden');
+  document.getElementById('vd-add-cancel').onclick = () => sheet.classList.add('hidden');
+  document.getElementById('vd-add-confirm').onclick = () => {
+    const time = document.getElementById('vd-add-time').value || '12:00';
+    const ripple = document.getElementById('vd-add-ripple').checked;
+    const day = TRIP_DATA.days.find(d => d.id === selectedDayId);
+    if (!day) return;
+    saveUndoSnapshot();
+    const stop = { ...entry.stop, id: entry.stop.id.startsWith('vegan_') || entry.stop.id.startsWith('gplace_') ? entry.stop.id : 'bucket_' + Date.now(), time, order: 999 };
+    if (!state.addedStops[day.id]) state.addedStops[day.id] = [];
+    state.addedStops[day.id].push(stop);
+    state.bucketList.splice(idx, 1);
+    if (ripple) cascadeTimeDelta(stop, stop.duration || 45);
+    save();
+    sheet.classList.add('hidden');
+    state.currentDayId = day.id;
+    state.currentView = 'day';
+    renderView(false);
+    showToast(`${stop.location || stop.name} added to ${getDayLabel(day)}`);
+  };
+  sheet.classList.remove('hidden');
+}
+
 /* ── Filter list ───────────────────────────────────────────────────── */
+async function renderVeganView(container) {
+  container.innerHTML = '';
+
+  const hdr = document.createElement('div');
+  hdr.className = 'vegan-view-header';
+  hdr.innerHTML = '<i class="ph ph-leaf"></i> Vegan near you';
+  container.appendChild(hdr);
+
+  // ── Place search bar ──────────────────────────────────────────────
+  const searchWrap = document.createElement('div');
+  searchWrap.className = 'place-search-wrap';
+  searchWrap.innerHTML = `
+    <div class="place-search-bar">
+      <i class="ph ph-magnifying-glass"></i>
+      <input class="place-search-input" id="place-search-input" type="search" placeholder="Search for a place by name…" autocomplete="off">
+      <button class="place-search-btn" id="place-search-btn"><i class="ph ph-arrow-right"></i></button>
+    </div>
+    <div id="place-search-results" class="place-search-results hidden"></div>`;
+  container.appendChild(searchWrap);
+
+  const searchInput   = searchWrap.querySelector('#place-search-input');
+  const searchBtn     = searchWrap.querySelector('#place-search-btn');
+  const searchResults = searchWrap.querySelector('#place-search-results');
+
+  const doSearch = async () => {
+    const q = searchInput.value.trim();
+    if (!q) return;
+    searchResults.classList.remove('hidden');
+    searchResults.innerHTML = `<div class="vegan-searching"><i class="ph ph-spinner vegan-spin"></i> Searching…</div>`;
+    try {
+      const body = {
+        textQuery: q + (_userLat !== null ? '' : ''),
+        maxResultCount: 5,
+        languageCode: 'en',
+      };
+      if (_userLat !== null) {
+        body.locationBias = { circle: { center: { latitude: _userLat, longitude: _userLng }, radius: 20000 } };
+      }
+      const res = await fetch('https://places.googleapis.com/v1/places:searchText', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Goog-Api-Key': GPLACES_KEY,
+          'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.userRatingCount,places.primaryType,places.regularOpeningHours,places.currentOpeningHours,places.nationalPhoneNumber,places.websiteUri,places.reviews,places.photos',
+        },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error('Search failed');
+      const data = await res.json();
+      const places = data.places || [];
+      if (!places.length) {
+        searchResults.innerHTML = `<div class="vegan-no-gps">No results found for "<strong>${q}</strong>"</div>`;
+        return;
+      }
+      searchResults.innerHTML = '';
+      places.forEach(p => {
+        const lat = p.location?.latitude, lng = p.location?.longitude;
+        const dist = (_userLat !== null && lat && lng)
+          ? Math.round(haversineM(_userLat, _userLng, lat, lng))
+          : null;
+        const distStr = dist !== null ? (dist < 1000 ? `${dist}m` : `${(dist/1000).toFixed(1)}km`) : '';
+        const typeLabel = (p.primaryType || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || 'Place';
+        const ratingHtml = p.rating
+          ? `<span class="vcard-rating"><i class="ph ph-star-fill" style="color:#f59e0b"></i> ${p.rating.toFixed(1)} <span class="vcard-rating-count">(${(p.userRatingCount||0).toLocaleString()})</span></span>`
+          : '';
+        const card = document.createElement('div');
+        card.className = 'vegan-place-card';
+        card.innerHTML = `
+          <div class="vegan-place-main">
+            <div class="vegan-place-name">${p.displayName?.text || q}</div>
+            <div class="vegan-place-meta">
+              <span class="vegan-place-type">${typeLabel}</span>
+            </div>
+            <div class="vcard-bottom-row">
+              ${ratingHtml}
+              ${p.formattedAddress ? `<span class="vegan-place-hours-mini">${p.formattedAddress}</span>` : ''}
+            </div>
+          </div>
+          <div class="vegan-place-right">
+            ${distStr ? `<div class="vegan-place-dist">${distStr}</div>` : ''}
+            <div class="vegan-place-chevron"><i class="ph ph-caret-right"></i></div>
+          </div>`;
+        card.addEventListener('click', () => {
+          // Convert Google Places result to the internal place format and open detail
+          const osmPlace = {
+            osmId:        'gplace_' + p.id,
+            osmType:      'node',
+            name:         p.displayName?.text || q,
+            type:         (p.primaryType || 'restaurant').replace(/_/g,' '),
+            veganLevel:   'yes',
+            cuisine:      '',
+            address:      p.formattedAddress || '',
+            phone:        p.nationalPhoneNumber || '',
+            website:      p.websiteUri || '',
+            openingHours: p.regularOpeningHours?.weekdayDescriptions?.join('; ') || '',
+            lat,
+            lng,
+            dist:         dist ?? 0,
+          };
+          // Pre-populate Google cache so detail page shows instantly
+          _placeGoogleCache[osmPlace.osmId] = {
+            rating:      p.rating || null,
+            ratingCount: p.userRatingCount || 0,
+            reviews:     (p.reviews || []).sort((a, b) => new Date(b.publishTime) - new Date(a.publishTime)).slice(0, 3),
+            photos:      (p.photos || []).slice(0, 5),
+            hours:       p.regularOpeningHours?.weekdayDescriptions || [],
+          };
+          openVeganDetail(osmPlace);
+        });
+        searchResults.appendChild(card);
+      });
+    } catch (e) {
+      searchResults.innerHTML = `<div class="vegan-no-gps"><i class="ph ph-warning"></i> Search failed — check your connection</div>`;
+    }
+  };
+
+  searchBtn.addEventListener('click', doSearch);
+  searchInput.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); doSearch(); } });
+
+  const nearbySection = document.createElement('div');
+  nearbySection.className = 'vegan-nearby-section';
+  container.appendChild(nearbySection);
+
+  if (_userLat === null) {
+    nearbySection.innerHTML = `<div class="vegan-no-gps"><i class="ph ph-map-pin-slash"></i><div>Enable location to find vegan places nearby</div><button class="pill-btn primary" id="vegan-gps-btn">Share location</button></div>`;
+    nearbySection.querySelector('#vegan-gps-btn')?.addEventListener('click', () => {
+      startLocationWatch();
+      nearbySection.innerHTML = `<div class="vegan-searching"><i class="ph ph-spinner vegan-spin"></i> Getting your location…</div>`;
+    });
+  } else {
+    const isCached = _veganCache &&
+      Math.abs(_veganCache.lat - _userLat) < 0.05 &&
+      Math.abs(_veganCache.lng - _userLng) < 0.05;
+    const doRender = (places, fromCache) => {
+      nearbySection.innerHTML = '';
+      const lat = _userLat, lng = _userLng;
+      if (places.length === 0) {
+        nearbySection.innerHTML = `<div class="vegan-empty"><i class="ph ph-smiley-sad"></i><div>No tagged vegan places found within 8 km.<br>Try HappyCow for community tips.</div></div>
+          <a class="vegan-happycow-btn" href="https://www.happycow.net/searchmap?lat=${lat}&lng=${lng}&zoom=13" target="_blank" rel="noopener"><i class="ph ph-leaf"></i> Open HappyCow</a>`;
+      } else {
+        const sub = document.createElement('div');
+        sub.className = 'vegan-nearby-subtitle';
+        sub.textContent = `${places.length} place${places.length !== 1 ? 's' : ''} found${fromCache ? ' · pull to refresh' : ''}`;
+        nearbySection.appendChild(sub);
+        places.forEach(p => nearbySection.appendChild(buildVeganCard(p)));
+        // Background-fetch Google ratings for first 8 places
+        places.slice(0, 8).forEach(p => {
+          if (_placeGoogleCache[p.osmId]) return;
+          fetchGooglePlace(p.name, p.address, p.lat, p.lng).then(gData => {
+            if (!gData) return;
+            _placeGoogleCache[p.osmId] = gData;
+            const el = nearbySection.querySelector(`[data-osmid="${p.osmId}"] .vcard-rating-loading`);
+            if (el && gData.rating) {
+              el.className = 'vcard-rating';
+              el.innerHTML = `<i class="ph ph-star-fill" style="color:#f59e0b"></i> ${gData.rating.toFixed(1)} <span class="vcard-rating-count">(${gData.ratingCount.toLocaleString()})</span>`;
+            }
+          });
+        });
+        const hcLink = document.createElement('a');
+        hcLink.className = 'vegan-happycow-btn';
+        hcLink.href = `https://www.happycow.net/searchmap?lat=${lat}&lng=${lng}&zoom=13`;
+        hcLink.target = '_blank'; hcLink.rel = 'noopener';
+        hcLink.innerHTML = '<i class="ph ph-leaf"></i> More on HappyCow';
+        nearbySection.appendChild(hcLink);
+      }
+    };
+    if (isCached) {
+      doRender(_veganCache.places, true);
+    } else {
+      nearbySection.innerHTML = `<div class="vegan-searching"><i class="ph ph-spinner vegan-spin"></i> Finding vegan places within 8 km…</div>`;
+      try {
+        const places = await fetchVeganNearby(_userLat, _userLng, 8000);
+        _veganCache = { lat: _userLat, lng: _userLng, places };
+        doRender(places, false);
+      } catch {
+        nearbySection.innerHTML = `<div class="vegan-empty"><i class="ph ph-wifi-slash"></i><div>Couldn't load nearby places — check connection.</div></div>
+          <a class="vegan-happycow-btn" href="https://www.happycow.net/searchmap?lat=${_userLat}&lng=${_userLng}&zoom=13" target="_blank" rel="noopener"><i class="ph ph-leaf"></i> Open HappyCow</a>`;
+      }
+    }
+  }
+
+  const planHdr = document.createElement('div');
+  planHdr.className = 'vegan-plan-header';
+  planHdr.innerHTML = '<i class="ph ph-calendar-check"></i> On your itinerary';
+  container.appendChild(planHdr);
+
+  let found = false;
+  TRIP_DATA.days.forEach(day => {
+    getDayStops(day).forEach(stop => {
+      if (!getStopVegan(stop) && getStopType(stop) !== 'food') return;
+      found = true;
+      const card = document.createElement('div');
+      card.className = 'vegan-place-card';
+      const dateStr = day.isFestival ? '20–27 Jun' : formatDate(day.date);
+      card.innerHTML = `
+        <div class="vegan-place-main">
+          <div class="vegan-place-name">${stop.location} <span class="vp-planned-badge"><i class="ph ph-calendar-check"></i> ${getDayLabel(day)} · ${dateStr}</span></div>
+          <div class="vegan-place-meta">
+            <span class="vegan-place-type">${stopTypeIcon(stop)} ${getStopType(stop)}</span>
+            <span class="alt-card-vegan full">On itinerary</span>
+          </div>
+          ${stop.reason ? `<div class="vegan-place-hours-mini">${stop.reason}</div>` : ''}
+        </div>
+        <div class="vegan-place-right">
+          <div class="vegan-place-chevron"><i class="ph ph-caret-right"></i></div>
+        </div>`;
+      card.addEventListener('click', () => openDetail(stop));
+      container.appendChild(card);
+    });
+  });
+  if (!found) {
+    const empty = document.createElement('div');
+    empty.className = 'vegan-empty';
+    empty.innerHTML = '<i class="ph ph-calendar-x"></i><div>No vegan stops on current itinerary.</div>';
+    container.appendChild(empty);
+  }
+}
+
+async function fetchVeganNearby(lat, lng, radiusM) {
+  const query = `[out:json][timeout:20];(
+nwr["diet:vegan"~"^(yes|only)$"]["amenity"~"^(restaurant|cafe|bar|fast_food|bakery|pub)$"](around:${radiusM},${lat},${lng});
+nwr["diet:vegan"~"^(yes|only)$"]["shop"~"^(health_food|organic|deli|supermarket|convenience|bakery)$"](around:${radiusM},${lat},${lng});
+nwr["cuisine"~"vegan"]["amenity"~"^(restaurant|cafe|bar|fast_food|bakery)$"](around:${radiusM},${lat},${lng});
+);out center body qt;`;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 20000);
+  let res;
+  try {
+    res = await fetch('https://overpass-api.de/api/interpreter', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: 'data=' + encodeURIComponent(query),
+      signal: ctrl.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
+  if (!res.ok) throw new Error('Overpass error');
+  const json = await res.json();
+  return (json.elements || []).map(el => {
+    const elLat = el.lat ?? el.center?.lat;
+    const elLng = el.lon ?? el.center?.lon;
+    if (!elLat || !elLng) return null;
+    const t = el.tags || {};
+    return {
+      osmId:        el.id,
+      osmType:      el.type,
+      name:         t.name || 'Unnamed place',
+      type:         t.amenity || t.shop || 'place',
+      veganLevel:   t['diet:vegan'] || 'yes',
+      vegetarian:   t['diet:vegetarian'],
+      cuisine:      t.cuisine ? t.cuisine.replace(/_/g,' ').replace(/;/g, ', ') : '',
+      address:      [t['addr:housenumber'], t['addr:street'], t['addr:city']].filter(Boolean).join(' '),
+      phone:        t.phone || t['contact:phone'] || '',
+      website:      t.website || t['contact:website'] || '',
+      openingHours: t.opening_hours || '',
+      image:        t.image || t['wikimedia_commons'] || '',
+      lat: elLat, lng: elLng,
+      dist: haversineM(lat, lng, elLat, elLng),
+    };
+  }).filter(Boolean).sort((a, b) => a.dist - b.dist).slice(0, 30);
+}
+
+/* ── Opening hours parser ───────────────────────────────────────────── */
+function parseOpeningHours(str) {
+  if (!str) return { open: null, todayStr: '' };
+  const dayNames = ['Su','Mo','Tu','We','Th','Fr','Sa'];
+  const now = new Date();
+  const todayIdx = now.getDay(); // 0=Sun
+  const todayAbbr = dayNames[todayIdx];
+  const nowMins = now.getHours() * 60 + now.getMinutes();
+
+  // Normalise: replace — with -, trim
+  const norm = str.replace(/–/g, '-').replace(/\s+/g, ' ').trim();
+
+  // Split by ; into rules
+  const rules = norm.split(/\s*;\s*/);
+
+  let todayHours = '';
+  let isOpen = null;
+
+  for (const rule of rules) {
+    // "24/7"
+    if (rule === '24/7') { return { open: true, todayStr: 'Open 24/7' }; }
+
+    // Match "DAY_RANGE TIME_RANGE[, TIME_RANGE]" or "DAY TIME" or "off/closed"
+    const m = rule.match(/^([A-Za-z,\-]+)?\s*(.*)$/);
+    if (!m) continue;
+    let [, dayPart, timePart] = m;
+
+    // Check if this rule applies to today
+    let appliesToToday = false;
+    if (!dayPart || dayPart === '') {
+      appliesToToday = true;
+    } else {
+      // Parse day part e.g. "Mo-Fr", "Mo,We,Fr", "Mo-Fr,Su"
+      const segments = dayPart.split(',');
+      for (const seg of segments) {
+        if (seg.includes('-')) {
+          const [start, end] = seg.split('-');
+          const si = dayNames.indexOf(start.trim());
+          const ei = dayNames.indexOf(end.trim());
+          if (si !== -1 && ei !== -1) {
+            if (si <= ei ? (todayIdx >= si && todayIdx <= ei) : (todayIdx >= si || todayIdx <= ei))
+              appliesToToday = true;
+          }
+        } else if (dayNames.indexOf(seg.trim()) === todayIdx) {
+          appliesToToday = true;
+        }
+      }
+    }
+
+    if (!appliesToToday) continue;
+
+    timePart = timePart.trim().toLowerCase();
+    if (timePart === 'off' || timePart === 'closed') {
+      todayHours = 'Closed today';
+      isOpen = false;
+      continue;
+    }
+
+    // Parse time ranges e.g. "08:00-18:00" or "08:00-12:00,14:00-18:00"
+    const timeSegs = timePart.split(',');
+    const ranges = [];
+    let openNow = false;
+    let nextOpen = null;
+    for (const ts of timeSegs) {
+      const tm = ts.trim().match(/(\d{1,2}:\d{2})\s*-\s*(\d{1,2}:\d{2})/);
+      if (!tm) continue;
+      const toMins = s => { const [h,min] = s.split(':').map(Number); return h*60+min; };
+      const start = toMins(tm[1]), end = toMins(tm[2]);
+      ranges.push(`${tm[1]}–${tm[2]}`);
+      if (nowMins >= start && nowMins < end) openNow = true;
+      else if (start > nowMins && (!nextOpen || start < toMins(nextOpen))) nextOpen = tm[1];
+    }
+    if (ranges.length) {
+      todayHours = ranges.join(', ');
+      isOpen = openNow;
+    }
+    if (!openNow && nextOpen) {
+      return { open: false, todayStr: todayHours, nextOpen };
+    }
+  }
+
+  return { open: isOpen, todayStr: todayHours, nextOpen: null };
+}
+
+/* ── Google Places API ──────────────────────────────────────────────── */
+const GPLACES_KEY = 'AIzaSyCiV3X0vUMJBkIpU_UgBWwyPzIAjyjJM9I';
+
+async function fetchGooglePlace(name, address, lat, lng) {
+  try {
+    const query = [name, address].filter(Boolean).join(', ');
+    const res = await fetch('https://places.googleapis.com/v1/places:searchText', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': GPLACES_KEY,
+        'X-Goog-FieldMask': 'places.id,places.rating,places.userRatingCount,places.reviews,places.photos,places.currentOpeningHours',
+      },
+      body: JSON.stringify({
+        textQuery: query,
+        locationBias: { circle: { center: { latitude: lat, longitude: lng }, radius: 300 } },
+        maxResultCount: 1,
+        languageCode: 'en',
+      }),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const p = data.places?.[0];
+    if (!p) return null;
+    return {
+      rating:      p.rating || null,
+      ratingCount: p.userRatingCount || 0,
+      reviews:     (p.reviews || []).sort((a, b) => new Date(b.publishTime) - new Date(a.publishTime)).slice(0, 3),
+      photos:      (p.photos || []).slice(0, 5),
+      hours:       p.currentOpeningHours?.weekdayDescriptions || [],
+    };
+  } catch { return null; }
+}
+
+async function gPhotoUrl(photoName, maxWidth = 800) {
+  const res = await fetch(`https://places.googleapis.com/v1/${photoName}/media?maxWidthPx=${maxWidth}&key=${GPLACES_KEY}&skipHttpRedirect=true`);
+  if (!res.ok) return null;
+  const data = await res.json();
+  return data.photoUri || null;
+}
+
+async function injectGoogleData(gData, heroEl, bodyEl) {
+  if (!gData) return;
+  // Remove any previously injected elements to avoid duplication on re-entry
+  bodyEl.querySelectorAll('.gp-rating-row, .gp-reviews').forEach(el => el.remove());
+
+  // Photo — resolve photo URI then set as background
+  if (gData.photos.length && heroEl) {
+    try {
+      const photoUri = await gPhotoUrl(gData.photos[0].name);
+      if (photoUri) {
+        heroEl.style.background = `url(${photoUri}) center/cover no-repeat`;
+        heroEl.innerHTML = '<div class="vd-hero-scrim"></div>';
+        heroEl.classList.remove('hidden');
+      }
+    } catch {}
+  }
+
+  // Rating row
+  if (gData.rating) {
+    const stars = Math.round(gData.rating * 2) / 2;
+    const filled = Math.floor(stars);
+    const half   = stars % 1 >= 0.5 ? 1 : 0;
+    const empty  = 5 - filled - half;
+    const starHtml =
+      '<i class="ph ph-star-fill" style="color:#f59e0b"></i>'.repeat(filled) +
+      (half ? '<i class="ph ph-star-half" style="color:#f59e0b"></i>' : '') +
+      '<i class="ph ph-star" style="color:rgba(255,255,255,.25)"></i>'.repeat(empty);
+    const ratingEl = document.createElement('div');
+    ratingEl.className = 'gp-rating-row';
+    ratingEl.innerHTML = `${starHtml} <span class="gp-rating-num">${gData.rating.toFixed(1)}</span> <span class="gp-rating-count">(${gData.ratingCount.toLocaleString()} reviews)</span>`;
+    // Use dedicated slot if available (detail page), else insert at top of body
+    const gratingSlot = bodyEl.querySelector('#detail-grating');
+    if (gratingSlot) gratingSlot.replaceWith(ratingEl);
+    else bodyEl.insertBefore(ratingEl, bodyEl.firstChild);
+  }
+
+  // Reviews
+  if (gData.reviews.length) {
+    const reviewsEl = document.createElement('div');
+    reviewsEl.className = 'gp-reviews';
+    reviewsEl.innerHTML = '<div class="vd-links-label" style="margin-bottom:10px"><i class="ph ph-quotes"></i> Recent reviews</div>';
+    gData.reviews.forEach(r => {
+      const div = document.createElement('div');
+      div.className = 'gp-review-card';
+      const rStars = '★'.repeat(r.rating || 0) + '☆'.repeat(5 - (r.rating || 0));
+      div.innerHTML = `
+        <div class="gp-review-header">
+          <span class="gp-review-author">${r.authorAttribution?.displayName || 'Guest'}</span>
+          <span class="gp-review-stars">${rStars}</span>
+          <span class="gp-review-time">${r.relativePublishTimeDescription || ''}</span>
+        </div>
+        <div class="gp-review-text">${r.text?.text || ''}</div>`;
+      reviewsEl.appendChild(div);
+    });
+    // Insert before links row
+    const linksRow = bodyEl.querySelector('#vd-links-row,#cd-links-row');
+    if (linksRow) bodyEl.insertBefore(reviewsEl, linksRow);
+    else bodyEl.appendChild(reviewsEl);
+  }
+}
+
+/* ── Maps URL helpers ───────────────────────────────────────────────── */
+function mapsSearchUrl(name, address, lat, lng) {
+  const q = [name, address].filter(Boolean).join(', ');
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q || (lat + ',' + lng))}`;
+}
+function mapsDirectionsUrl(name, address, lat, lng) {
+  const dest = address ? encodeURIComponent([name, address].filter(Boolean).join(', '))
+                       : `${lat},${lng}`;
+  return `https://www.google.com/maps/dir/?api=1&destination=${dest}&travelmode=driving`;
+}
+
+/* ── Wikimedia photo fetch ──────────────────────────────────────────── */
+async function fetchWikimediaPhoto(tag) {
+  if (!tag) return null;
+  // tag may be "File:foo.jpg" or just a filename
+  const title = tag.startsWith('File:') ? tag : `File:${tag}`;
+  try {
+    const url = `https://commons.wikimedia.org/w/api.php?action=query&titles=${encodeURIComponent(title)}&prop=imageinfo&iiprop=url&iiurlwidth=600&format=json&origin=*`;
+    const res = await fetch(url);
+    const json = await res.json();
+    const pages = json?.query?.pages || {};
+    const page = Object.values(pages)[0];
+    return page?.imageinfo?.[0]?.thumburl || page?.imageinfo?.[0]?.url || null;
+  } catch { return null; }
+}
+
+/* ── Find matching planned stop by proximity ────────────────────────── */
+function findMatchingPlannedStop(place) {
+  if (!place.lat || !place.lng) return null;
+  for (const day of TRIP_DATA.days) {
+    for (const stop of getDayStops(day)) {
+      if (!stop.lat || !stop.lng) continue;
+      if (haversineM(place.lat, place.lng, stop.lat, stop.lng) < 80) return { stop, day };
+    }
+  }
+  return null;
+}
+
+function openHoursBadge(open, nextOpen, todayStr) {
+  if (open === true)  return '<span class="vp-open-badge open">Open now</span>';
+  if (nextOpen)       return `<span class="vp-open-badge opening">Opens ${nextOpen}</span>`;
+  if (open === false) return '<span class="vp-open-badge closed">Closed</span>';
+  return '';
+}
+
+function buildVeganCard(place) {
+  const card = document.createElement('div');
+  card.className = 'vegan-place-card';
+  card.dataset.osmid = place.osmId;
+  const distStr = place.dist < 1000 ? `${Math.round(place.dist)}m` : `${(place.dist / 1000).toFixed(1)}km`;
+  const typeLabel = { restaurant:'Restaurant', cafe:'Café', bar:'Bar', fast_food:'Takeaway', bakery:'Bakery', pub:'Pub' }[place.type] || place.type;
+  const levelLabel = place.veganLevel === 'only' ? 'Fully vegan' : 'Vegan options';
+  const levelClass = place.veganLevel === 'only' ? 'full' : '';
+  const { open, todayStr, nextOpen } = parseOpeningHours(place.openingHours);
+  const openBadge = openHoursBadge(open, nextOpen, todayStr);
+  const planned = findMatchingPlannedStop(place);
+  const cached = _placeGoogleCache[place.osmId];
+  const ratingHtml = cached?.rating
+    ? `<span class="vcard-rating"><i class="ph ph-star-fill" style="color:#f59e0b"></i> ${cached.rating.toFixed(1)} <span class="vcard-rating-count">(${cached.ratingCount.toLocaleString()})</span></span>`
+    : '<span class="vcard-rating vcard-rating-loading" data-osmid="' + place.osmId + '"></span>';
+  card.innerHTML = `
+    <div class="vegan-place-main">
+      <div class="vegan-place-name">${place.name}${planned ? ' <span class="vp-planned-badge"><i class="ph ph-calendar-check"></i> On itinerary</span>' : ''}</div>
+      <div class="vegan-place-meta">
+        <span class="vegan-place-type">${typeLabel}</span>
+        <span class="alt-card-vegan ${levelClass}">${levelLabel}</span>
+        ${openBadge}
+      </div>
+      <div class="vcard-bottom-row">
+        ${ratingHtml}
+        ${todayStr ? `<span class="vegan-place-hours-mini">${todayStr}</span>` : ''}
+      </div>
+    </div>
+    <div class="vegan-place-right">
+      <div class="vegan-place-dist">${distStr}</div>
+      <div class="vegan-place-chevron"><i class="ph ph-caret-right"></i></div>
+    </div>`;
+  card.addEventListener('click', () => openVeganDetail(place));
+  return card;
+}
+
+/* ── Vegan place detail overlay ─────────────────────────────────────── */
+let _vdPlace = null;
+let _vdMiniMap = null;
+let _cdMiniMap = null;
+let _veganCache = null;        // { lat, lng, places }
+let _chargerCache = null;      // { lat, lng, chargers }
+let _placeGoogleCache = {};    // osmId → gData
+let _chargerMinKW = 50;        // minimum kW filter for charger list
+
+function initMiniMap(containerId, lat, lng, mapRef) {
+  const el = document.getElementById(containerId);
+  if (!el) return mapRef;
+  if (mapRef) {
+    mapRef.setView([lat, lng], 16);
+    mapRef._vdMarker?.setLatLng([lat, lng]);
+    return mapRef;
+  }
+  const m = L.map(el, {
+    zoomControl: false, dragging: false, touchZoom: false,
+    scrollWheelZoom: false, doubleClickZoom: false, keyboard: false,
+    attributionControl: false,
+  }).setView([lat, lng], 16);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(m);
+  m._vdMarker = L.circleMarker([lat, lng], { radius: 8, fillColor: '#0a84ff', fillOpacity: 1, color: '#fff', weight: 2 }).addTo(m);
+  setTimeout(() => m.invalidateSize(), 50);
+  return m;
+}
+
+function openVeganDetail(place) {
+  _vdPlace = place;
+  const overlay = document.getElementById('vd-overlay');
+  if (!overlay) return;
+
+  const typeLabel = { restaurant:'Restaurant', cafe:'Café', bar:'Bar', fast_food:'Takeaway', bakery:'Bakery', pub:'Pub' }[place.type] || 'Place';
+  const typeIcon  = { restaurant:'🍽', cafe:'☕', bar:'🍷', fast_food:'🥡', bakery:'🥐', pub:'🍺' }[place.type] || '🌿';
+  const levelLabel = place.veganLevel === 'only' ? 'Fully vegan' : 'Vegan options';
+  const levelClass = place.veganLevel === 'only' ? 'full' : '';
+  const distStr = place.dist < 1000 ? `${Math.round(place.dist)}m away` : `${(place.dist / 1000).toFixed(1)}km away`;
+  const mapsUrl = mapsSearchUrl(place.name, place.address, place.lat, place.lng);
+  const mapsNavUrl = mapsDirectionsUrl(place.name, place.address, place.lat, place.lng);
+  const happycowUrl = `https://www.happycow.net/searchmap?lat=${place.lat}&lng=${place.lng}&zoom=16`;
+  const planned = findMatchingPlannedStop(place);
+  const { open, todayStr } = parseOpeningHours(place.openingHours);
+
+  // Hero: mini-map always shown; photo loads on top if available
+  const hero = document.getElementById('vd-hero');
+  const typeColors = { restaurant:'#ea580c', cafe:'#d97706', bar:'#7c3aed', fast_food:'#dc2626', bakery:'#b45309', pub:'#4f46e5' };
+  const heroColor = typeColors[place.type] || '#16a34a';
+  hero.style.background = '';
+  hero.innerHTML = '<div id="vd-mini-map" style="width:100%;height:100%"></div>';
+  _vdMiniMap = initMiniMap('vd-mini-map', place.lat, place.lng, null);
+  // Try to overlay a photo if one is available
+  const tryPhoto = place.image?.startsWith('http') ? Promise.resolve(place.image)
+    : place.image ? fetchWikimediaPhoto(place.image) : Promise.resolve(null);
+  tryPhoto.then(url => {
+    if (url && !document.getElementById('vd-overlay').classList.contains('hidden')) {
+      hero.style.background = `url(${url}) center/cover no-repeat`;
+      hero.innerHTML = '<div class="vd-hero-scrim"></div>';
+    }
+  });
+
+  // Meta row
+  document.getElementById('vd-meta-row').innerHTML =
+    `<span class="tl-card-badge" style="background:${heroColor}22;color:${heroColor}">${typeLabel}</span>` +
+    `<span class="alt-card-vegan ${levelClass}" style="margin-left:8px">${levelLabel}</span>` +
+    (planned ? `<span class="vp-planned-badge" style="margin-left:8px"><i class="ph ph-calendar-check"></i> On itinerary</span>` : '') +
+    `<span class="vd-dist-label">${distStr}</span>`;
+
+  // Name
+  document.getElementById('vd-name').textContent = place.name;
+
+  // Hours
+  const hoursEl = document.getElementById('vd-hours-row');
+  if (place.openingHours) {
+    const statusClass = open === true ? 'open' : open === false ? 'closed' : '';
+    const statusText  = open === true ? 'Open now' : open === false ? 'Closed now' : '';
+    hoursEl.className = 'vd-hours-row';
+    hoursEl.innerHTML =
+      `<i class="ph ph-clock"></i>` +
+      (statusText ? `<span class="vp-open-badge ${statusClass}" style="margin-right:6px">${statusText}</span>` : '') +
+      `<span class="vd-hours-text">${todayStr || place.openingHours}</span>`;
+    if (place.openingHours && todayStr !== place.openingHours) {
+      hoursEl.innerHTML += `<button class="vd-hours-expand" id="vd-hours-toggle"><i class="ph ph-caret-down"></i></button>
+        <div class="vd-full-hours hidden" id="vd-full-hours">${place.openingHours}</div>`;
+      hoursEl.querySelector('#vd-hours-toggle')?.addEventListener('click', () => {
+        const fh = document.getElementById('vd-full-hours');
+        const btn = document.getElementById('vd-hours-toggle');
+        fh.classList.toggle('hidden');
+        btn.innerHTML = fh.classList.contains('hidden') ? '<i class="ph ph-caret-down"></i>' : '<i class="ph ph-caret-up"></i>';
+      });
+    }
+    hoursEl.classList.remove('hidden');
+  } else {
+    hoursEl.className = 'hidden';
+  }
+
+  // Address
+  const addrEl = document.getElementById('vd-address');
+  addrEl.innerHTML = place.address ? `<i class="ph ph-map-pin"></i> ${place.address}` : '';
+  addrEl.className = place.address ? 'vd-info-line' : 'hidden';
+
+  // Info rows (phone, website, cuisine)
+  const infoEl = document.getElementById('vd-info-rows');
+  const rows = [];
+  if (place.cuisine) rows.push(`<div class="vd-info-line"><i class="ph ph-fork-knife"></i> ${place.cuisine}</div>`);
+  if (place.phone)   rows.push(`<a class="vd-info-line vd-info-link" href="tel:${place.phone}"><i class="ph ph-phone"></i> ${place.phone}</a>`);
+  if (place.website) rows.push(`<a class="vd-info-line vd-info-link" href="${place.website}" target="_blank" rel="noopener"><i class="ph ph-globe"></i> Website</a>`);
+  infoEl.innerHTML = rows.join('');
+
+  // Links row (reviews/photos)
+  document.getElementById('vd-links-row').innerHTML =
+    `<div class="vd-links-label"><i class="ph ph-star"></i> Ratings, reviews &amp; photos</div>
+     <div class="vd-links-btns">
+       <a class="vd-link-btn gmaps" href="${mapsUrl}" target="_blank" rel="noopener">
+         <i class="ph ph-google-logo"></i><div><span class="vd-link-title">Google Maps</span><span class="vd-link-sub">Reviews &amp; photos</span></div>
+       </a>
+       <a class="vd-link-btn happycow" href="${happycowUrl}" target="_blank" rel="noopener">
+         <i class="ph ph-leaf"></i><div><span class="vd-link-title">HappyCow</span><span class="vd-link-sub">Vegan reviews</span></div>
+       </a>
+     </div>`;
+
+  // Maps link in topbar
+  document.getElementById('vd-maps-link').href = mapsUrl;
+
+  // Toolbar
+  const addLabel = planned ? 'Already on itinerary' : 'Add to trip';
+  const addDisabled = planned ? 'disabled' : '';
+  document.getElementById('vd-toolbar').innerHTML =
+    `<a class="detail-tool-btn nav-tool" href="${mapsNavUrl}" target="_blank" rel="noopener"><i class="ph ph-navigation-arrow"></i>Navigate</a>` +
+    `<button class="detail-tool-btn vd-add-tool" id="vd-add-btn" ${addDisabled}><i class="ph ph-calendar-plus"></i>${addLabel}</button>`;
+
+  document.getElementById('vd-add-btn')?.addEventListener('click', () => {
+    if (!planned) openVeganAddSheet();
+  });
+
+  // Back button
+  document.getElementById('vd-back').onclick = () => {
+    overlay.classList.add('hidden');
+    _vdPlace = null;
+  };
+
+  overlay.classList.remove('hidden');
+
+  // Async: fetch Google Places data (use cache if available)
+  const _vdFetch = _placeGoogleCache[place.osmId]
+    ? Promise.resolve(_placeGoogleCache[place.osmId])
+    : fetchGooglePlace(place.name, place.address, place.lat, place.lng);
+  _vdFetch.then(gData => {
+    if (!gData) return;
+    _placeGoogleCache[place.osmId] = gData;
+    if (!overlay.classList.contains('hidden') && _vdPlace === place)
+      injectGoogleData(gData, hero, document.getElementById('vd-body'));
+  });
+}
+
+/* ── Add vegan place to trip ────────────────────────────────────────── */
+function openVeganAddSheet() {
+  const sheet = document.getElementById('vd-add-overlay');
+  if (!sheet) return;
+
+  // Populate day buttons
+  const daysEl = document.getElementById('vd-add-days');
+  daysEl.innerHTML = '';
+  let selectedDayId = state.currentDayId;
+  TRIP_DATA.days.filter(d => !d.isCountdown).forEach(day => {
+    const btn = document.createElement('button');
+    btn.className = 'vd-day-btn' + (day.id === selectedDayId ? ' selected' : '');
+    btn.dataset.dayId = day.id;
+    btn.innerHTML = `<span class="vd-day-btn-name">${getDayLabel(day)}</span><span class="vd-day-btn-date">${formatDate(day.date)}</span>`;
+    btn.addEventListener('click', () => {
+      daysEl.querySelectorAll('.vd-day-btn').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+      selectedDayId = day.id;
+    });
+    daysEl.appendChild(btn);
+  });
+
+  // Scroll selected day into view
+  setTimeout(() => daysEl.querySelector('.selected')?.scrollIntoView({ block:'nearest', behavior:'smooth' }), 50);
+
+  document.getElementById('vd-add-close').onclick = () => sheet.classList.add('hidden');
+  document.getElementById('vd-add-cancel').onclick = () => sheet.classList.add('hidden');
+  document.getElementById('vd-add-confirm').onclick = () => {
+    const time    = document.getElementById('vd-add-time').value || '12:00';
+    const ripple  = document.getElementById('vd-add-ripple').checked;
+    const day     = TRIP_DATA.days.find(d => d.id === selectedDayId);
+    if (!day || !_vdPlace) return;
+
+    saveUndoSnapshot();
+    const newStop = {
+      id:       'vegan_' + Date.now(),
+      time,
+      location: _vdPlace.name,
+      type:     _vdPlace.type === 'bakery' ? 'food' : (_vdPlace.type === 'cafe' ? 'food' : 'food'),
+      duration: 45,
+      reason:   (_vdPlace.cuisine ? _vdPlace.cuisine + ' — ' : '') + 'Vegan ' + (_vdPlace.veganLevel === 'only' ? '(fully vegan)' : 'options'),
+      lat:      _vdPlace.lat,
+      lng:      _vdPlace.lng,
+      mapsUrl:  `https://www.google.com/maps/search/?api=1&query=${_vdPlace.lat},${_vdPlace.lng}`,
+      veganFriendly: true,
+      order:    999,
+    };
+
+    if (!state.addedStops[day.id]) state.addedStops[day.id] = [];
+    state.addedStops[day.id].push(newStop);
+
+    if (ripple) {
+      // Shift all stops that come after this one by the new stop's duration
+      cascadeTimeDelta(newStop, newStop.duration);
+    }
+
+    save();
+    sheet.classList.add('hidden');
+    document.getElementById('vd-overlay').classList.add('hidden');
+    _vdPlace = null;
+
+    // Switch to day view for that day
+    state.currentDayId = day.id;
+    state.currentView = 'day';
+    renderView(false);
+    showToast(`${newStop.location} added to ${getDayLabel(day)}`);
+  };
+
+  sheet.classList.remove('hidden');
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   EV CHARGER FINDER
+   ═══════════════════════════════════════════════════════════════════════ */
+
+const CHARGER_BRANDS = {
+  tesla:    { label:'Tesla Supercharger', color:'#cc0000', icon:'⚡' },
+  ionity:   { label:'Ionity',             color:'#6d28d9', icon:'⚡' },
+  fastned:  { label:'Fastned',            color:'#f59e0b', icon:'⚡' },
+  electra:  { label:'Electra',            color:'#0ea5e9', icon:'⚡' },
+  'bp pulse':{ label:'BP Pulse',          color:'#16a34a', icon:'⚡' },
+  default:  { label:'Charger',            color:'#3b82f6', icon:'⚡' },
+};
+
+function chargerBrand(op) {
+  if (!op) return CHARGER_BRANDS.default;
+  const lo = op.toLowerCase();
+  for (const [key, val] of Object.entries(CHARGER_BRANDS)) {
+    if (key !== 'default' && lo.includes(key)) return { ...val, isTesla: key === 'tesla' };
+  }
+  return { ...CHARGER_BRANDS.default, label: op };
+}
+
+function parseKW(str) {
+  if (!str) return null;
+  const m = str.match(/(\d+(?:\.\d+)?)\s*(?:kW|KW|kw)?/);
+  return m ? parseFloat(m[1]) : null;
+}
+
+async function fetchChargersNearby(lat, lng, radiusM) {
+  const query = `[out:json][timeout:15];(nwr["amenity"="charging_station"](around:${radiusM},${lat},${lng}););out center body qt;`;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 20000);
+  let res;
+  try {
+    res = await fetch('https://overpass-api.de/api/interpreter', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: 'data=' + encodeURIComponent(query),
+      signal: ctrl.signal,
+    });
+  } finally { clearTimeout(timer); }
+  if (!res.ok) throw new Error('Overpass error');
+  const json = await res.json();
+
+  return (json.elements || []).map(el => {
+    const elLat = el.lat ?? el.center?.lat;
+    const elLng = el.lon ?? el.center?.lon;
+    if (!elLat || !elLng) return null;
+    const t = el.tags || {};
+
+    // Operator / network
+    const operator = t.operator || t.network || t.brand || '';
+
+    // Max kW — scan all socket output tags
+    let maxKW = null;
+    for (const [k, v] of Object.entries(t)) {
+      if (k.endsWith(':output') || k === 'maxpower' || k === 'charging_station:output') {
+        const kw = parseKW(v);
+        if (kw && kw > (maxKW || 0)) maxKW = kw;
+      }
+    }
+
+    // Connector types and counts
+    const connectors = [];
+    const socketKeys = { 'socket:type2_combo':'CCS', 'socket:ccs':'CCS', 'socket:chademo':'CHAdeMO',
+      'socket:tesla_supercharger':'Tesla', 'socket:type2':'Type 2', 'socket:type1':'Type 1' };
+    for (const [sk, label] of Object.entries(socketKeys)) {
+      const count = parseInt(t[sk]) || 0;
+      const kw    = parseKW(t[`${sk}:output`]);
+      if (count > 0 || t[sk]) connectors.push({ label, count: count || null, kw });
+    }
+
+    return {
+      osmId:        el.id,
+      name:         t.name || t['name:en'] || operator || 'Charging station',
+      operator,
+      address:      [t['addr:housenumber'], t['addr:street'], t['addr:city']].filter(Boolean).join(' '),
+      openingHours: t.opening_hours || '',
+      fee:          t.fee,
+      charge:       t.charge || t['charge:description'] || '',
+      capacity:     parseInt(t.capacity) || null,
+      maxKW,
+      connectors,
+      phone:        t.phone || '',
+      website:      t.website || '',
+      lat: elLat, lng: elLng,
+      dist: haversineM(lat, lng, elLat, elLng),
+    };
+  }).filter(Boolean).sort((a, b) => a.dist - b.dist).slice(0, 40);
+}
+
+const TESLA_CONNECTORS = new Set(['CCS', 'Tesla', 'Type 2']);
+
+function isTeslaCompatible(charger) {
+  // Must have at least one CCS, Tesla, or high-power Type 2 connector
+  return charger.connectors.some(c => TESLA_CONNECTORS.has(c.label)) ||
+    (charger.maxKW && charger.maxKW >= _chargerMinKW);
+}
+
+function applyChargerFilters(chargers) {
+  return chargers.filter(c => {
+    const compatible = isTeslaCompatible(c);
+    const kw = c.maxKW || c.connectors.reduce((mx, cn) => Math.max(mx, cn.kw || 0), 0);
+    const meetsKW = kw >= _chargerMinKW;
+    return compatible && meetsKW;
+  });
+}
+
+async function renderChargerView(container) {
+  container.innerHTML = '';
+
+  const hdr = document.createElement('div');
+  hdr.className = 'vegan-view-header';
+  hdr.style.color = 'var(--teal)';
+  hdr.innerHTML = '<i class="ph ph-lightning"></i> EV Chargers near you';
+  container.appendChild(hdr);
+
+  // Min kW filter stepper
+  const KW_STEPS = [22, 50, 75, 100, 150, 350];
+  const filterRow = document.createElement('div');
+  filterRow.className = 'charger-filter-row';
+  const updateStepperLabel = () => `${_chargerMinKW} kW min`;
+  filterRow.innerHTML = `
+    <span class="charger-filter-label"><i class="ph ph-lightning"></i> Min power</span>
+    <div class="charger-kw-stepper">
+      <button class="charger-kw-btn" id="charger-kw-dec"><i class="ph ph-minus"></i></button>
+      <span class="charger-kw-val" id="charger-kw-val">${_chargerMinKW} kW</span>
+      <button class="charger-kw-btn" id="charger-kw-inc"><i class="ph ph-plus"></i></button>
+    </div>
+    <span class="charger-filter-note">Tesla-compatible only</span>`;
+  container.appendChild(filterRow);
+
+  const nearbySection = document.createElement('div');
+  nearbySection.className = 'vegan-nearby-section';
+  container.appendChild(nearbySection);
+
+  const renderFilteredChargers = (allChargers, fromCache) => {
+    const filtered = applyChargerFilters(allChargers);
+    nearbySection.innerHTML = '';
+    if (filtered.length === 0) {
+      nearbySection.innerHTML = `<div class="vegan-empty"><i class="ph ph-charging-station"></i><div>No compatible chargers found at ${_chargerMinKW}kW+.<br>Try lowering the minimum power.</div></div>`;
+    } else {
+      const sub = document.createElement('div');
+      sub.className = 'vegan-nearby-subtitle';
+      sub.textContent = `${filtered.length} station${filtered.length !== 1 ? 's' : ''} found${fromCache ? ' · pull to refresh' : ''}`;
+      nearbySection.appendChild(sub);
+      filtered.forEach(c => nearbySection.appendChild(buildChargerCard(c)));
+    }
+  };
+
+  // Wire stepper buttons — re-filter without re-fetching
+  container.addEventListener('click', e => {
+    const allChargers = _chargerCache?.chargers;
+    if (!allChargers) return;
+    const cidx = KW_STEPS.indexOf(_chargerMinKW);
+    if (e.target.closest('#charger-kw-dec') && cidx > 0) {
+      _chargerMinKW = KW_STEPS[cidx - 1];
+    } else if (e.target.closest('#charger-kw-inc') && cidx < KW_STEPS.length - 1) {
+      _chargerMinKW = KW_STEPS[cidx + 1];
+    } else return;
+    document.getElementById('charger-kw-val').textContent = `${_chargerMinKW} kW`;
+    renderFilteredChargers(allChargers, true);
+  });
+
+  if (_userLat === null) {
+    nearbySection.innerHTML = `<div class="vegan-no-gps"><i class="ph ph-map-pin-slash"></i><div>Enable location to find chargers near you</div><button class="pill-btn primary" id="charger-gps-btn">Share location</button></div>`;
+    nearbySection.querySelector('#charger-gps-btn')?.addEventListener('click', () => {
+      startLocationWatch();
+      nearbySection.innerHTML = `<div class="vegan-searching"><i class="ph ph-spinner vegan-spin"></i> Getting your location…</div>`;
+    });
+  } else {
+    const isCached = _chargerCache &&
+      Math.abs(_chargerCache.lat - _userLat) < 0.05 &&
+      Math.abs(_chargerCache.lng - _userLng) < 0.05;
+    if (isCached) {
+      renderFilteredChargers(_chargerCache.chargers, true);
+    } else {
+      nearbySection.innerHTML = `<div class="vegan-searching"><i class="ph ph-spinner vegan-spin"></i> Finding chargers within 20 km…</div>`;
+      try {
+        const chargers = await fetchChargersNearby(_userLat, _userLng, 20000);
+        _chargerCache = { lat: _userLat, lng: _userLng, chargers };
+        renderFilteredChargers(chargers, false);
+      } catch {
+        nearbySection.innerHTML = `<div class="vegan-empty"><i class="ph ph-wifi-slash"></i><div>Couldn't load chargers — check connection.</div></div>`;
+      }
+    }
+  }
+
+  // Planned charging stops
+  const planHdr = document.createElement('div');
+  planHdr.className = 'vegan-plan-header';
+  planHdr.innerHTML = '<i class="ph ph-calendar-check"></i> On your itinerary';
+  container.appendChild(planHdr);
+
+  let found = false;
+  TRIP_DATA.days.forEach(day => {
+    getDayStops(day).forEach(stop => {
+      if (stop.type !== 'charging') return;
+      found = true;
+      const card = document.createElement('div');
+      card.className = 'vegan-place-card';
+      const dateStr = day.isFestival ? '20–27 Jun' : formatDate(day.date);
+      card.innerHTML = `
+        <div class="vegan-place-main">
+          <div class="vegan-place-name">${stop.location} <span class="vp-planned-badge"><i class="ph ph-calendar-check"></i> ${getDayLabel(day)} · ${dateStr}</span></div>
+          <div class="vegan-place-meta">
+            <span class="vegan-place-type">${stopTypeIcon(stop)} Charging stop</span>
+            <span class="alt-card-vegan full" style="background:rgba(56,189,248,.15);color:var(--teal);border-color:rgba(56,189,248,.3)">On itinerary</span>
+          </div>
+          ${stop.reason ? `<div class="vegan-place-hours-mini">${stop.reason}</div>` : ''}
+        </div>
+        <div class="vegan-place-right">
+          <div class="vegan-place-chevron"><i class="ph ph-caret-right"></i></div>
+        </div>`;
+      card.addEventListener('click', () => openDetail(stop));
+      container.appendChild(card);
+    });
+  });
+  if (!found) {
+    const empty = document.createElement('div');
+    empty.className = 'vegan-empty';
+    empty.innerHTML = '<i class="ph ph-calendar-x"></i><div>No charging stops on current itinerary.</div>';
+    container.appendChild(empty);
+  }
+}
+
+function buildChargerCard(charger) {
+  const card = document.createElement('div');
+  card.className = 'charger-card';
+  const distStr = charger.dist < 1000 ? `${Math.round(charger.dist)}m` : `${(charger.dist / 1000).toFixed(1)}km`;
+  const brand = chargerBrand(charger.operator);
+  const { open, todayStr, nextOpen } = parseOpeningHours(charger.openingHours);
+  const openBadge = openHoursBadge(open, nextOpen, todayStr);
+  const kw = charger.maxKW || charger.connectors.reduce((mx, c) => Math.max(mx, c.kw || 0), 0);
+  const kwBadge = kw ? `<span class="charger-kw-badge">${Math.round(kw)} kW</span>` : '';
+  const bays = charger.capacity ? `<span class="charger-bays"><i class="ph ph-charging-station"></i> ${charger.capacity}</span>` : '';
+  const priceBadge = charger.charge ? `<span class="charger-price-badge">${charger.charge}</span>` : (charger.fee === 'no' ? '<span class="charger-price-badge free">Free</span>' : '');
+
+  const sameName = !charger.name || charger.name === charger.operator || charger.name === 'Charging station';
+  const displayName = sameName ? (charger.address || brand.label + ' station') : charger.name;
+  const displayAddr = (sameName || !charger.address) ? '' : charger.address;
+
+  const connChips = charger.connectors
+    .filter(c => TESLA_CONNECTORS.has(c.label))
+    .slice(0, 3).map(c =>
+      `<span class="charger-conn-chip">${c.label}${c.kw ? ' · ' + Math.round(c.kw) + 'kW' : ''}</span>`
+    ).join('');
+
+  card.innerHTML = `
+    <div class="charger-card-row">
+      <div class="charger-card-left">
+        <div class="charger-brand-pill" style="background:${brand.color}22;color:${brand.color}">
+          ${brand.isTesla ? '⚡ ' : '<i class="ph ph-charging-station"></i> '}${brand.label}
+        </div>
+        <div class="charger-card-name">${displayName}</div>
+        ${displayAddr ? `<div class="charger-card-addr">${displayAddr}</div>` : ''}
+        <div class="charger-card-chips">${kwBadge}${bays}${openBadge}${priceBadge}${connChips}</div>
+      </div>
+      <div class="charger-card-right">
+        <div class="vegan-place-dist">${distStr}</div>
+        <div class="vegan-place-chevron"><i class="ph ph-caret-right"></i></div>
+      </div>
+    </div>`;
+  card.addEventListener('click', () => openChargerDetail(charger));
+  return card;
+}
+
+/* ── Charger detail overlay ─────────────────────────────────────────── */
+let _cdPlace = null;
+
+function openChargerDetail(charger) {
+  _cdPlace = charger;
+  const overlay = document.getElementById('cd-overlay');
+  if (!overlay) return;
+
+  const brand = chargerBrand(charger.operator);
+  const distStr = charger.dist < 1000 ? `${Math.round(charger.dist)}m away` : `${(charger.dist / 1000).toFixed(1)}km away`;
+  const mapsUrl = mapsSearchUrl(charger.name, charger.address, charger.lat, charger.lng);
+  const mapsNav = mapsDirectionsUrl(charger.name, charger.address, charger.lat, charger.lng);
+  const teslaNav = `https://www.tesla.com/_tsla/journey/?lat=${charger.lat}&lng=${charger.lng}`;
+  const { open, todayStr } = parseOpeningHours(charger.openingHours);
+
+  // Hero
+  const hero = document.getElementById('cd-hero');
+  hero.style.background = '';
+  hero.innerHTML = '<div id="cd-mini-map" style="width:100%;height:100%"></div>';
+  _cdMiniMap = initMiniMap('cd-mini-map', charger.lat, charger.lng, null);
+
+  // Meta row
+  document.getElementById('cd-meta-row').innerHTML =
+    `<span class="tl-card-badge" style="background:${brand.color}22;color:${brand.color}">${brand.label}</span>` +
+    (charger.maxKW ? `<span class="charger-kw-badge" style="margin-left:8px">${Math.round(charger.maxKW)}kW max</span>` : '') +
+    `<span class="vd-dist-label">${distStr}</span>`;
+
+  document.getElementById('cd-name').textContent = charger.name;
+
+  // Hours
+  const hoursEl = document.getElementById('cd-hours-row');
+  if (charger.openingHours) {
+    const statusClass = open === true ? 'open' : open === false ? 'closed' : '';
+    const statusText  = open === true ? 'Open now' : open === false ? 'Closed now' : '';
+    hoursEl.className = 'vd-hours-row';
+    hoursEl.innerHTML = `<i class="ph ph-clock"></i>` +
+      (statusText ? `<span class="vp-open-badge ${statusClass}">${statusText}</span>` : '') +
+      `<span class="vd-hours-text">${todayStr || charger.openingHours}</span>`;
+  } else {
+    hoursEl.className = 'hidden';
+  }
+
+  // Address
+  const addrEl = document.getElementById('cd-address');
+  addrEl.innerHTML = charger.address ? `<i class="ph ph-map-pin"></i> ${charger.address}` : '';
+  addrEl.className = charger.address ? 'vd-info-line' : 'hidden';
+
+  // Connectors table
+  const infoEl = document.getElementById('cd-info-rows');
+  const rows = [];
+  if (charger.connectors.length) {
+    rows.push('<div class="cd-connectors">');
+    charger.connectors.forEach(c => {
+      rows.push(`<div class="cd-connector-row">
+        <span class="cd-connector-label">${c.label}</span>
+        ${c.kw ? `<span class="charger-kw-badge">${Math.round(c.kw)}kW</span>` : ''}
+        ${c.count ? `<span class="cd-connector-count">${c.count} bay${c.count !== 1 ? 's' : ''}</span>` : ''}
+      </div>`);
+    });
+    rows.push('</div>');
+  }
+  if (charger.capacity && !charger.connectors.length)
+    rows.push(`<div class="vd-info-line"><i class="ph ph-stack"></i> ${charger.capacity} charging bays total</div>`);
+  if (charger.charge)
+    rows.push(`<div class="vd-info-line"><i class="ph ph-currency-circle-dollar"></i> ${charger.charge}</div>`);
+  else if (charger.fee === 'no')
+    rows.push(`<div class="vd-info-line"><i class="ph ph-currency-circle-dollar"></i> Free to use</div>`);
+  if (charger.phone)
+    rows.push(`<a class="vd-info-line vd-info-link" href="tel:${charger.phone}"><i class="ph ph-phone"></i> ${charger.phone}</a>`);
+  if (charger.website)
+    rows.push(`<a class="vd-info-line vd-info-link" href="${charger.website}" target="_blank" rel="noopener"><i class="ph ph-globe"></i> Operator website</a>`);
+
+  // Real-time note
+  rows.push(`<div class="cd-realtime-note"><i class="ph ph-info"></i> Live bay availability requires the operator's app</div>`);
+  infoEl.innerHTML = rows.join('');
+
+  // Links row
+  document.getElementById('cd-links-row').innerHTML =
+    `<div class="vd-links-label">Open in</div>
+     <div class="vd-links-btns">
+       <a class="vd-link-btn gmaps" href="${mapsUrl}" target="_blank" rel="noopener"><i class="ph ph-google-logo"></i><span>Google Maps</span></a>
+       ${brand.isTesla ? `<a class="vd-link-btn" style="color:#cc0000;background:rgba(204,0,0,.1);border-color:rgba(204,0,0,.2)" href="https://www.tesla.com/en_gb/charging" target="_blank" rel="noopener"><span>⚡</span><span>Tesla app</span></a>` : ''}
+     </div>`;
+
+  document.getElementById('cd-maps-link').href = mapsUrl;
+
+  // Toolbar
+  const isPlanned = TRIP_DATA.days.some(d => getDayStops(d).some(s => s.lat && haversineM(s.lat, s.lng, charger.lat, charger.lng) < 200));
+  document.getElementById('cd-toolbar').innerHTML =
+    `<a class="detail-tool-btn nav-tool" href="${mapsNav}" target="_blank" rel="noopener"><i class="ph ph-navigation-arrow"></i>Navigate</a>` +
+    `<button class="detail-tool-btn vd-add-tool" id="cd-add-btn" ${isPlanned ? 'disabled' : ''}><i class="ph ph-calendar-plus"></i>${isPlanned ? 'On itinerary' : 'Add to trip'}</button>`;
+
+  document.getElementById('cd-add-btn')?.addEventListener('click', () => {
+    if (!isPlanned) openChargerAddSheet();
+  });
+
+  document.getElementById('cd-back').onclick = () => { overlay.classList.add('hidden'); _cdPlace = null; };
+  overlay.classList.remove('hidden');
+
+  // Async: fetch Google Places data for charger (ratings/photos where available)
+  fetchGooglePlace(charger.name, charger.address, charger.lat, charger.lng).then(gData => {
+    if (!overlay.classList.contains('hidden') && _cdPlace === charger)
+      injectGoogleData(gData, hero, document.getElementById('cd-body'));
+  });
+}
+
+function openChargerAddSheet() {
+  const sheet = document.getElementById('cd-add-overlay');
+  if (!sheet) return;
+  const daysEl = document.getElementById('cd-add-days');
+  daysEl.innerHTML = '';
+  let selectedDayId = state.currentDayId;
+  TRIP_DATA.days.filter(d => !d.isCountdown).forEach(day => {
+    const btn = document.createElement('button');
+    btn.className = 'vd-day-btn' + (day.id === selectedDayId ? ' selected' : '');
+    btn.dataset.dayId = day.id;
+    btn.innerHTML = `<span class="vd-day-btn-name">${getDayLabel(day)}</span><span class="vd-day-btn-date">${formatDate(day.date)}</span>`;
+    btn.addEventListener('click', () => {
+      daysEl.querySelectorAll('.vd-day-btn').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected'); selectedDayId = day.id;
+    });
+    daysEl.appendChild(btn);
+  });
+  setTimeout(() => daysEl.querySelector('.selected')?.scrollIntoView({ block:'nearest', behavior:'smooth' }), 50);
+
+  document.getElementById('cd-add-close').onclick  = () => sheet.classList.add('hidden');
+  document.getElementById('cd-add-cancel').onclick = () => sheet.classList.add('hidden');
+  document.getElementById('cd-add-confirm').onclick = () => {
+    const time   = document.getElementById('cd-add-time').value || '12:00';
+    const ripple = document.getElementById('cd-add-ripple').checked;
+    const day    = TRIP_DATA.days.find(d => d.id === selectedDayId);
+    if (!day || !_cdPlace) return;
+    saveUndoSnapshot();
+    const newStop = {
+      id: 'charger_' + Date.now(), time, type: 'charging', duration: 30,
+      location: _cdPlace.name || 'Charging stop',
+      reason: [_cdPlace.operator, _cdPlace.maxKW ? `${Math.round(_cdPlace.maxKW)}kW` : '', _cdPlace.charge].filter(Boolean).join(' · '),
+      lat: _cdPlace.lat, lng: _cdPlace.lng,
+      mapsUrl: mapsSearchUrl(_cdPlace.name, _cdPlace.address, _cdPlace.lat, _cdPlace.lng),
+      order: 999,
+    };
+    if (!state.addedStops[day.id]) state.addedStops[day.id] = [];
+    state.addedStops[day.id].push(newStop);
+    if (ripple) applyTravelAction(day, newStop, time, true);
+    save();
+    sheet.classList.add('hidden');
+    document.getElementById('cd-overlay').classList.add('hidden');
+    _cdPlace = null;
+    state.currentDayId = day.id; state.currentView = 'day';
+    renderView(false);
+    showToast(`Charging stop added to ${getDayLabel(day)}`);
+  };
+  sheet.classList.remove('hidden');
+}
+
 function renderFilterList(container, kind) {
   container.innerHTML = '';
   TRIP_DATA.days.forEach(day => {
@@ -1377,6 +3424,54 @@ function renderFilterList(container, kind) {
 
 /* ── Countdown banner ──────────────────────────────────────────────── */
 let _countdownInterval = null;
+
+/* Returns { state:'travelling'|'at_stop'|'done', stop, nextStop, targetMs, day }
+   based on today's trip day stops and current time. */
+function getTripState() {
+  const todayStr = localDateStr();
+  // Find the trip day for today (non-countdown, non-festival, matching date; or festival matching range)
+  const today = TRIP_DATA.days.find(d => {
+    if (d.isCountdown) return false;
+    if (d.isFestival) return todayStr >= d.date && todayStr <= d.dateEnd;
+    return d.date === todayStr;
+  });
+  if (!today) return null;
+  const stops = getDayStops(today);
+  if (!stops.length) return null;
+
+  const nowMs = Date.now();
+  const dayDate = today.date;
+
+  // Build stop schedule: { stop, arrivalMs, leaveMs }
+  const schedule = stops.map(s => {
+    const timeStr = getStopTime(s);
+    const arrivalMs = timeStr ? new Date(dayDate + 'T' + timeStr + ':00+01:00').getTime() : null;
+    const dur = getStopDuration(s);
+    const leaveMs = arrivalMs !== null ? arrivalMs + dur * 60000 : null;
+    return { stop: s, arrivalMs, leaveMs };
+  }).filter(s => s.arrivalMs !== null);
+
+  if (!schedule.length) return null;
+
+  // Are we at a stop? (arrived but not yet left)
+  for (let i = 0; i < schedule.length; i++) {
+    const { stop, arrivalMs, leaveMs } = schedule[i];
+    if (nowMs >= arrivalMs && nowMs < leaveMs) {
+      return { state: 'at_stop', stop, nextStop: schedule[i + 1]?.stop || null, targetMs: leaveMs, day: today };
+    }
+  }
+
+  // Are we travelling to a stop? (past leave time of previous, before arrival of next)
+  for (let i = 0; i < schedule.length; i++) {
+    const { stop, arrivalMs } = schedule[i];
+    if (nowMs < arrivalMs) {
+      return { state: 'travelling', stop, nextStop: null, targetMs: arrivalMs, day: today };
+    }
+  }
+
+  // Past all stops
+  return { state: 'done', stop: schedule[schedule.length - 1].stop, nextStop: null, targetMs: null, day: today };
+}
 
 function renderCountdownBanner(container) {
   // Departure: Wed 17 Jun 2026 10:30 UK time
@@ -1401,7 +3496,7 @@ function renderCountdownBanner(container) {
   function tick() {
     const { days, hours, mins, secs, departed } = formatCountdown();
     if (departed) {
-      banner.innerHTML = `<div class="cd-emoji"><i class="ph ph-car"></i></div><h2 class="cd-title">We're on our way!</h2><p class="cd-sub">Annecy 2026 · Have a wonderful trip</p>`;
+      renderTripProgressBanner(container, banner);
       clearInterval(_countdownInterval);
       return;
     }
@@ -1425,6 +3520,209 @@ function renderCountdownBanner(container) {
   _countdownInterval = setInterval(tick, 1000);
 }
 
+/* ── Trip progress banner (shown after departure countdown hits zero) ── */
+function renderTripProgressBanner(container, existingBanner) {
+  if (existingBanner) existingBanner.remove();
+  container.innerHTML = '';
+
+  const banner = document.createElement('div');
+  banner.className = 'countdown-banner';
+  container.appendChild(banner);
+
+  function pad2(n) { return String(n).padStart(2, '0'); }
+
+  function fmtHMS(ms) {
+    if (ms <= 0) return '00:00:00';
+    const s = Math.floor(ms / 1000);
+    return `${pad2(Math.floor(s/3600))}:${pad2(Math.floor(s/3600*60)%60 || Math.floor((s%3600)/60))}:${pad2(s%60)}`;
+  }
+
+  function fmtHMSfromMs(ms) {
+    if (ms <= 0) return '00:00:00';
+    const totalSec = Math.floor(ms / 1000);
+    const h = Math.floor(totalSec / 3600);
+    const m = Math.floor((totalSec % 3600) / 60);
+    const s = totalSec % 60;
+    return `${pad2(h)}:${pad2(m)}:${pad2(s)}`;
+  }
+
+  let _stopCard = null;
+  let _lastStopId = null;
+  let _weatherStr = '<i class="ph ph-spinner ph-spin" style="opacity:.4"></i>';
+
+  function getDistStr(stop) {
+    if (!stop.lat || !stop.lng) return null;
+    if (!navigator.geolocation) return null;
+    return new Promise(resolve => {
+      navigator.geolocation.getCurrentPosition(pos => {
+        const R = 6371;
+        const dLat = (stop.lat - pos.coords.latitude) * Math.PI / 180;
+        const dLon = (stop.lng - pos.coords.longitude) * Math.PI / 180;
+        const a = Math.sin(dLat/2)**2 + Math.cos(pos.coords.latitude*Math.PI/180)*Math.cos(stop.lat*Math.PI/180)*Math.sin(dLon/2)**2;
+        const km = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        resolve(fmtDist(km));
+      }, () => resolve(null), { timeout: 5000 });
+    });
+  }
+
+  async function loadWeather(stop, day) {
+    if (!day) return;
+    try {
+      const wMap = await fetchWeatherForDay(day);
+      if (!wMap) return;
+      const w = lookupHourlyWeather(wMap, day.date, getStopTime(stop) || '12:00');
+      if (!w) return;
+      _weatherStr = `<i class="ph ${w.icon}"></i> ${w.tempC}°C`;
+      const dist = await getDistStr(stop);
+      if (dist) _weatherStr += ` · ${dist}`;
+    } catch(e) {}
+  }
+
+  function renderStopCard(stop, day) {
+    if (_lastStopId === stop.id && _stopCard) return;
+    _lastStopId = stop.id;
+    if (_stopCard) _stopCard.remove();
+    _stopCard = buildTimelineItem(stop, false, day, null);
+    _stopCard.style.marginTop = '12px';
+    container.appendChild(_stopCard);
+    loadWeather(stop, day);
+  }
+
+  function tick() {
+    const ts = getTripState();
+    if (!ts) {
+      banner.innerHTML = `<div class="cd-emoji"><i class="ph ph-confetti"></i></div><h2 class="cd-title">Enjoy the festival!</h2>`;
+      clearInterval(_countdownInterval);
+      return;
+    }
+
+    const remaining = ts.targetMs ? ts.targetMs - Date.now() : 0;
+    const timeStr = ts.targetMs ? fmtHMSfromMs(Math.max(0, remaining)) : '—';
+
+    if (ts.state === 'travelling') {
+      const name = getStopName(ts.stop);
+      banner.innerHTML = `
+        <div class="cd-emoji"><i class="ph ph-car"></i></div>
+        <h2 class="cd-title">${name}</h2>
+        <p class="cd-sub">Time to next stop</p>
+        <div class="cd-units">
+          <div class="cd-unit"><span class="cd-num">${timeStr.split(':')[0]}</span><span class="cd-label">hrs</span></div>
+          <div class="cd-sep">:</div>
+          <div class="cd-unit"><span class="cd-num">${timeStr.split(':')[1]}</span><span class="cd-label">min</span></div>
+          <div class="cd-sep">:</div>
+          <div class="cd-unit"><span class="cd-num">${timeStr.split(':')[2]}</span><span class="cd-label">sec</span></div>
+        </div>
+        <p class="cd-sub" style="margin-top:12px;margin-bottom:0">${_weatherStr}</p>`;
+      renderStopCard(ts.stop, ts.day);
+
+    } else if (ts.state === 'at_stop') {
+      const name = getStopName(ts.stop);
+      banner.innerHTML = `
+        <div class="cd-emoji"><i class="ph ph-smiley"></i></div>
+        <p class="cd-sub" style="margin-bottom:4px">Enjoy</p>
+        <h2 class="cd-title">${name}</h2>
+        <p class="cd-sub">Back on the road in</p>
+        <div class="cd-units">
+          <div class="cd-unit"><span class="cd-num">${timeStr.split(':')[0]}</span><span class="cd-label">hrs</span></div>
+          <div class="cd-sep">:</div>
+          <div class="cd-unit"><span class="cd-num">${timeStr.split(':')[1]}</span><span class="cd-label">min</span></div>
+          <div class="cd-sep">:</div>
+          <div class="cd-unit"><span class="cd-num">${timeStr.split(':')[2]}</span><span class="cd-label">sec</span></div>
+        </div>
+        <p class="cd-sub" style="margin-top:12px;margin-bottom:0">${_weatherStr}</p>`;
+      renderStopCard(ts.stop, ts.day);
+
+    } else {
+      banner.innerHTML = `<div class="cd-emoji"><i class="ph ph-confetti"></i></div><h2 class="cd-title">You've arrived!</h2><p class="cd-sub">Enjoy Annecy 2026</p>`;
+      clearInterval(_countdownInterval);
+    }
+  }
+
+  clearInterval(_countdownInterval);
+  tick();
+  _countdownInterval = setInterval(tick, 1000);
+}
+
+/* ── Date+weather header for regular calendar days ─────────────────── */
+function buildCalDayHeader(day, containerId) {
+  const dateStr = day.date;
+  const dateLabel = new Date(dateStr + 'T12:00:00').toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long' });
+  const header = document.createElement('div');
+  header.className = 'cal-day-header';
+  const weatherId = containerId + '-weather';
+  header.innerHTML = `
+    <div class="cal-day-header-date">${dateLabel}</div>
+    <div class="cal-day-header-weather" id="${weatherId}"><i class="ph ph-spinner ph-spin" style="opacity:.4"></i></div>`;
+  fetchWeatherForDay(day).then(wMap => {
+    const el = document.getElementById(weatherId);
+    if (!el || !wMap) { if (el) el.innerHTML = ''; return; }
+    // Use midday (12:00) as representative temperature for the day header
+    const w = lookupHourlyWeather(wMap, dateStr, '12:00');
+    if (!w) { el.innerHTML = ''; return; }
+    el.innerHTML = `<i class="ph ${w.icon}"></i> <strong>${w.tempC}°C</strong> <span>${w.conditionText}</span>`;
+  });
+  return header;
+}
+
+/* ── Festival banner — title + today's date + weather ──────────────── */
+function buildFestivalBanner(day) {
+  const todayStr = localDateStr();
+  const dateStr  = (todayStr >= day.date && todayStr <= day.dateEnd) ? todayStr : day.date;
+  const dateLabel = new Date(dateStr + 'T12:00:00').toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long' });
+
+  const banner = document.createElement('div');
+  banner.className = 'festival-banner';
+  banner.innerHTML = `
+    <div class="cd-emoji"><i class="ph ph-film-slate"></i></div>
+    <h2>International Animation<br>Film Festival 2026</h2>
+    <p>Annecy, France</p>
+    <div class="festival-banner-row">
+      <div class="festival-banner-date"><i class="ph ph-calendar-blank"></i> ${dateLabel}</div>
+      <div class="festival-banner-weather" id="fest-banner-weather"><i class="ph ph-spinner ph-spin" style="opacity:.5"></i></div>
+    </div>`;
+
+  fetchWeatherForDay(day).then(wMap => {
+    const el = document.getElementById('fest-banner-weather');
+    if (!el || !wMap) { if (el) el.innerHTML = ''; return; }
+    const w = lookupHourlyWeather(wMap, dateStr, '14:00'); // afternoon representative
+    if (!w) { el.innerHTML = ''; return; }
+    el.innerHTML = `<i class="ph ${w.icon}"></i> ${w.tempC}°C &middot; ${w.conditionText}`;
+  });
+
+  return banner;
+}
+
+/* ── Festival calendar view ────────────────────────────────────────── */
+function renderFestivalCalView(container, day) {
+  container.appendChild(buildFestivalBanner(day));
+
+  // Venue list
+  const list = document.createElement('div');
+  list.className = 'fest-cal-list';
+
+  const TYPE_COL = {
+    charging:'#16a34a', hotel:'#0284c7', transport:'#7c3aed', food:'#ea580c',
+    architecture:'#d97706', village:'#0d9488', town:'#0d9488', experience:'#db2777',
+    wander:'#059669', depart:'#475569', scenic:'#16a34a', historic:'#b45309', festival:'#7c3aed', work:'#6366f1',
+  };
+
+  getDayStops(day).forEach(stop => {
+    const type = getStopType(stop);
+    const col  = TYPE_COL[type] || '#334155';
+    const item = document.createElement('div');
+    item.className = 'fest-cal-item';
+    item.style.borderLeftColor = col;
+    if (state.checked[stop.id]) item.classList.add('visited');
+    item.innerHTML = `
+      <div class="fest-cal-item-name">${stopTypeIcon(stop)} ${getStopName(stop)}</div>
+      <div class="fest-cal-item-meta">${typeLabel(type)}${stop.veganFriendly ? ' · <i class="ph ph-leaf"></i> Vegan' : ''}</div>`;
+    item.addEventListener('click', () => openDetail(stop));
+    list.appendChild(item);
+  });
+
+  container.appendChild(list);
+}
+
 /* ── Calendar view ─────────────────────────────────────────────────── */
 const CAL_PX_MIN = 1.5; // px per minute (90px/hour)
 
@@ -1434,10 +3732,12 @@ function renderCalView(container) {
   if (!day || day.isCountdown) { renderTimeline(container, false); return; }
   setBgClass('bg-day');
 
+  if (day.isFestival) { renderFestivalCalView(container, day); return; }
+
   const timedStops = getDayStops(day).filter(s => timeToMinutes(getStopTime(s)) !== null);
   if (!timedStops.length) return;
 
-  const _calToday = new Date().toISOString().slice(0, 10);
+  const _calToday = localDateStr();
   const isToday = day.date === _calToday || (day.isFestival && _calToday >= day.date && _calToday <= (day.dateEnd || day.date));
   const isPastDay = day.date && day.date < _calToday;
 
@@ -1503,10 +3803,12 @@ function renderCalView(container) {
     card.id = `cal-${stop.id}`;
     card.style.cssText = `top:${top}px;height:${h}px;border-left-color:${col};`;
     const isVisited = !!state.checked[stop.id];
+    const isSkipped = !!state.skipped[stop.id];
     if (isVisited) card.classList.add('visited');
-    if (!isVisited) {
+    if (isSkipped) card.classList.add('skipped');
+    if (!isVisited && !isSkipped) {
       const depMins = t !== null ? t + dur : null;
-      if (isPastDay || (isToday && depMins !== null && depMins < nowMinutes()))
+      if (isToday && depMins !== null && depMins < nowMinutes())
         card.classList.add('cal-card--past');
     }
     const dur_h = Math.floor(dur/60), dur_m = dur%60;
@@ -1522,13 +3824,11 @@ function renderCalView(container) {
     if (calWPill) {
       fetchWeatherForDay(day).then(wMap => {
         if (!wMap || !calWPill.isConnected) return;
-        const dateStr = day.date || '';
-        const entry = wMap.get(dateStr);
-        if (!entry) return;
-        const night = isNightTime(getStopTime(stop));
-        const icon = night ? entry.nightIcon : entry.icon;
-        const tempC = night ? entry.nightTempC : entry.tempC;
-        calWPill.innerHTML = `<i class="ph ${icon}"></i> ${tempC}°`;
+        const today = localDateStr();
+        const dateStr = day.isFestival ? today : (day.date || '');
+        const w = lookupHourlyWeather(wMap, dateStr, getStopTime(stop));
+        if (!w) return;
+        calWPill.innerHTML = `<i class="ph ${w.icon}"></i> ${w.tempC}°`;
       });
     }
 
@@ -1597,6 +3897,7 @@ function renderCalView(container) {
   }
 
   outer.appendChild(wrap);
+  container.appendChild(buildCalDayHeader(day, 'cal'));
   container.appendChild(outer);
 
   if (isToday) {
@@ -1625,13 +3926,10 @@ function renderTimeline(container, scrollToNow) {
   setBgClass('bg-day');
 
   if (day.isFestival) {
-    const banner = document.createElement('div');
-    banner.className = 'festival-banner';
-    banner.innerHTML = `<div class="cd-emoji"><i class="ph ph-film-slate"></i></div><h2>International Animation<br>Film Festival 2026</h2><p>Annecy, France</p><div class="festival-dates">20 – 27 June 2026</div>`;
-    container.appendChild(banner);
+    container.appendChild(buildFestivalBanner(day));
   }
 
-  const today = new Date().toISOString().slice(0,10);
+  const today = localDateStr();
   const isToday = day.date === today || (day.isFestival && today >= day.date && today <= day.dateEnd);
   const now = nowMinutes();
   let nowLineEl = null;
@@ -1661,9 +3959,11 @@ function renderTimeline(container, scrollToNow) {
       (compactCard || container).appendChild(nowLine);
       nowLineEl = nowLine;
     }
+    const nextStop = _tlStops[idx + 1] || null;
+    const prevStop = _tlStops[idx - 1] || null;
     const item = state.cardView === 'compact'
-      ? buildCompactItem(stop, idx === _tlStops.length - 1)
-      : buildTimelineItem(stop, idx === _tlStops.length - 1);
+      ? buildCompactItem(stop, idx === _tlStops.length - 1, day)
+      : buildTimelineItem(stop, idx === _tlStops.length - 1, day, nextStop, prevStop);
     (compactCard || container).appendChild(item);
   });
 
@@ -1713,7 +4013,7 @@ function renderTimeline(container, scrollToNow) {
 }
 
 /* ── Compact concertina item ───────────────────────────────────────── */
-function buildCompactItem(stop, isLast) {
+function buildCompactItem(stop, isLast, day) {
   const item = document.createElement('div');
   item.className = 'tl-compact-item';
   item.id = `stop-${stop.id}`;
@@ -1721,15 +4021,16 @@ function buildCompactItem(stop, isLast) {
 
   const time      = getStopTime(stop);
   const isVisited = !!state.checked[stop.id];
+  const isSkipped = !!state.skipped[stop.id];
   const info      = leaveByInfo(stop);
-  const _cTodayStr = new Date().toISOString().slice(0, 10);
-  const _cDay = TRIP_DATA.days.find(d => d.stops.some(s => s.id === stop.id));
+  const _cTodayStr = localDateStr();
+  const _cDay = day || TRIP_DATA.days.find(d => d.stops.some(s => s.id === stop.id));
   const _cIsToday = _cDay && (_cDay.date === _cTodayStr ||
     (_cDay.isFestival && _cTodayStr >= _cDay.date && _cTodayStr <= (_cDay.dateEnd || _cDay.date)));
   const _cIsPastDay = _cDay?.date && _cDay.date < _cTodayStr;
   const _cStopMins = timeToMinutes(time);
   const _cDepMins = _cStopMins !== null ? _cStopMins + getStopDuration(stop) : null;
-  const cIsPast = !isVisited && (_cIsPastDay || (_cIsToday && _cDepMins !== null && _cDepMins < nowMinutes()));
+  const cIsPast = !isVisited && _cIsToday && _cDepMins !== null && _cDepMins < nowMinutes();
 
   let metaHtml = '';
   if (info) {
@@ -1745,11 +4046,12 @@ function buildCompactItem(stop, isLast) {
       <div class="tl-dot"></div>
       ${isLast ? '' : '<div class="tl-line"></div>'}
     </div>
-    <div class="compact-body${isVisited ? ' visited' : cIsPast ? ' past' : ''}">
+    <div class="compact-body${isVisited ? ' visited' : ''}${isSkipped ? ' skipped' : ''}">
       <div class="compact-name">${stopTypeIcon(stop)} ${getStopName(stop)}</div>
       <div class="compact-meta">
         ${metaHtml}
         ${isVisited ? '<div class="compact-visited-dot"><i class="ph ph-check"></i></div>' : ''}
+        ${isSkipped ? '<div class="compact-visited-dot skipped-dot"><i class="ph ph-x"></i></div>' : ''}
       </div>
     </div>`;
 
@@ -1758,7 +4060,7 @@ function buildCompactItem(stop, isLast) {
 }
 
 /* ── Build one timeline item ───────────────────────────────────────── */
-function buildTimelineItem(stop, isLast) {
+function buildTimelineItem(stop, isLast, day, nextStop, prevStop) {
   const item = document.createElement('div');
   item.className = 'tl-item';
   item.dataset.type = getStopType(stop);
@@ -1766,52 +4068,122 @@ function buildTimelineItem(stop, isLast) {
 
   const time = getStopTime(stop);
   const isEditable = timeToMinutes(time) !== null;
-  const isVisited = !!state.checked[stop.id];
+  const isVisited  = !!state.checked[stop.id];
+  const isSkipped  = !!state.skipped[stop.id];
 
-  const _todayStr = new Date().toISOString().slice(0, 10);
-  const _currentDay = TRIP_DATA.days.find(d => d.id === state.currentDayId);
+  const _todayStr = localDateStr();
+  const _currentDay = day || TRIP_DATA.days.find(d => d.id === state.currentDayId);
   const _isToday = _currentDay && (_currentDay.date === _todayStr ||
     (_currentDay.isFestival && _todayStr >= _currentDay.date && _todayStr <= (_currentDay.dateEnd || _currentDay.date)));
   const _isPastDay = _currentDay?.date && _currentDay.date < _todayStr;
   const _stopMins = timeToMinutes(time);
   const _depMins = _stopMins !== null ? _stopMins + getStopDuration(stop) : null;
-  const isPast = !isVisited && (_isPastDay || (_isToday && _depMins !== null && _depMins < nowMinutes()));
+  const isPast = !isVisited && _isToday && _depMins !== null && _depMins < nowMinutes();
 
-  item.innerHTML = `
-    <div class="tl-left">
-      <button class="tl-time-btn" data-stop-id="${stop.id}">
-        <span>${time}</span>${stop.tz ? `<div class="tl-tz">${stop.tz}</div>` : ''}
-      </button>
-    </div>
-    <div class="tl-line-wrap">
-      <div class="tl-dot"></div>
-      ${isLast ? '' : '<div class="tl-line"></div>'}
-    </div>
-    <div class="tl-card${isVisited ? ' visited' : ''}${isPast && !isVisited ? ' tl-card--past' : ''}" data-stop-id="${stop.id}">
-      <div class="card-visited-badge">✓</div>
-      ${buildSlider(stop, 'card')}
-      <div class="card-body">
-        <div class="card-top-row">
-          <div class="card-name">${stopTypeIcon(stop)} ${getStopName(stop)}</div>
-          <button class="check-btn${isVisited ? ' checked' : ''}" data-stop-id="${stop.id}" aria-label="Mark visited"><i class="ph ${isVisited ? 'ph-check-circle' : 'ph-circle'}"></i></button>
-        </div>
-        <div class="card-meta-row">
-          <span class="tl-card-badge">${typeLabel(getStopType(stop))}</span>
-          ${getStopPriority(stop) > 0 ? `<span class="priority-stars">${priorityStars(getStopPriority(stop))}</span>` : ''}
-          <a class="weather-pill" data-stop-id="${stop.id}" data-lat="${getStopLat(stop)||''}" data-lng="${getStopLng(stop)||''}" href="#" onclick="return false;"></a>
-        </div>
-        <div class="card-reason">${getStopReason(stop)}</div>
-        ${buildTags(stop)}
-        ${hasExplicitDuration(stop) ? `<div data-leaveby="${stop.id}" class="leave-by-pill" style="display:none"></div>` : ''}
-        <div class="tl-actions">${buildIconActions(stop)}</div>
+  // Departure stops: slim row showing where you're heading next, no photo
+  if (getStopType(stop) === 'depart') {
+    const linkedSkipped = prevStop && !!state.skipped[prevStop.id];
+    const nextName = nextStop ? getStopName(nextStop) : null;
+    const nextIcon = nextStop ? stopTypeIcon(nextStop) : '';
+    item.innerHTML = `
+      <div class="tl-left">
+        <button class="tl-time-btn" data-stop-id="${stop.id}">
+          <span>${time}</span>${stop.tz ? `<div class="tl-tz">${stop.tz}</div>` : ''}
+        </button>
       </div>
-    </div>`;
+      <div class="tl-line-wrap">
+        <div class="tl-dot tl-dot--depart${linkedSkipped ? ' tl-dot--skipped' : ''}"></div>
+        ${isLast ? '' : '<div class="tl-line"></div>'}
+      </div>
+      <div class="tl-depart-row${linkedSkipped ? ' depart-skipped' : ''}" data-stop-id="${stop.id}">
+        ${linkedSkipped ? '<span class="depart-skipped-badge"><i class="ph ph-x-circle"></i> Skipped</span>' : ''}
+        <div class="tl-depart-from">${getStopName(stop)}</div>
+        ${nextName ? `<div class="tl-depart-arrow"><i class="ph ph-arrow-right"></i></div><div class="tl-depart-to">${nextIcon} ${nextName}</div>` : ''}
+        <div class="tl-depart-note">${getStopReason(stop)}</div>
+        <div class="depart-edit-hint"><i class="ph ph-pencil"></i> Tap to edit</div>
+      </div>`;
+    const _d = TRIP_DATA.days.find(d => d.id === state.currentDayId);
+    item.querySelector('.tl-time-btn').addEventListener('click', () => openTimeModal(stop, _d));
+    // Tap the depart row to edit departure time
+    item.querySelector('.tl-depart-row').addEventListener('click', () => openTimeModal(stop, _d));
+    item.querySelector('.tl-depart-row').style.cursor = 'pointer';
+    return item;
+  }
+
+  const _swipeActionsHtml = `
+      <div class="tl-swipe-actions">
+        <button class="swipe-skip-btn">${isSkipped ? '<i class="ph ph-arrow-u-up-left"></i> Restore' : '<i class="ph ph-x-circle"></i> Skip'}</button>
+        <button class="swipe-remove-btn"><i class="ph ph-trash"></i> Remove</button>
+      </div>`;
+
+  if (isSkipped) {
+    item.innerHTML = `
+      <div class="tl-left">
+        <button class="tl-time-btn" data-stop-id="${stop.id}">
+          <span>${time}</span>${stop.tz ? `<div class="tl-tz">${stop.tz}</div>` : ''}
+        </button>
+      </div>
+      <div class="tl-line-wrap">
+        <div class="tl-dot"></div>
+        ${isLast ? '' : '<div class="tl-line"></div>'}
+      </div>
+      <div class="tl-swipe-wrap">
+        <div class="tl-swipe-track">
+        <div class="tl-card skipped compact-card" data-stop-id="${stop.id}">
+          <div class="compact-card-inner">
+            <span class="compact-card-icon">${stopTypeIcon(stop)}</span>
+            <span class="compact-card-name">${getStopName(stop)}</span>
+            <span class="card-skipped-badge"><i class="ph ph-x-circle"></i> Skipped</span>
+          </div>
+        </div>
+        ${_swipeActionsHtml}
+        </div>
+      </div>`;
+  } else {
+    item.innerHTML = `
+      <div class="tl-left">
+        <button class="tl-time-btn" data-stop-id="${stop.id}">
+          <span>${time}</span>${stop.tz ? `<div class="tl-tz">${stop.tz}</div>` : ''}
+        </button>
+      </div>
+      <div class="tl-line-wrap">
+        <div class="tl-dot"></div>
+        ${isLast ? '' : '<div class="tl-line"></div>'}
+      </div>
+      <div class="tl-swipe-wrap">
+        <div class="tl-swipe-track">
+        <div class="tl-card${isVisited ? ' visited' : ''}" data-stop-id="${stop.id}">
+          <div class="card-visited-badge">✓</div>
+          ${buildSlider(stop, 'card')}
+          <div class="card-body">
+            <div class="card-top-row">
+              <div class="card-name">${stopTypeIcon(stop)} ${getStopName(stop)}</div>
+              ${ (stop.planStatus === 'conditional' || stop.planStatus === 'weak-vegan') ? '<span class="card-warn-icon"><i class="ph ph-warning"></i></span>' : '' }<button class="check-btn${isVisited ? ' checked' : ''}" data-stop-id="${stop.id}" aria-label="Mark visited"><i class="ph ${isVisited ? 'ph-check-circle' : 'ph-circle'}"></i></button>
+            </div>
+            ${stop.address || stop.location ? `<div class="card-address">${stop.address || stop.location}</div>` : ''}
+            <div class="card-meta-row">
+              <span class="tl-card-badge">${typeLabel(getStopType(stop))}</span>
+              ${getStopPriority(stop) > 0 ? `<span class="priority-stars">${priorityStars(getStopPriority(stop))}</span>` : ''}
+              <span class="vcard-rating-loading" data-stopid="${stop.id}"></span>
+              <a class="weather-pill" data-stop-id="${stop.id}" data-lat="${getStopLat(stop)||''}" data-lng="${getStopLng(stop)||''}" href="#" onclick="return false;"></a>
+            </div>
+            <div class="card-reason">${getStopReason(stop)}</div>
+            ${buildTags(stop)}
+            ${hasExplicitDuration(stop) ? `<div data-leaveby="${stop.id}" class="leave-by-pill" style="display:none"></div>` : ''}
+            <div class="tl-actions">${buildIconActions(stop)}</div>
+          </div>
+        </div>
+        ${_swipeActionsHtml}
+        </div>
+      </div>`;
+  }
 
   if (isEditable) {
     const day = TRIP_DATA.days.find(d => d.id === state.currentDayId);
     item.querySelector('.tl-time-btn').addEventListener('click', () => openTimeModal(stop, day));
   }
-  item.querySelector('.check-btn').addEventListener('click', e => {
+  const _checkBtn = item.querySelector('.check-btn');
+  if (_checkBtn) _checkBtn.addEventListener('click', e => {
     e.stopPropagation();
     toggleCheck(stop.id, item);
   });
@@ -1820,9 +4192,89 @@ function buildTimelineItem(stop, isLast) {
   const card = item.querySelector('.tl-card');
   card.style.cursor = 'pointer';
   card.addEventListener('click', e => {
-    // Let act-btn links and check-btn handle themselves
+    if (isSkipped) return; // compact card — no detail open
     if (e.target.closest('.act-btn, .check-btn')) return;
     openDetail(stop);
+  });
+  card.addEventListener('click', e => {
+    const actBtn = e.target.closest('.act-btn[data-action]');
+    if (!actBtn) return;
+    e.stopPropagation();
+    if (actBtn.dataset.action === 'vegan-view') {
+      if (stop.lat) { _userLat = stop.lat; _userLng = stop.lng; }
+      state.currentView = 'vegan'; renderView(true);
+    } else if (actBtn.dataset.action === 'charge-view') {
+      if (stop.lat) { _userLat = stop.lat; _userLng = stop.lng; }
+      state.currentView = 'charging'; renderView(true);
+    }
+  });
+
+  // Swipe-left to reveal Skip / Restore button
+  const swipeWrap  = item.querySelector('.tl-swipe-wrap');
+  const swipeTrack = item.querySelector('.tl-swipe-track');
+  const SWIPE_REVEAL = 160;
+  let _sx = 0, _sy = 0, _sActive = false, _sOpen = false, _sMoved = false;
+  swipeWrap.addEventListener('touchstart', e => {
+    _sx = e.touches[0].clientX; _sy = e.touches[0].clientY;
+    _sActive = true; _sMoved = false;
+  }, { passive: true });
+  swipeWrap.addEventListener('touchmove', e => {
+    if (!_sActive) return;
+    const dx = e.touches[0].clientX - _sx;
+    const dy = e.touches[0].clientY - _sy;
+    if (!_sMoved && Math.abs(dy) > Math.abs(dx) + 4) { _sActive = false; return; }
+    _sMoved = true;
+    const base = _sOpen ? -SWIPE_REVEAL : 0;
+    const tx = Math.min(0, Math.max(-SWIPE_REVEAL, base + dx));
+    swipeTrack.style.transition = 'none';
+    swipeTrack.style.transform = `translateX(${tx}px)`;
+  }, { passive: true });
+  swipeWrap.addEventListener('touchend', e => {
+    if (!_sActive || !_sMoved) { _sActive = false; return; }
+    _sActive = false;
+    const dx = e.changedTouches[0].clientX - _sx;
+    swipeTrack.style.transition = 'transform .22s ease';
+    if (!_sOpen && dx < -SWIPE_REVEAL / 2) {
+      swipeTrack.style.transform = `translateX(-${SWIPE_REVEAL}px)`;
+      _sOpen = true;
+    } else {
+      swipeTrack.style.transform = '';
+      _sOpen = false;
+    }
+  });
+  // Tap the card while open → close
+  card.addEventListener('click', () => {
+    if (_sOpen) { swipeTrack.style.transition = 'transform .22s ease'; swipeTrack.style.transform = ''; _sOpen = false; }
+  }, true);
+  // Skip / Restore button
+  item.querySelector('.swipe-skip-btn').addEventListener('click', e => {
+    e.stopPropagation();
+    swipeTrack.style.transition = 'transform .22s ease'; swipeTrack.style.transform = ''; _sOpen = false;
+    if (state.skipped[stop.id]) {
+      delete state.skipped[stop.id];
+      save(); renderView(false);
+    } else {
+      skipStop(stop);
+    }
+  });
+  // Remove button — moves stop to bucket list
+  item.querySelector('.swipe-remove-btn').addEventListener('click', e => {
+    e.stopPropagation();
+    swipeTrack.style.transition = 'transform .22s ease'; swipeTrack.style.transform = ''; _sOpen = false;
+    const _rDay = TRIP_DATA.days.find(d => d.id === state.currentDayId) || TRIP_DATA.days[0];
+    const isAdded = state.addedStops[_rDay.id] && state.addedStops[_rDay.id].some(s => s.id === stop.id);
+    if (stop.id.startsWith('vegan_') || stop.id.startsWith('gplace_') || isAdded) {
+      if (state.addedStops[_rDay.id]) {
+        state.addedStops[_rDay.id] = state.addedStops[_rDay.id].filter(s => s.id !== stop.id);
+      }
+    } else {
+      state.removed[stop.id] = true;
+    }
+    state.bucketList.unshift({ stop: { ...stop }, dayLabel: getDayLabel(_rDay), originalDayId: _rDay.id, removedAt: Date.now() });
+    delete state.skipped[stop.id];
+    delete state.checked[stop.id];
+    delete state.overrides[stop.id];
+    save(); renderView(false); showToast('Moved to Bucket List');
   });
 
   // Photo slider still handles its own swipe; tap on slider already calls openDetail,
@@ -1834,21 +4286,38 @@ function buildTimelineItem(stop, isLast) {
 
   initSlider(item.querySelector('.card-slider'), stop, 'card');
 
+  // Lazily populate Google star rating on card
+  const _ratingEl = item.querySelector('.vcard-rating-loading[data-stopid]');
+  if (_ratingEl && stop.lat && stop.lng) {
+    const _cacheKey = 'stop_' + stop.id;
+    const _showRating = (gData) => {
+      if (!_ratingEl.isConnected || !gData?.rating) return;
+      _ratingEl.className = 'vcard-rating';
+      _ratingEl.innerHTML = `<i class="ph ph-star-fill" style="color:#f59e0b"></i> ${gData.rating.toFixed(1)} <span class="vcard-rating-count">(${gData.ratingCount?.toLocaleString()})</span>`;
+    };
+    if (_placeGoogleCache[_cacheKey]) {
+      _showRating(_placeGoogleCache[_cacheKey]);
+    } else if (getStopType(stop) === 'food' || getStopType(stop) === 'vegan' || getStopVegan(stop)) {
+      fetchGooglePlace(stop.name, stop.address, stop.lat, stop.lng).then(gData => {
+        if (gData) { _placeGoogleCache[_cacheKey] = gData; _showRating(gData); }
+      });
+    }
+  }
+
   // Lazily fetch weather and update pill
   const _weatherPill = item.querySelector('.weather-pill');
   if (_weatherPill && _currentDay) {
     fetchWeatherForDay(_currentDay).then(wMap => {
       if (!wMap || !_weatherPill.isConnected) return;
-      const dateStr = _currentDay.date || '';
-      const entry = wMap.get(dateStr);
-      if (!entry) return;
-      const night = isNightTime(getStopTime(stop));
-      const icon  = night ? entry.nightIcon : entry.icon;
-      const tempC = night ? entry.nightTempC : entry.tempC;
+      const today = localDateStr();
+      const dateStr = _currentDay.isFestival ? today : (_currentDay.date || '');
+      const w = lookupHourlyWeather(wMap, dateStr, getStopTime(stop));
+      if (!w) return;
+      const { icon, tempC } = w;
       const lat   = _weatherPill.dataset.lat;
       const lng   = _weatherPill.dataset.lng;
       _weatherPill.innerHTML = `<i class="ph ${icon}"></i> ${tempC}°C`;
-      _weatherPill.title = entry.conditionText;
+      _weatherPill.title = w.conditionText;
       if (lat && lng) {
         _weatherPill.addEventListener('click', e => {
           e.stopPropagation();
@@ -1953,12 +4422,12 @@ function initSlider(sliderEl, stop, prefix) {
 
 /* ── Action buttons — icon only ───────────────────────────────────── */
 function buildIconActions(stop) {
-  const parts = [`<a class="act-btn tesla" href="${teslaNavUrl(stop)}" target="_blank" rel="noopener"><i class="ph ph-navigation-arrow"></i></a>`];
+  const parts = [`<a class="act-btn tesla" href="${navUrl(stop.name, stop.address, stop.lat, stop.lng)}" target="_blank" rel="noopener"><i class="ph ph-navigation-arrow"></i></a>`];
   const sType = getStopType(stop);
   if (sType !== 'depart' && sType !== 'transport') {
-    if (getStopVegan(stop) || sType === 'food')
-      parts.push(`<a class="act-btn vegan" href="${veganNearbyUrl(stop)}" target="_blank" rel="noopener"><i class="ph ph-leaf"></i></a>`);
-    parts.push(`<a class="act-btn charge" href="${chargingNearbyUrl(stop)}" target="_blank" rel="noopener"><i class="ph ph-lightning"></i></a>`);
+    if (getStopVegan(stop) || sType === 'food' || sType === 'vegan')
+      parts.push(`<button class="act-btn vegan" data-stopid="${stop.id}" data-action="vegan-view"><i class="ph ph-leaf"></i></button>`);
+    parts.push(`<button class="act-btn charge" data-stopid="${stop.id}" data-action="charge-view"><i class="ph ph-lightning"></i></button>`);
     if (getStopPriority(stop) >= 2)
       parts.push(`<a class="act-btn poi" href="${poiNearbyUrl(stop)}" target="_blank" rel="noopener"><i class="ph ph-map-pin"></i></a>`);
   }
@@ -2305,11 +4774,328 @@ function setDetailSlides(photos, stop) {
   initDetailSlider();
 }
 
+function renderDetailPlanSection(stop) {
+  const planEl = document.getElementById('detail-plan-section');
+  const altsEl = document.getElementById('detail-alts-section');
+  if (!planEl || !altsEl) return;
+
+  const ps = stop.planStatus;
+  const statusLabels = {
+    'conditional': '<i class="ph ph-warning"></i> Conditional stop — check before visiting',
+    'weak-vegan':  '<i class="ph ph-leaf"></i> Weak vegan fit — limited plant-based options',
+    'anchor':      '<i class="ph ph-anchor-simple"></i> Fixed commitment — do not skip',
+    'booked':      '<i class="ph ph-check-circle"></i> Booked — confirmed reservation',
+  };
+
+  if (ps && statusLabels[ps]) {
+    planEl.classList.remove('hidden');
+    let html = `<div class="plan-status-banner status-${ps}">${statusLabels[ps]}</div>`;
+    const rows = [];
+    if (stop.trigger)           rows.push(['When', stop.trigger]);
+    if (stop.sameDayAction)     rows.push(['Today', stop.sameDayAction]);
+    if (stop.decisionDeadline)  rows.push(['Decide by', `<span class="plan-info-value deadline">${stop.decisionDeadline}</span>`]);
+    if (rows.length) {
+      html += '<div class="plan-info-rows">' + rows.map(([label, val]) =>
+        `<div class="plan-info-row"><span class="plan-info-label">${label}</span><span class="plan-info-value">${val}</span></div>`
+      ).join('') + '</div>';
+    }
+    planEl.innerHTML = html;
+  } else if (ps === 'primary' && (stop.trigger || stop.sameDayAction || stop.decisionDeadline)) {
+    planEl.classList.remove('hidden');
+    const rows = [];
+    if (stop.trigger)           rows.push(['Note', stop.trigger]);
+    if (stop.sameDayAction)     rows.push(['Today', stop.sameDayAction]);
+    if (stop.decisionDeadline)  rows.push(['By', `<span class="plan-info-value deadline">${stop.decisionDeadline}</span>`]);
+    planEl.innerHTML = '<div class="plan-info-rows">' + rows.map(([label, val]) =>
+      `<div class="plan-info-row"><span class="plan-info-label">${label}</span><span class="plan-info-value">${val}</span></div>`
+    ).join('') + '</div>';
+  } else {
+    planEl.classList.add('hidden');
+    planEl.innerHTML = '';
+  }
+
+  const alts = stop.alternatives || [];
+  if (alts.length) {
+    altsEl.classList.remove('hidden');
+    const veganLabel = { full:'Fully vegan', wide:'Wide vegan choice', limited:'Limited vegan', single:'One vegan dish' };
+    const altCards = alts.map((alt, idx) => {
+      const vLabel = alt.veganFit ? veganLabel[alt.veganFit] || alt.veganFit : (alt.veganFriendly ? 'Vegan-friendly' : '');
+      const vClass = { full:'full', wide:'', limited:'limited', single:'limited' }[alt.veganFit] || '';
+      return `<div class="alt-card">
+        <div class="alt-card-header">
+          <div class="alt-card-name">${stopTypeIcon(alt)} ${alt.location}</div>
+          ${vLabel ? `<span class="alt-card-vegan ${vClass}">${vLabel}</span>` : ''}
+        </div>
+        <div class="alt-card-reason">${alt.reason}</div>
+        ${alt.trigger ? `<div class="alt-card-trigger">Use when: ${alt.trigger}</div>` : ''}
+        ${alt.sameDayAction ? `<div class="plan-info-row" style="margin:4px 0 0;font-size:12px"><span class="plan-info-label">Today</span><span class="plan-info-value">${alt.sameDayAction}</span></div>` : ''}
+        <div class="alt-card-actions">
+          <button class="alt-card-btn switch-btn" data-alt-idx="${idx}"><i class="ph ph-shuffle"></i> Use this instead</button>
+          <a class="alt-card-btn maps-btn" href="${alt.mapsUrl}" target="_blank" rel="noopener"><i class="ph ph-map-trifold"></i> Maps</a>
+        </div>
+      </div>`;
+    }).join('');
+    altsEl.innerHTML =
+      `<div class="detail-alts-toggle" id="detail-alts-toggle">
+        <div class="detail-alts-toggle-label"><i class="ph ph-shuffle"></i> Alternatives <span class="detail-alts-toggle-count">${alts.length}</span></div>
+        <i class="ph ph-caret-down detail-alts-chevron"></i>
+      </div>
+      <div id="detail-alts-list">${altCards}</div>`;
+    altsEl.querySelector('#detail-alts-toggle').addEventListener('click', () => {
+      const toggle = altsEl.querySelector('#detail-alts-toggle');
+      const list   = altsEl.querySelector('#detail-alts-list');
+      toggle.classList.toggle('open');
+      list.classList.toggle('open');
+    });
+    altsEl.querySelectorAll('.switch-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const altIdx = parseInt(btn.dataset.altIdx, 10);
+        switchToAlternative(stop, alts[altIdx]);
+      });
+    });
+  } else {
+    altsEl.classList.add('hidden');
+    altsEl.innerHTML = '';
+  }
+}
+
+function switchToAlternative(primaryStop, alt) {
+  saveUndoSnapshot();
+  // Find the day containing the primary stop
+  const day = TRIP_DATA.days.find(d => getDayStops(d).some(s => s.id === primaryStop.id));
+  if (!day) return;
+
+  // Skip the primary stop
+  state.skipped[primaryStop.id] = true;
+  delete state.checked[primaryStop.id];
+
+  // Build a new stop object from the alternative, inheriting the primary's time and order
+  const newStop = {
+    id:           alt.id,
+    order:        primaryStop.order + 0.5,   // insert right after primary
+    time:         getStopTime(primaryStop),
+    tz:           primaryStop.tz || 'FR',
+    location:     alt.location,
+    type:         alt.type || primaryStop.type,
+    priority:     primaryStop.priority,
+    lat:          alt.lat,
+    lng:          alt.lng,
+    mapsUrl:      alt.mapsUrl,
+    reason:       alt.reason,
+    duration:     alt.duration || primaryStop.duration,
+    veganFriendly: alt.veganFriendly || false,
+    planStatus:   'primary',
+  };
+
+  // Add to addedStops for this day
+  if (!state.addedStops[day.id]) state.addedStops[day.id] = [];
+  // Remove any prior switch to the same alt
+  state.addedStops[day.id] = state.addedStops[day.id].filter(s => s.id !== alt.id);
+  state.addedStops[day.id].push(newStop);
+
+  // If primary had a linked depart stop, skip that too
+  const dayStops = getDayStops(day);
+  const pIdx = dayStops.findIndex(s => s.id === primaryStop.id);
+  const next = dayStops[pIdx + 1];
+  if (next && getStopType(next) === 'depart') state.skipped[next.id] = true;
+
+  save();
+  closeDetail();
+  renderView(false);
+  showToast(`Switched to ${alt.location}`);
+}
+
+function renderDetailTimeStrip(stop, container) {
+  const todayStr = localDateStr();
+  const today = TRIP_DATA.days.find(d => getDayStops(d).some(s => s.id === stop.id));
+  const isToday = today && today.date === todayStr;
+  const stopType = getStopType(stop);
+  const interactive = isToday && stopType !== 'depart';
+
+  const arrVal  = getStopTime(stop) || '';
+  const durMins = getStopDuration(stop) || 0;
+  const durH    = Math.floor(durMins / 60);
+  const durM    = durMins % 60;
+  const durStr  = durH > 0 ? `${durH}h${durM > 0 ? durM + 'm' : ''}` : `${durMins}m`;
+  const arrMins = timeToMinutes(arrVal) ?? null;
+  const depVal  = (arrMins !== null && durMins > 0) ? minutesToTime(arrMins + durMins) : '';
+
+  if (interactive) {
+    container.innerHTML = `
+      <div class="dts-row">
+        <div class="dts-chip dts-input-chip">
+          <span class="dts-label">Arrived</span>
+          <input class="dts-time-input" id="dts-arr-input" type="time" value="${arrVal}">
+        </div>
+        <div class="dts-chip dts-dur-chip">
+          <button class="dts-step-btn" id="dts-dur-minus"><i class="ph ph-minus"></i></button>
+          <div class="dts-dur-inner">
+            <i class="ph ph-timer" style="font-size:13px;color:var(--text2)"></i>
+            <span class="dts-time" id="dts-dur-val">${durStr}</span>
+          </div>
+          <button class="dts-step-btn" id="dts-dur-plus"><i class="ph ph-plus"></i></button>
+        </div>
+        <div class="dts-chip dts-input-chip">
+          <span class="dts-label">Depart</span>
+          <input class="dts-time-input" id="dts-dep-input" type="time" value="${depVal}">
+        </div>
+      </div>
+      <div class="dts-now-row">
+        <button class="dts-now-full-btn" id="dts-arr-now"><i class="ph ph-clock"></i> Arrived now</button>
+        <button class="dts-now-full-btn" id="dts-dep-now"><i class="ph ph-sign-out"></i> Departed now</button>
+      </div>`;
+    container.classList.remove('hidden');
+
+    const arrInput = document.getElementById('dts-arr-input');
+    const depInput = document.getElementById('dts-dep-input');
+    const durVal   = document.getElementById('dts-dur-val');
+
+    // Update dep input and duration display in-place — avoids destroying the
+    // native iOS time picker by never calling renderDetailTimeStrip during input.
+    const refreshDisplay = () => {
+      const arr = timeToMinutes(getStopTime(stop));
+      const dur = getStopDuration(stop) || 0;
+      const h = Math.floor(dur / 60), m = dur % 60;
+      if (durVal) durVal.textContent = h > 0 ? `${h}h${m > 0 ? m + 'm' : ''}` : `${dur}m`;
+      if (depInput && arr !== null && dur > 0) depInput.value = minutesToTime(arr + dur);
+    };
+
+    arrInput?.addEventListener('change', () => {
+      const newArr = timeToMinutes(arrInput.value);
+      if (newArr === null) return;
+      saveUndoSnapshot();
+      const oldArr = timeToMinutes(getStopTime(stop)) ?? newArr;
+      const delta  = newArr - oldArr;
+      state.overrides[stop.id] = minutesToTime(newArr);
+      cascadeTimeDelta(stop, delta);
+      save(); renderView(false); refreshDisplay();
+      showUndoToast('Arrival updated — times rippled');
+    });
+
+    depInput?.addEventListener('change', () => {
+      const newDep = timeToMinutes(depInput.value);
+      if (newDep === null) return;
+      saveUndoSnapshot();
+      const curArr = timeToMinutes(getStopTime(stop));
+      if (curArr !== null) state.durOverrides[stop.id] = Math.max(0, newDep - curArr);
+      cascadeFromDeparture(stop, newDep);
+      save(); renderView(false); refreshDisplay();
+      showUndoToast('Departure updated — times rippled');
+    });
+
+    document.getElementById('dts-arr-now')?.addEventListener('click', () => {
+      const now = new Date();
+      const nowMins = now.getHours() * 60 + now.getMinutes();
+      saveUndoSnapshot();
+      const oldArr = timeToMinutes(getStopTime(stop)) ?? nowMins;
+      state.overrides[stop.id] = minutesToTime(nowMins);
+      cascadeTimeDelta(stop, nowMins - oldArr);
+      save(); renderView(false); renderDetailTimeStrip(stop, container);
+      showUndoToast('Arrival set to now — times updated');
+    });
+
+    document.getElementById('dts-dep-now')?.addEventListener('click', () => {
+      const now = new Date();
+      const nowMins = now.getHours() * 60 + now.getMinutes();
+      saveUndoSnapshot();
+      const curArr = timeToMinutes(getStopTime(stop));
+      if (curArr !== null) state.durOverrides[stop.id] = Math.max(0, nowMins - curArr);
+      cascadeFromDeparture(stop, nowMins);
+      save(); renderView(false); renderDetailTimeStrip(stop, container);
+      showUndoToast('Departed now — times updated');
+    });
+
+    document.getElementById('dts-dur-minus')?.addEventListener('click', () => {
+      saveUndoSnapshot();
+      state.durOverrides[stop.id] = Math.max(0, (getStopDuration(stop) || 0) - 5);
+      cascadeTimeDelta(stop, -5);
+      save(); renderView(false); refreshDisplay();
+    });
+
+    document.getElementById('dts-dur-plus')?.addEventListener('click', () => {
+      saveUndoSnapshot();
+      state.durOverrides[stop.id] = (getStopDuration(stop) || 0) + 5;
+      cascadeTimeDelta(stop, 5);
+      save(); renderView(false); refreshDisplay();
+    });
+
+  } else {
+    container.innerHTML = `
+      <div class="dts-row">
+        <div class="dts-chip">
+          <span class="dts-label">Arrived</span>
+          <span class="dts-time">${arrVal || '—'}</span>
+        </div>
+        <div class="dts-chip dts-dur-chip">
+          <div class="dts-dur-inner">
+            <i class="ph ph-timer" style="font-size:13px;color:var(--text2)"></i>
+            <span class="dts-time">${durStr}</span>
+          </div>
+        </div>
+        <div class="dts-chip">
+          <span class="dts-label">Depart</span>
+          <span class="dts-time">${depVal || '—'}</span>
+        </div>
+      </div>`;
+    container.classList.remove('hidden');
+  }
+}
+
+function renderLegInfo(stop) {
+  const el = document.getElementById('detail-leg-info');
+  if (!el) return;
+  el.classList.add('hidden');
+  el.innerHTML = '';
+
+  // Find next non-skipped stop in the day
+  const day = TRIP_DATA.days.find(d => getDayStops(d).some(s => s.id === stop.id));
+  if (!day) return;
+  const sorted = getDayStops(day).sort((a, b) => (a.order ?? 9999) - (b.order ?? 9999));
+  const idx = sorted.findIndex(s => s.id === stop.id);
+  const next = sorted.slice(idx + 1).find(s => !state.skipped[s.id] && s.lat && s.lng);
+  if (!next || !stop.lat || !stop.lng) return;
+
+  const straightKm = haversineM(stop.lat, stop.lng, next.lat, next.lng) / 1000;
+  const depMins  = (timeToMinutes(getStopTime(stop)) ?? 0) + (getStopDuration(stop) ?? 0);
+  const arrMins  = timeToMinutes(getStopTime(next));
+  const gapMins  = arrMins !== null ? arrMins - depMins : null;
+  const gapStr   = gapMins !== null && gapMins > 0
+    ? (gapMins >= 60 ? `${Math.floor(gapMins/60)}h${gapMins%60?gapMins%60+'m':''}` : `${gapMins}m`)
+    : null;
+
+  el.innerHTML = `<i class="ph ph-arrow-right"></i>
+    <span class="leg-next-name">${next.location || getStopName(next)}</span>
+    <span class="leg-travel" id="leg-travel-val">
+      <i class="ph ph-spinner vegan-spin"></i>
+    </span>`;
+  el.classList.remove('hidden');
+
+  // Async: fetch OSRM driving route
+  const url = `https://router.project-osrm.org/route/v1/driving/${stop.lng},${stop.lat};${next.lng},${next.lat}?overview=false`;
+  fetch(url).then(r => r.json()).then(d => {
+    const route = d.routes?.[0];
+    const travelEl = document.getElementById('leg-travel-val');
+    if (!travelEl) return;
+    if (route) {
+      const roadKm   = (route.distance / 1000).toFixed(1);
+      const roadMins = Math.ceil(route.duration / 60);
+      const rH = Math.floor(roadMins / 60), rM = roadMins % 60;
+      const rStr = roadMins >= 60 ? `${rH}h${rM ? rM + 'm' : ''}` : `${roadMins}m`;
+      travelEl.innerHTML = `${rStr} drive &middot; ${roadKm}km`;
+    } else {
+      travelEl.innerHTML = `~${straightKm.toFixed(1)}km${gapStr ? ' &middot; ' + gapStr + ' planned' : ''}`;
+    }
+  }).catch(() => {
+    const travelEl = document.getElementById('leg-travel-val');
+    if (travelEl) travelEl.innerHTML = `~${straightKm.toFixed(1)}km${gapStr ? ' &middot; ' + gapStr : ''}`;
+  });
+}
+
 function openDetail(stop) {
   _detailStop = stop;
   _detailCurrent = 0;
   const overlay = document.getElementById('detail-overlay');
-  overlay.scrollTop = 0;
+  document.getElementById('detail-page').scrollTop = 0;
   overlay.classList.remove('hidden');
   requestAnimationFrame(() => requestAnimationFrame(() => overlay.classList.add('open')));
 
@@ -2334,15 +5120,115 @@ function openDetail(stop) {
   if (getStopType(stop) === 'charging')      tagsEl.innerHTML += '<span class="tl-tag charge"><i class="ph ph-lightning"></i> Supercharger</span>';
   if (getStopPriority(stop) >= 3)            tagsEl.innerHTML += '<span class="tl-tag poi">★ Must-see</span>';
 
-  const actEl = document.getElementById('detail-actions');
-  const parts = [`<a class="act-btn-full tesla" href="${teslaNavUrl(stop)}" target="_blank" rel="noopener"><i class="ph ph-navigation-arrow"></i> Navigate</a>`];
-  if (getStopVegan(stop) || getStopType(stop) === 'food')
-    parts.push(`<a class="act-btn-full vegan" href="${veganNearbyUrl(stop)}" target="_blank" rel="noopener"><i class="ph ph-leaf"></i> Vegan nearby</a>`);
-  parts.push(`<a class="act-btn-full charge" href="${chargingNearbyUrl(stop)}" target="_blank" rel="noopener"><i class="ph ph-lightning"></i> Chargers</a>`);
+  // ── Plan status + alternatives ──────────────────────────────────────
+  renderDetailPlanSection(stop);
+
+  // ── Address / info / links (match vegan search result style) ──────────
+  const _hoursEl = document.getElementById('detail-hours-row');
+  const _addrEl  = document.getElementById('detail-address-row');
+  const _infoEl  = document.getElementById('detail-info-rows');
+  const _extEl   = document.getElementById('detail-ext-links');
+  [_hoursEl, _addrEl, _infoEl, _extEl].forEach(el => { if (el) { el.innerHTML = ''; el.classList.add('hidden'); } });
+
+  if (_hoursEl && stop.openingHours) {
+    const oh = parseOpeningHours(stop.openingHours);
+    _hoursEl.innerHTML = `${openHoursBadge(oh.open, oh.nextOpen, oh.todayStr)}${oh.todayStr ? `<span class="vd-hours-str">${oh.todayStr}</span>` : ''}`;
+    _hoursEl.classList.remove('hidden');
+  }
+
+  const _addr = stop.address || stop.location;
+  if (_addrEl && _addr) {
+    _addrEl.innerHTML = `<div class="vd-info-row"><i class="ph ph-map-pin"></i><span>${_addr}</span></div>`;
+    _addrEl.classList.remove('hidden');
+  }
+
+  if (_infoEl) {
+    const _rows = [];
+    if (stop.cuisine)  _rows.push(`<div class="vd-info-row"><i class="ph ph-fork-knife"></i><span>${stop.cuisine}</span></div>`);
+    if (stop.phone)    _rows.push(`<div class="vd-info-row"><i class="ph ph-phone"></i><a href="tel:${stop.phone}" class="vd-link">${stop.phone}</a></div>`);
+    if (stop.website)  _rows.push(`<div class="vd-info-row"><i class="ph ph-globe"></i><a href="${stop.website}" target="_blank" rel="noopener" class="vd-link">Website</a></div>`);
+    if (_rows.length) { _infoEl.innerHTML = _rows.join(''); _infoEl.classList.remove('hidden'); }
+  }
+
+  if (_extEl && stop.lat && stop.lng) {
+    const _st = getStopType(stop);
+    const _hcUrl = `https://www.happycow.net/searchmap?lat=${stop.lat}&lng=${stop.lng}&zoom=15`;
+    const _gmUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((stop.name||'') + ' ' + (_addr||''))}`;
+    const _extBtns = [];
+    if (_st === 'food' || _st === 'vegan' || getStopVegan(stop))
+      _extBtns.push(`<a class="vd-link-btn happycow" href="${_hcUrl}" target="_blank" rel="noopener"><i class="ph ph-leaf"></i><div><strong>HappyCow</strong><small>Vegan reviews</small></div></a>`);
+    _extBtns.push(`<a class="vd-link-btn gmaps" href="${_gmUrl}" target="_blank" rel="noopener"><i class="ph ph-google-logo"></i><div><span class="vd-link-title">Google Maps</span><span class="vd-link-sub">Reviews &amp; photos</span></div></a>`);
+    _extEl.innerHTML = `<div class="vd-links-row">${_extBtns.join('')}</div>`;
+    _extEl.classList.remove('hidden');
+  }
+
+  const toolbarEl = document.getElementById('detail-toolbar');
+  const toolBtns = [`<a class="detail-tool-btn nav-tool" href="${navUrl(stop.name, stop.address, stop.lat, stop.lng)}" target="_blank" rel="noopener"><i class="ph ph-navigation-arrow"></i>Navigate</a>`];
+  if (getStopVegan(stop) || getStopType(stop) === 'food' || getStopType(stop) === 'vegan')
+    toolBtns.push(`<button class="detail-tool-btn vegan-tool" id="dtb-vegan"><i class="ph ph-leaf"></i>Vegan</button>`);
+  toolBtns.push(`<button class="detail-tool-btn charge-tool" id="dtb-charge"><i class="ph ph-lightning"></i>Charge</button>`);
   if (stop.mapsUrl && stop.mapsUrl !== 'N/A')
-    parts.push(`<a class="act-btn-full maps" href="${stop.mapsUrl}" target="_blank" rel="noopener"><i class="ph ph-map-trifold"></i> Maps</a>`);
-  actEl.innerHTML = parts.join('');
+    toolBtns.push(`<a class="detail-tool-btn maps-tool" href="${stop.mapsUrl}" target="_blank" rel="noopener"><i class="ph ph-map-trifold"></i>Maps</a>`);
+  toolbarEl.innerHTML = toolBtns.join('');
+  toolbarEl.querySelector('#dtb-vegan')?.addEventListener('click', () => {
+    if (stop.lat) { _userLat = stop.lat; _userLng = stop.lng; }
+    closeDetail();
+    state.currentView = 'vegan';
+    renderView(true);
+  });
+  toolbarEl.querySelector('#dtb-charge')?.addEventListener('click', () => {
+    if (stop.lat) { _userLat = stop.lat; _userLng = stop.lng; }
+    closeDetail();
+    state.currentView = 'charging';
+    renderView(true);
+  });
   document.getElementById('detail-edit-btn').onclick = () => openEditSheet(stop);
+
+  // Time strip
+  const timeStripEl = document.getElementById('detail-time-strip');
+  if (timeStripEl) {
+    timeStripEl.innerHTML = '';
+    timeStripEl.classList.add('hidden');
+    renderDetailTimeStrip(stop, timeStripEl);
+  }
+
+  // Leg info — distance + drive time to next stop
+  renderLegInfo(stop);
+
+  // Travel action buttons — Skip stop only (time/duration handled by time strip above)
+  const travelActEl = document.getElementById('detail-travel-actions');
+  if (travelActEl) {
+    const stopType = getStopType(stop);
+    if (stopType !== 'depart') {
+      const isSkippedNow = !!state.skipped[stop.id];
+      travelActEl.innerHTML = `<button class="travel-action-btn detail-skip-btn${isSkippedNow ? ' active' : ''}" data-stop-id="${stop.id}">
+        <i class="ph ${isSkippedNow ? 'ph-arrow-u-up-left' : 'ph-x-circle'}"></i> ${isSkippedNow ? 'Restore stop' : 'Skip stop'}
+      </button>`;
+      travelActEl.classList.remove('hidden');
+      travelActEl.classList.remove('hidden');
+      travelActEl.querySelector('.detail-skip-btn')?.addEventListener('click', () => {
+        if (state.skipped[stop.id]) {
+          delete state.skipped[stop.id];
+          save(); renderView(false); closeDetail();
+        } else {
+          closeDetail();
+          skipStop(stop);
+        }
+      });
+      const bucketBtn = document.createElement('button');
+      bucketBtn.className = 'travel-action-btn detail-bucket-btn';
+      bucketBtn.innerHTML = '<i class="ph ph-bookmark-simple"></i> Move to Bucket List';
+      bucketBtn.addEventListener('click', () => {
+        moveStopToBucketList(stop);
+        closeDetail();
+        showToast('Moved to Bucket List');
+      });
+      travelActEl.appendChild(bucketBtn);
+    } else {
+      travelActEl.innerHTML = '';
+      travelActEl.classList.add('hidden');
+    }
+  }
 
   const poiSection  = document.getElementById('detail-poi-section');
   const poiCarousel = document.getElementById('detail-poi-carousel');
@@ -2362,12 +5248,11 @@ function openDetail(stop) {
       fetchWeatherForDay(_dDay).then(wMap => {
         if (!wMap || !detailWeatherEl.isConnected) return;
         if (_detailStop?.id !== stop.id) return;
-        const dateStr = _dDay.date || '';
-        const entry = wMap.get(dateStr);
-        if (!entry) return;
-        const night = isNightTime(getStopTime(stop));
-        const icon  = night ? entry.nightIcon : entry.icon;
-        const tempC = night ? entry.nightTempC : entry.tempC;
+        const today = localDateStr();
+        const dateStr = _dDay.isFestival ? today : (_dDay.date || '');
+        const w = lookupHourlyWeather(wMap, dateStr, getStopTime(stop));
+        if (!w) return;
+        const { icon, tempC } = w;
         const lat   = getStopLat(stop) || _dDay.lat || '';
         const lng   = getStopLng(stop) || _dDay.lng || '';
         detailWeatherEl.innerHTML = `
@@ -2382,10 +5267,32 @@ function openDetail(stop) {
     }
   }
 
-  // Fetch wiki + commons together; refresh slides + description when done
+  // Inject Google data for food/vegan planned stops
+  const stopType = getStopType(stop);
+  if ((stopType === 'food' || stopType === 'vegan') && stop.lat && stop.lng) {
+    const cacheKey = 'stop_' + stop.id;
+    const heroEl = document.getElementById('detail-hero');
+    const bodyEl = document.getElementById('detail-body');
+    // Check cache first
+    if (_placeGoogleCache[cacheKey]) {
+      injectGoogleData(_placeGoogleCache[cacheKey], heroEl, bodyEl);
+    } else {
+      const query = [stop.name, stop.address].filter(Boolean).join(', ');
+      fetchGooglePlace(query, stop.lat, stop.lng).then(gData => {
+        if (gData) {
+          _placeGoogleCache[cacheKey] = gData;
+          injectGoogleData(gData, heroEl, bodyEl);
+        }
+      });
+    }
+  }
+
+  // Fetch wiki + Places data; refresh slides + description when done
   const tasks = [];
-  if (_wikiCache[stop.id] === undefined)    tasks.push(fetchWikiData(stop));
-  if (_commonsCache[stop.id] === undefined) tasks.push(fetchCommonsPhotos(stop));
+  if (_wikiCache[stop.id] === undefined) tasks.push(fetchWikiData(stop));
+  const type = getStopType(stop);
+  if (type !== 'depart' && type !== 'charging' && !_placesCache[stop.id]?.photos?.length)
+    tasks.push(fetchPlacesPhotos(stop));
 
   if (tasks.length) {
     Promise.all(tasks).then(() => {
@@ -2499,8 +5406,8 @@ function initDetailNavSwipe() {
   page.addEventListener('touchstart', e => {
     const sliderWrap  = document.getElementById(sliderWrapId);
     const poiCarousel = document.getElementById('detail-poi-carousel');
-    if (sliderWrap  && sliderWrap.contains(e.target))  return; // photo slider owns this
-    if (poiCarousel && poiCarousel.contains(e.target)) return; // POI carousel owns this
+    if (sliderWrap  && sliderWrap.contains(e.target))  return;
+    if (poiCarousel && poiCarousel.contains(e.target)) return;
     startX = e.touches[0].clientX;
     startY = e.touches[0].clientY;
     diffX = 0; isHoriz = null; active = true;
@@ -2511,14 +5418,14 @@ function initDetailNavSwipe() {
     const dx = e.touches[0].clientX - startX;
     const dy = e.touches[0].clientY - startY;
     if (isHoriz === null) {
-      if (Math.abs(dx) > Math.abs(dy) + 6)       isHoriz = true;
-      else if (Math.abs(dy) > Math.abs(dx) + 6)  isHoriz = false;
+      if (Math.abs(dy) > 30)                      { active = false; return; }
+      if (Math.abs(dx) > Math.abs(dy) + 8)        isHoriz = true;
+      else if (Math.abs(dy) > Math.abs(dx) + 8)   { active = false; return; }
       else return;
     }
-    if (!isHoriz) return;
+    if (!isHoriz) { active = false; return; }
     diffX = dx;
     page.style.transition = 'none';
-    // right-swipe: slide out right; left-swipe: slide out left (dampened)
     page.style.transform = `translateX(${diffX * 0.35}px)`;
     e.preventDefault();
   }, { passive: false });
@@ -2535,11 +5442,11 @@ function initDetailNavSwipe() {
     const _ds = day ? getDayStops(day) : [];
     const idx  = day && _detailStop ? _ds.findIndex(s => s.id === _detailStop.id) : -1;
 
-    if (diffX > 60) {
+    if (diffX > 100) {
       const prev = idx > 0 ? _ds[idx - 1] : null;
       if (prev) openDetail(prev);
       else closeDetail();
-    } else if (diffX < -60) {
+    } else if (diffX < -100) {
       const next = idx >= 0 ? _ds[idx + 1] : null;
       if (next) openDetail(next);
     }
@@ -2562,35 +5469,434 @@ function openTimeModal(stop, day) {
   _modalStop = stop; _modalDay = day;
   document.getElementById('modal-location').innerHTML = stopTypeIcon(stop) + ' ' + stop.location;
   document.getElementById('modal-time-input').value = getStopTime(stop);
-  document.getElementById('modal-cascade').checked = state.cascadeEnabled;
+  const stopType = getStopType(stop);
+  document.getElementById('modal-cascade').checked = (stopType === 'depart' || stopType === 'transport');
   document.getElementById('modal-overlay').classList.remove('hidden');
 }
+function resetDayTimes() {
+  if (!_modalDay) return;
+  // Clear time overrides and cross-day moves for all stops originating from this day
+  const stops = [
+    ..._modalDay.stops,
+    ...(state.addedStops?.[_modalDay.id] || []),
+  ];
+  stops.forEach(s => {
+    delete state.overrides[s.id];
+    delete state.crossDayMoves[s.id];
+  });
+  save(); closeModal(); renderView(false);
+  showToast('Day times reset to defaults');
+}
+
 function closeModal() {
   document.getElementById('modal-overlay').classList.add('hidden');
   _modalStop = _modalDay = null;
 }
+function getStopHomeDayIdx(stop) {
+  for (let i = 0; i < TRIP_DATA.days.length; i++) {
+    const d = TRIP_DATA.days[i];
+    if (d.stops?.find(s => s.id === stop.id)) return i;
+    if ((state.addedStops?.[d.id] || []).find(s => s.id === stop.id)) return i;
+  }
+  return -1;
+}
+
 function saveModal() {
   if (!_modalStop || !_modalDay) return;
   const newTime = document.getElementById('modal-time-input').value;
   const cascade = document.getElementById('modal-cascade').checked;
   const delta = timeToMinutes(newTime) - timeToMinutes(getStopTime(_modalStop));
   state.overrides[_modalStop.id] = newTime;
+
   if (cascade && delta !== 0) {
-    let found = false;
-    _modalDay.stops.forEach(s => {
-      if (s.id === _modalStop.id) { found = true; return; }
-      if (!found) return;
-      const cur = timeToMinutes(getStopTime(s));
-      if (cur !== null) state.overrides[s.id] = minutesToTime(cur + delta);
+    const days = TRIP_DATA.days;
+    const dayIdx = days.findIndex(d => d.id === _modalDay.id);
+    if (!state.crossDayMoves) state.crossDayMoves = {};
+
+    // Only cascade stops that ORIGINATE from _modalDay (not stops independently
+    // scheduled on later days). Include stops previously moved out of _modalDay.
+    const homeDayStops = [
+      ..._modalDay.stops,
+      ...(state.addedStops?.[_modalDay.id] || []),
+    ];
+    const homeDayIds = new Set(homeDayStops.map(s => s.id));
+
+    // Also include stops previously moved from _modalDay into later days
+    const movedFromThisDay = Object.entries(state.crossDayMoves)
+      .filter(([stopId]) => homeDayIds.has(stopId))
+      .map(([stopId]) => homeDayStops.find(s => s.id === stopId))
+      .filter(Boolean);
+
+    // Collect stops after the edited stop (by current time order)
+    const allHomeDayStops = [...homeDayStops];
+    allHomeDayStops.sort((a, b) => {
+      const ta = timeToMinutes(getStopTime(a)) ?? Infinity;
+      const tb = timeToMinutes(getStopTime(b)) ?? Infinity;
+      return ta - tb;
     });
+
+    let found = false;
+    const toUpdate = [];
+    allHomeDayStops.forEach(s => {
+      if (!found) { if (s.id === _modalStop.id) found = true; return; }
+      toUpdate.push(s);
+    });
+    // Also bring back any that were moved out (they may not be in sorted order above)
+    movedFromThisDay.forEach(s => {
+      if (!toUpdate.find(t => t.id === s.id) && s.id !== _modalStop.id) toUpdate.push(s);
+    });
+
+    const changedStops = [];
+    toUpdate.forEach(stop => {
+      const cur = timeToMinutes(getStopTime(stop));
+      if (cur === null) return;
+
+      // Compute current absolute position: home day * 1440 + time on that day
+      const currentDayIdx = state.crossDayMoves[stop.id]
+        ? days.findIndex(d => d.id === state.crossDayMoves[stop.id])
+        : dayIdx;
+      const absoluteMins = currentDayIdx * 1440 + cur;
+      const newAbsolute  = absoluteMins + delta;
+      const targetDayIdx = Math.min(Math.max(0, Math.floor(newAbsolute / 1440)), days.length - 1);
+      const newTimeStr   = minutesToTime(newAbsolute);
+
+      state.overrides[stop.id] = newTimeStr;
+
+      if (targetDayIdx !== dayIdx) {
+        state.crossDayMoves[stop.id] = days[targetDayIdx].id;
+      } else {
+        delete state.crossDayMoves[stop.id];
+      }
+      changedStops.push({ stop, newTime: newTimeStr, dayDate: days[targetDayIdx]?.date });
+    });
+
+    if (changedStops.length) {
+      const firstDate = changedStops[0].dayDate;
+      checkCascadedStops(changedStops.filter(s => s.dayDate === firstDate), firstDate);
+    }
   }
   save(); closeModal(); renderView(false);
+}
+
+/* ── Travel actions: Departed / Arrived / Extend ───────────────────── */
+
+function snapshotState() {
+  return {
+    overrides:         JSON.parse(JSON.stringify(state.overrides)),
+    checked:           JSON.parse(JSON.stringify(state.checked)),
+    durOverrides:      JSON.parse(JSON.stringify(state.durOverrides)),
+    crossDayMoves:     JSON.parse(JSON.stringify(state.crossDayMoves || {})),
+  };
+}
+
+let _undoSnapshot = null;
+let _undoTimer = null;
+
+function saveUndoSnapshot() {
+  _undoSnapshot = snapshotState();
+}
+
+function showUndoToast(msg) {
+  let el = document.getElementById('app-toast');
+  if (!el) { el = document.createElement('div'); el.id = 'app-toast'; document.getElementById('app').appendChild(el); }
+  el.innerHTML = `${msg} <button id="undo-btn" style="margin-left:10px;font-weight:700;text-decoration:underline;background:none;border:none;color:inherit;cursor:pointer;font-size:inherit">Undo</button>`;
+  el.classList.add('visible');
+  clearTimeout(el._t);
+  el._t = setTimeout(() => { el.classList.remove('visible'); _undoSnapshot = null; }, 10000);
+  document.getElementById('undo-btn').addEventListener('click', () => {
+    if (!_undoSnapshot) return;
+    Object.assign(state.overrides,     _undoSnapshot.overrides);
+    Object.assign(state.checked,       _undoSnapshot.checked);
+    Object.assign(state.durOverrides,  _undoSnapshot.durOverrides);
+    state.crossDayMoves = _undoSnapshot.crossDayMoves;
+    _undoSnapshot = null;
+    save(); renderView(false);
+    el.classList.remove('visible');
+    showToast('Changes undone');
+  });
+}
+
+function extendStop(stop, deltaMins) {
+  saveUndoSnapshot();
+  const cur  = state.durOverrides[stop.id] ?? stop.duration ?? 30;
+  const next = Math.max(5, cur + deltaMins);
+  state.durOverrides[stop.id] = next;
+  // Duration only — arrival times of other stops are not touched.
+  // Use the time modal (ripple) to shift following stops.
+  save(); renderView(false);
+}
+
+function moveStopToBucketList(stop) {
+  const day = TRIP_DATA.days.find(d => d.id === state.currentDayId) || TRIP_DATA.days[0];
+  const isAdded = state.addedStops[day.id] && state.addedStops[day.id].some(s => s.id === stop.id);
+  if (stop.id.startsWith('vegan_') || stop.id.startsWith('gplace_') || isAdded) {
+    if (state.addedStops[day.id]) {
+      state.addedStops[day.id] = state.addedStops[day.id].filter(s => s.id !== stop.id);
+    }
+  } else {
+    state.removed[stop.id] = true;
+  }
+  state.bucketList.unshift({ stop: { ...stop }, dayLabel: getDayLabel(day), originalDayId: day.id, removedAt: Date.now() });
+  delete state.skipped[stop.id];
+  delete state.checked[stop.id];
+  save();
+}
+
+async function skipStop(stop) {
+  saveUndoSnapshot();
+  state.skipped[stop.id] = true;
+  delete state.checked[stop.id];
+
+  // Find the day and surrounding stops to calculate time saving
+  const day = TRIP_DATA.days.find(d => getDayStops(d).some(s => s.id === stop.id));
+  if (!day) { save(); renderView(false); return; }
+
+  const dayStops = getDayStops(day).filter(s => getStopType(s) !== 'depart');
+  const idx = dayStops.findIndex(s => s.id === stop.id);
+  const prevStop = idx > 0 ? dayStops[idx - 1] : null;
+  const nextStop = idx < dayStops.length - 1 ? dayStops[idx + 1] : null;
+
+  // Auto-skip the immediately following depart stop (it's linked to this stop)
+  const departAfter = dayStops[idx + 1];
+  if (departAfter && getStopType(departAfter) === 'depart') {
+    state.skipped[departAfter.id] = true;
+  }
+
+  if (!nextStop) { save(); renderView(false); return; }
+
+  // Time freed = duration of skipped stop
+  const freedMins = getStopDuration(stop);
+
+  // Routing delta: (prev→skip→next) vs (prev→next) if we have coords
+  let routingDelta = 0;
+  if (prevStop && getStopLat(prevStop) && getStopLng(prevStop) &&
+      getStopLat(stop) && getStopLng(stop) &&
+      getStopLat(nextStop) && getStopLng(nextStop)) {
+    const [viaTime, directTime] = await Promise.all([
+      fetchTravelMins(getStopLat(prevStop), getStopLng(prevStop), getStopLat(stop),    getStopLng(stop)),
+      fetchTravelMins(getStopLat(stop),     getStopLng(stop),     getStopLat(nextStop), getStopLng(nextStop)),
+    ]).then(([a, b]) => [
+      // via skip: prev→skip + skip→next
+      (a ?? 0) + (b ?? 0),
+      // direct: just fetch prev→next
+      null,
+    ]);
+    const directOnlyTime = await fetchTravelMins(
+      getStopLat(prevStop), getStopLng(prevStop),
+      getStopLat(nextStop), getStopLng(nextStop)
+    );
+    if (directOnlyTime !== null) routingDelta = viaTime - directOnlyTime; // positive = time saved by skipping
+  }
+
+  const totalSaving = freedMins + routingDelta;
+
+  if (totalSaving > 0) {
+    // Shift all following non-skipped stops on this day earlier
+    let found = false;
+    dayStops.forEach(s => {
+      if (!found) { if (s.id === stop.id) found = true; return; }
+      if (state.skipped[s.id]) return;
+      const t = timeToMinutes(getStopTime(s));
+      if (t !== null) state.overrides[s.id] = minutesToTime(t - totalSaving);
+    });
+    showToast(`Skipped · ${totalSaving}m saved · stops brought forward`);
+  } else {
+    showToast('Stop skipped');
+  }
+
+  save(); renderView(false);
+}
+
+function resetStopDuration(stop) {
+  saveUndoSnapshot();
+  delete state.durOverrides[stop.id];
+  save(); renderView(false);
+}
+
+let _travelActionStop = null;
+let _travelActionType = null;
+
+function openTravelAction(stop, type) {
+  _travelActionStop = stop;
+  _travelActionType = type;
+  const planned = getStopTime(stop);
+  const actual  = minutesToTime(nowMinutes());
+  const delta   = nowMinutes() - (timeToMinutes(planned) || 0);
+  const lateStr = delta > 0 ? `${delta} min late` : delta < 0 ? `${-delta} min early` : 'on time';
+  const label   = type === 'departed' ? 'Departed' : 'Arrived';
+
+  document.getElementById('travel-action-title').textContent = `${label}: ${getStopName(stop)}`;
+  document.getElementById('travel-action-summary').textContent =
+    `Planned ${planned} · Actual ${actual} · ${lateStr}`;
+
+  const skipList = document.getElementById('travel-action-skip-list');
+  skipList.innerHTML = '';
+  if (delta > 0) {
+    // Show remaining stops for today so user can choose to skip
+    const day = TRIP_DATA.days.find(d => d.id === state.currentDayId);
+    if (day) {
+      const remaining = getDayStops(day).filter(s => {
+        const t = timeToMinutes(getStopTime(s));
+        return t !== null && t > (timeToMinutes(planned) || 0) && s.id !== stop.id
+          && !['depart','transport','hotel','charging'].includes(getStopType(s));
+      });
+      remaining.forEach(s => {
+        const alreadySkipped = !!state.skipped[s.id];
+        const row = document.createElement('label');
+        row.className = 'skip-stop-row' + (alreadySkipped ? ' already-skipped' : '');
+        row.innerHTML = `<input type="checkbox" value="${s.id}"${alreadySkipped ? '' : ' checked'}><span style="flex:1">${stopTypeIcon(s)} ${getStopName(s)}${alreadySkipped ? ' <em style="opacity:.5;font-style:normal;font-size:.8em">skipped</em>' : ''}</span><span class="skip-time">${getStopTime(s)}</span>`;
+        skipList.appendChild(row);
+      });
+    }
+  }
+
+  document.getElementById('travel-action-ripple').style.display = delta !== 0 ? '' : 'none';
+  document.getElementById('travel-action-overlay').classList.remove('hidden');
+}
+
+function closeTravelAction() {
+  document.getElementById('travel-action-overlay').classList.add('hidden');
+  _travelActionStop = _travelActionType = null;
+}
+
+// Cascade a time delta to all following stops on the same day, stopping at fixed stops.
+// skipSet: Set of stop ids to skip over (already-skipped stops stay un-updated but don't block cascade).
+// Departure cascade: anchors all following stops to actualDepMins using ORIGINAL
+// data times as the base. Avoids compounding errors from earlier arrival cascades.
+function cascadeFromDeparture(fromStop, actualDepMins) {
+  // Use original (data) departure as the reference, not whatever overrides exist
+  const origArr = timeToMinutes(fromStop.time);
+  const origDur = fromStop.duration ?? 30;
+  if (origArr === null) {
+    // Added stop with no original time — fall back to current state departure
+    const curArr = timeToMinutes(getStopTime(fromStop));
+    if (curArr === null) return;
+    const curDur = getStopDuration(fromStop);
+    cascadeTimeDelta(fromStop, actualDepMins - (curArr + curDur));
+    return;
+  }
+  const origDep = origArr + origDur;
+  const delta = actualDepMins - origDep;
+
+  const day = TRIP_DATA.days.find(d => d.stops.concat(state.addedStops?.[d.id] || []).some(s => s.id === fromStop.id));
+  if (!day) return;
+  const days = TRIP_DATA.days;
+  const dayIdx = days.findIndex(d => d.id === day.id);
+  if (!state.crossDayMoves) state.crossDayMoves = {};
+  const allStops = [...day.stops, ...(state.addedStops?.[day.id] || [])];
+  const sorted = [...allStops].sort((a, b) => (a.order ?? 9999) - (b.order ?? 9999));
+  let found = false;
+  for (const s of sorted) {
+    if (!found) { if (s.id === fromStop.id) found = true; continue; }
+    if (s.fixed) break;
+    if (['hotel','sleep'].includes(getStopType(s))) break; // overnight stop — don't shift next day
+    if (state.skipped[s.id]) continue;
+    // Use ORIGINAL data time so we don't compound previous arrival cascades
+    const origTime = timeToMinutes(s.time) ?? timeToMinutes(getStopTime(s));
+    if (origTime === null) continue;
+    const newAbsolute = dayIdx * 1440 + origTime + delta;
+    const targetDayIdx = Math.min(Math.max(0, Math.floor(newAbsolute / 1440)), days.length - 1);
+    state.overrides[s.id] = minutesToTime(newAbsolute);
+    if (targetDayIdx !== dayIdx) state.crossDayMoves[s.id] = days[targetDayIdx].id;
+    else delete state.crossDayMoves[s.id];
+  }
+}
+
+function cascadeTimeDelta(fromStop, delta, skipSet = new Set()) {
+  if (!delta) return;
+  const day = TRIP_DATA.days.find(d => d.stops.concat(state.addedStops?.[d.id] || []).some(s => s.id === fromStop.id));
+  if (!day) return;
+  const days = TRIP_DATA.days;
+  const dayIdx = days.findIndex(d => d.id === day.id);
+  if (!state.crossDayMoves) state.crossDayMoves = {};
+  const homeDayStops = [...day.stops, ...(state.addedStops?.[day.id] || [])];
+  const sorted = [...homeDayStops].sort((a, b) => (a.order ?? 9999) - (b.order ?? 9999));
+  let found = false;
+  for (const s of sorted) {
+    if (!found) { if (s.id === fromStop.id) found = true; continue; }
+    if (s.fixed) break;
+    if (['hotel','sleep'].includes(getStopType(s))) break; // overnight stop — don't shift next day
+    if (skipSet.has(s.id) || state.skipped[s.id]) continue;
+    const cur = timeToMinutes(getStopTime(s));
+    if (cur === null) continue;
+    const currentDayIdx = state.crossDayMoves[s.id] ? days.findIndex(d => d.id === state.crossDayMoves[s.id]) : dayIdx;
+    const newAbsolute = currentDayIdx * 1440 + cur + delta;
+    const targetDayIdx = Math.min(Math.max(0, Math.floor(newAbsolute / 1440)), days.length - 1);
+    state.overrides[s.id] = minutesToTime(newAbsolute);
+    if (targetDayIdx !== dayIdx) state.crossDayMoves[s.id] = days[targetDayIdx].id;
+    else delete state.crossDayMoves[s.id];
+  }
+}
+
+function applyTravelAction(ripple) {
+  if (!_travelActionStop) return;
+  saveUndoSnapshot();
+
+  const planned = timeToMinutes(getStopTime(_travelActionStop)) || 0;
+  const actual  = nowMinutes();
+  const delta   = actual - planned;
+
+  // Mark skipped stops
+  document.querySelectorAll('#travel-action-skip-list input:checked').forEach(cb => {
+    state.skipped[cb.value] = true;
+    delete state.checked[cb.value];
+  });
+
+  // Record actual time
+  state.overrides[_travelActionStop.id] = minutesToTime(actual);
+
+  if (ripple && delta !== 0) {
+    const skipSet = new Set([...document.querySelectorAll('#travel-action-skip-list input:checked')].map(cb => cb.value));
+    cascadeTimeDelta(_travelActionStop, delta, skipSet);
+  }
+
+  save(); closeTravelAction(); renderView(false);
+  showUndoToast(_travelActionType === 'departed' ? 'Departed recorded' : 'Arrival recorded');
+}
+
+/* ── Opening hours check after cascade ─────────────────────────────── */
+async function checkCascadedStops(changedStops, dayDate) {
+  const date = new Date(dayDate + 'T12:00:00');
+  const toCheck = changedStops.filter(({ stop }) => {
+    const type = getStopType(stop);
+    return type !== 'depart' && type !== 'charging' && type !== 'sleep';
+  });
+  if (!toCheck.length) return;
+
+  // Fetch opening hours for any stops that don't have them cached yet
+  await Promise.allSettled(toCheck.map(({ stop }) => fetchOpeningHours(stop)));
+
+  // Only prompt for stops that are definitively closed
+  const closed = toCheck.filter(({ stop, newTime }) => {
+    const status = isStopOpenAt(stop, newTime, date);
+    return status === 'closed';
+  });
+  if (!closed.length) return;
+
+  // Show the skip prompt
+  const list = document.getElementById('skip-prompt-list');
+  list.innerHTML = '';
+  closed.forEach(({ stop, newTime }) => {
+    const row = document.createElement('div');
+    row.className = 'skip-stop-row';
+    row.innerHTML = `
+      <input type="checkbox" id="skip-${stop.id}" value="${stop.id}" checked>
+      <label for="skip-${stop.id}">${stopTypeIcon(stop)} ${getStopName(stop)}</label>
+      <span class="skip-time">${newTime}</span>
+      <span class="closed-badge">Closed</span>`;
+    list.appendChild(row);
+  });
+  document.getElementById('skip-prompt-overlay').classList.remove('hidden');
+}
+
+function closeSkipPrompt() {
+  document.getElementById('skip-prompt-overlay').classList.add('hidden');
 }
 
 /* ── Day swipe (edge swipe left/right to change day) ───────────────── */
 function initDaySwipe() {
   const mc = document.getElementById('main-content');
-  const EDGE = 44; // px from screen edge that activates the gesture
+  const EDGE = 60; // px from screen edge that activates the gesture
   let startX = 0, startY = 0, diffX = 0, active = false, isHoriz = null;
 
   function adjacentDayId(delta) {
@@ -2619,7 +5925,7 @@ function initDaySwipe() {
     const dy = e.touches[0].clientY - startY;
     if (isHoriz === null) {
       if (Math.abs(dx) > Math.abs(dy) + 6)      isHoriz = true;
-      else if (Math.abs(dy) > Math.abs(dx) + 6) isHoriz = false;
+      else if (Math.abs(dy) > Math.abs(dx) + 6) { active = false; return; }
       else return;
     }
     if (!isHoriz) { active = false; return; }
@@ -2629,20 +5935,114 @@ function initDaySwipe() {
   mc.addEventListener('touchend', () => {
     if (!active || !isHoriz) { active = false; return; }
     active = false;
-    if (Math.abs(diffX) < 60) return;
+    if (Math.abs(diffX) < 80) return;
     const delta = diffX < 0 ? 1 : -1; // left = next day, right = previous day
     const nextId = adjacentDayId(delta);
     if (nextId) selectDay(nextId);
   });
 }
 
+/* ── Pull-to-refresh ───────────────────────────────────────────────── */
+function initPullToRefresh() {
+  const mc      = document.getElementById('main-content');
+  const THRESHOLD = 72; // px pulled before release triggers refresh
+  let startY = 0, pulling = false, triggered = false;
+
+  // Spinner element
+  const spinner = document.createElement('div');
+  spinner.id = 'ptr-spinner';
+  spinner.innerHTML = '<i class="ph ph-arrow-clockwise"></i>';
+  document.getElementById('app').appendChild(spinner);
+
+  mc.addEventListener('touchstart', e => {
+    if (mc.scrollTop !== 0) return;
+    if (!document.getElementById('detail-overlay').classList.contains('hidden')) return;
+    startY   = e.touches[0].clientY;
+    pulling  = true;
+    triggered = false;
+  }, { passive: true });
+
+  mc.addEventListener('touchmove', e => {
+    if (!pulling) return;
+    const dy = e.touches[0].clientY - startY;
+    if (dy <= 0) { spinner.style.transform = ''; spinner.classList.remove('visible'); return; }
+    const progress = Math.min(dy / THRESHOLD, 1);
+    spinner.style.transform = `translateY(${Math.min(dy * 0.4, THRESHOLD * 0.5)}px) rotate(${progress * 360}deg)`;
+    spinner.classList.toggle('visible', dy > 16);
+    spinner.classList.toggle('ready', dy >= THRESHOLD);
+  }, { passive: true });
+
+  mc.addEventListener('touchend', async () => {
+    if (!pulling) return;
+    pulling = false;
+    if (!spinner.classList.contains('ready')) {
+      spinner.style.transform = '';
+      spinner.classList.remove('visible', 'ready');
+      return;
+    }
+    // Triggered — spin and refresh
+    spinner.classList.add('spinning');
+    spinner.classList.remove('ready');
+    try {
+      if (state.currentView === 'vegan') { _veganCache = null; }
+      else if (state.currentView === 'charging') { _chargerCache = null; }
+      else if (state.currentView === 'map') { _veganCache = null; _chargerCache = null; }
+      const day = TRIP_DATA.days.find(d => d.id === state.currentDayId);
+      if (day && state.currentView !== 'vegan' && state.currentView !== 'charging') {
+        _weatherCache.delete(day.id);
+        await fetchWeatherForDay(day);
+      }
+      if (typeof syncInit === 'undefined' && typeof _db !== 'undefined' && _db) {
+        // Re-read remote state
+        _db.ref('shared/state').once('value').then(snap => {
+          const remote = snap.val();
+          if (remote) applyRemoteState(remote);
+        });
+      }
+      renderView(false);
+      showToast('Refreshed');
+    } finally {
+      setTimeout(() => {
+        spinner.style.transform = '';
+        spinner.classList.remove('visible', 'spinning');
+      }, 400);
+    }
+  });
+}
+
 /* ── Init ──────────────────────────────────────────────────────────── */
+function updateHeaderHeight() {
+  const h = document.getElementById('app-header');
+  if (h) document.documentElement.style.setProperty('--header-h', h.offsetHeight + 'px');
+}
+
+// Auto-reload when a new service worker activates
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('message', e => {
+    if (e.data?.type === 'SW_UPDATED') window.location.reload(true);
+  });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
+  // One-time reset trigger: open app with ?reset=times to clear all time data
+  if (new URLSearchParams(location.search).get('reset') === 'times') {
+    ['annecy_overrides','annecy_dur_overrides','annecy_cross_day_moves'].forEach(k => localStorage.removeItem(k));
+    // Also clear from Firebase once _db is ready (handled after syncInit)
+    window._pendingResetTimes = true;
+    history.replaceState(null, '', location.pathname);
+  }
+  document.getElementById('version-badge').textContent = APP_VERSION;
+  document.getElementById('version-number').textContent = APP_VERSION;
   load();
   loadWikiCache();
+  loadPlacesCache();
+  loadGooglePhotos();
+  loadWeatherCache();
   state.currentDayId = findTodayDayId() || TRIP_DATA.days[0].id;
   buildDayStrip();
   renderView(true); // scroll to now only on first load
+  updateHeaderHeight();
+  new ResizeObserver(updateHeaderHeight).observe(document.getElementById('app-header'));
   if (typeof syncInit === 'function') syncInit();
   scheduleNotifs(); // schedule any pending departure alerts for today
   if (state.notifsEnabled && notifGranted()) startTrafficPolling();
@@ -2723,6 +6123,39 @@ document.addEventListener('DOMContentLoaded', () => {
     if (notifTestBtn) {
       notifTestBtn.addEventListener('click', () => testServerPush());
     }
+
+    // Version panel
+    const versionBtn = document.getElementById('version-btn');
+    if (versionBtn) versionBtn.addEventListener('click', () => { closeDrawer(); showVersionPanel(); });
+    const versionClose = document.getElementById('version-close');
+    if (versionClose) versionClose.addEventListener('click', hideVersionPanel);
+    const copyDevBtn = document.getElementById('copy-dev-data-btn');
+    if (copyDevBtn) copyDevBtn.addEventListener('click', copyDevData);
+    const forceUpdateBtn = document.getElementById('force-update-btn');
+    if (forceUpdateBtn) forceUpdateBtn.addEventListener('click', async () => {
+      forceUpdateBtn.disabled = true;
+      forceUpdateBtn.innerHTML = '<i class="ph ph-spinner"></i> Clearing…';
+      try {
+        const keys = await caches.keys();
+        await Promise.all(keys.map(k => caches.delete(k)));
+        // Do NOT unregister the SW — that destroys the push subscription
+      } catch (e) { /* ignore */ }
+      window.location.reload(true);
+    });
+
+    // Nav app preference (Apple Maps / Google Maps)
+    try { const saved = localStorage.getItem('annecy_nav_app'); if (saved === 'google') state.navApp = 'google'; } catch {}
+    function updateNavAppBtn() {
+      const lbl = document.getElementById('nav-app-label');
+      if (lbl) lbl.textContent = state.navApp === 'google' ? 'Navigate with Google Maps' : 'Navigate with Apple Maps';
+    }
+    updateNavAppBtn();
+    const navAppBtn = document.getElementById('nav-app-btn');
+    if (navAppBtn) navAppBtn.addEventListener('click', () => {
+      state.navApp = state.navApp === 'apple' ? 'google' : 'apple';
+      try { localStorage.setItem('annecy_nav_app', state.navApp); } catch {}
+      updateNavAppBtn();
+    });
 
     // Units toggle (km / miles)
     function updateUnitsBtn() {
@@ -2810,7 +6243,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!day || day.isCountdown) { showToast('No itinerary for this day'); return; }
     const allStops = getDayStops(day);
     const now = nowMinutes();
-    const todayStr = new Date().toISOString().slice(0, 10);
+    const todayStr = localDateStr();
     const isToday = day.date === todayStr;
     let fromIdx = 0;
     if (isToday) {
@@ -2865,13 +6298,14 @@ document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('.drawer-item[data-action]').forEach(btn =>
     btn.addEventListener('click', () => {
       if (btn.dataset.action === 'home')         { state.currentView = 'day'; renderView(false); closeDrawer(); }
+      if (btn.dataset.action === 'bucket')       { state.currentView = 'bucket'; renderView(false); closeDrawer(); }
       if (btn.dataset.action === 'reset-times')  { state.overrides = {}; state.locOverrides = {}; state.durOverrides = {}; state.typeOverrides = {}; state.priorityOverrides = {}; state.reasonOverrides = {}; state.veganOverrides = {}; save(); renderView(false); closeDrawer(); }
       if (btn.dataset.action === 'reset-checks') { state.checked   = {}; save(); renderView(false); closeDrawer(); }
       if (btn.dataset.action === 'toggle-dark')  {
         document.body.classList.toggle('light');
         try { localStorage.setItem('annecy_theme', document.body.classList.contains('light') ? 'light' : 'dark'); } catch {}
         updateDrawerLabels();
-        if (_leafletMap) { _leafletMap.remove(); _leafletMap = null; _locMarker = null; _locCircle = null; document.getElementById('map-container').innerHTML = ''; }
+        if (_leafletMap) { _leafletMap.remove(); _leafletMap = null; _mapMarkerLayer = null; _mapRouteLayer = null; _locMarker = null; _locCircle = null; document.getElementById('map-container').innerHTML = ''; }
         if (state.currentView === 'map') renderMapView();
         closeDrawer();
       }
@@ -2881,6 +6315,7 @@ document.addEventListener('DOMContentLoaded', () => {
   /* Time modal */
   document.getElementById('modal-close').addEventListener('click', closeModal);
   document.getElementById('modal-cancel').addEventListener('click', closeModal);
+  document.getElementById('modal-reset-day').addEventListener('click', resetDayTimes);
   document.getElementById('modal-overlay').addEventListener('click', e => { if (e.target.id === 'modal-overlay') closeModal(); });
   document.getElementById('modal-save').addEventListener('click', saveModal);
   document.querySelectorAll('.time-adj').forEach(btn =>
@@ -2890,10 +6325,27 @@ document.addEventListener('DOMContentLoaded', () => {
       if (cur !== null) input.value = minutesToTime(cur + parseInt(btn.dataset.delta, 10));
     }));
 
+  /* Travel action sheet */
+  document.getElementById('travel-action-close').addEventListener('click', closeTravelAction);
+  document.getElementById('travel-action-ripple').addEventListener('click', () => applyTravelAction(true));
+  document.getElementById('travel-action-done').addEventListener('click',   () => applyTravelAction(false));
+
+  /* Skip prompt */
+  document.getElementById('skip-prompt-close').addEventListener('click', closeSkipPrompt);
+  document.getElementById('skip-prompt-cancel').addEventListener('click', closeSkipPrompt);
+  document.getElementById('skip-prompt-confirm').addEventListener('click', () => {
+    document.querySelectorAll('#skip-prompt-list input[type=checkbox]:checked').forEach(cb => {
+      state.skipped[cb.value] = true;
+      delete state.checked[cb.value];
+    });
+    save(); renderView(false); closeSkipPrompt();
+  });
+
   /* Detail page */
   document.getElementById('detail-back').addEventListener('click', closeDetail);
   initDetailNavSwipe();
   initDaySwipe();
+  initPullToRefresh();
 
   /* Edit sheet */
   document.getElementById('edit-sheet-close').addEventListener('click', closeEditSheet);
@@ -2984,4 +6436,23 @@ document.addEventListener('DOMContentLoaded', () => {
   // visibilitychange covers most cases; pageshow catches iOS PWA cold-resume
   document.addEventListener('visibilitychange', handleResume);
   window.addEventListener('pageshow', handleResume);
+
+  // Midnight advance — schedule a tick at the next local midnight so the day
+  // tab advances automatically without needing to reopen the app
+  function scheduleMidnightTick() {
+    const now = new Date();
+    const msUntilMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 5).getTime() - now.getTime();
+    setTimeout(() => {
+      const todayId = findTodayDayId();
+      if (todayId && todayId !== state.currentDayId) {
+        state.currentDayId = todayId;
+        state.currentView  = 'day';
+        updateDayStrip();
+        renderView(true);
+        scheduleNotifs();
+      }
+      scheduleMidnightTick(); // re-arm for the following midnight
+    }, msUntilMidnight);
+  }
+  scheduleMidnightTick();
 });
