@@ -1,7 +1,17 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v226';
+const APP_VERSION = 'v227';
 
 const CHANGELOG = [
+  { version: 'v227', title: 'Navigation, palette & stop timing', items: [
+    { type: 'feature', text: 'Apple Maps navigation (switch to Google Maps in settings)' },
+    { type: 'feature', text: 'Arrived / Duration / Departed time strip on stop pages' },
+    { type: 'feature', text: 'Vegan & charger pins shown on map view' },
+    { type: 'feature', text: 'Google Places data (photos, reviews) shown on planned food/vegan stops' },
+    { type: 'design', text: 'Simplified colour palette — reduced accent colours throughout' },
+    { type: 'design', text: 'Improved text contrast (text2/text3 opacity bumped)' },
+    { type: 'design', text: 'Nearest stop chip now visible with strong glass background' },
+    { type: 'fix', text: 'Removed PlugShare and HappyCow from drawer (use own lookup + per-page link)' },
+  ]},
   {
     version: 'v226',
     title: 'Version panel with changelog',
@@ -63,7 +73,6 @@ const state = {
   cardView: 'full',
   notifsEnabled: false,
   useMetric: true,
-  navApp: 'apple',         // 'apple' | 'google'
   overrides: {},        // stopId → time string
   checked: {},          // stopId → bool (visited)
   skipped: {},          // stopId → bool (deliberately skipped)
@@ -1932,29 +1941,6 @@ function renderMapView() {
     m.on('click', () => openDetail(stop));
   });
 
-  // Overlay vegan spots from session cache
-  if (_veganCache?.places) {
-    _veganCache.places.forEach(p => {
-      const icon = L.divIcon({
-        className: '',
-        html: `<div class="map-marker-poi vegan-poi"><i class="ph ph-leaf"></i></div>`,
-        iconSize: [28,28], iconAnchor: [14,14],
-      });
-      L.marker([p.lat, p.lng], { icon }).addTo(markerGroup).on('click', () => openVeganDetail(p));
-    });
-  }
-  // Overlay EV charger spots from session cache
-  if (_chargerCache?.chargers) {
-    applyChargerFilters(_chargerCache.chargers).forEach(c => {
-      const icon = L.divIcon({
-        className: '',
-        html: `<div class="map-marker-poi charger-poi"><i class="ph ph-lightning"></i></div>`,
-        iconSize: [28,28], iconAnchor: [14,14],
-      });
-      L.marker([c.lat, c.lng], { icon }).addTo(markerGroup).on('click', () => openChargerDetail(c));
-    });
-  }
-
   // ── Route: remove old polyline, fetch fresh (active stops only) ───
   if (_mapRouteLayer) { _mapRouteLayer.remove(); _mapRouteLayer = null; }
   const routeColor = isDark ? '#38bdf8' : '#0284c7';
@@ -2344,15 +2330,6 @@ function mapsDirectionsUrl(name, address, lat, lng) {
                        : `${lat},${lng}`;
   return `https://www.google.com/maps/dir/?api=1&destination=${dest}&travelmode=driving`;
 }
-function navUrl(name, address, lat, lng) {
-  const dest = [name, address].filter(Boolean).join(', ');
-  if (state.navApp === 'apple') {
-    const q = encodeURIComponent(dest || `${lat},${lng}`);
-    return `maps://?daddr=${q}&dirflg=d`;
-  }
-  const gdest = address ? encodeURIComponent(dest) : `${lat},${lng}`;
-  return `https://www.google.com/maps/dir/?api=1&destination=${gdest}&travelmode=driving`;
-}
 
 /* ── Wikimedia photo fetch ──────────────────────────────────────────── */
 async function fetchWikimediaPhoto(tag) {
@@ -2466,7 +2443,7 @@ function openVeganDetail(place) {
   const levelClass = place.veganLevel === 'only' ? 'full' : '';
   const distStr = place.dist < 1000 ? `${Math.round(place.dist)}m away` : `${(place.dist / 1000).toFixed(1)}km away`;
   const mapsUrl = mapsSearchUrl(place.name, place.address, place.lat, place.lng);
-  const mapsNavUrl = navUrl(place.name, place.address, place.lat, place.lng);
+  const mapsNavUrl = mapsDirectionsUrl(place.name, place.address, place.lat, place.lng);
   const happycowUrl = `https://www.happycow.net/searchmap?lat=${place.lat}&lng=${place.lng}&zoom=16`;
   const planned = findMatchingPlannedStop(place);
   const { open, todayStr } = parseOpeningHours(place.openingHours);
@@ -2946,7 +2923,7 @@ function openChargerDetail(charger) {
   const brand = chargerBrand(charger.operator);
   const distStr = charger.dist < 1000 ? `${Math.round(charger.dist)}m away` : `${(charger.dist / 1000).toFixed(1)}km away`;
   const mapsUrl = mapsSearchUrl(charger.name, charger.address, charger.lat, charger.lng);
-  const mapsNav = navUrl(charger.name, charger.address, charger.lat, charger.lng);
+  const mapsNav = mapsDirectionsUrl(charger.name, charger.address, charger.lat, charger.lng);
   const teslaNav = `https://www.tesla.com/_tsla/journey/?lat=${charger.lat}&lng=${charger.lng}`;
   const { open, todayStr } = parseOpeningHours(charger.openingHours);
 
@@ -4512,66 +4489,6 @@ function switchToAlternative(primaryStop, alt) {
   showToast(`Switched to ${alt.location}`);
 }
 
-function renderDetailTimeStrip(stop, container) {
-  const today = TRIP_DATA.days.find(d => getDayStops(d).some(s => s.id === stop.id));
-  const todayStr = localDateStr();
-  const isToday = today && (today.date === todayStr ||
-    (today.isFestival && todayStr >= today.date && todayStr <= (today.dateEnd || today.date)));
-  const arrival = getStopTime(stop);
-  const durMins = getStopDuration(stop);
-  const durStr  = durMins >= 60
-    ? `${Math.floor(durMins/60)}h${durMins%60 ? ' ' + (durMins%60) + 'm' : ''}`
-    : `${durMins}m`;
-  const depart  = minutesToTime((timeToMinutes(arrival) || 0) + durMins);
-  const interactive = isToday && getStopType(stop) !== 'depart';
-  container.innerHTML = `
-    <div class="dts-row">
-      <button class="dts-chip${interactive ? ' dts-interactive' : ''}" id="dts-arrived"${!interactive ? ' disabled' : ''}>
-        <span class="dts-label">Arrived</span>
-        <span class="dts-time">${arrival}</span>
-      </button>
-      <button class="dts-chip dts-dur${interactive ? ' dts-interactive' : ''}" id="dts-dur"${!interactive ? ' disabled' : ''}>
-        <i class="ph ph-timer"></i>
-        <span class="dts-time">${durStr}</span>
-      </button>
-      <button class="dts-chip${interactive ? ' dts-interactive' : ''}" id="dts-departed"${!interactive ? ' disabled' : ''}>
-        <span class="dts-label">Depart</span>
-        <span class="dts-time">${depart}</span>
-      </button>
-    </div>`;
-  container.classList.remove('hidden');
-  if (!interactive) return;
-  container.querySelector('#dts-arrived')?.addEventListener('click', () => openTravelAction(stop, 'arrived'));
-  container.querySelector('#dts-departed')?.addEventListener('click', () => openTravelAction(stop, 'departed'));
-  container.querySelector('#dts-dur')?.addEventListener('click', () => {
-    const existing = container.querySelector('.dts-dur-controls');
-    if (existing) { existing.remove(); return; }
-    const ctrl = document.createElement('div');
-    ctrl.className = 'dts-dur-controls';
-    ctrl.innerHTML = `
-      <button class="dts-adj-btn" data-delta="-15">−15m</button>
-      <button class="dts-adj-btn" data-delta="-5">−5m</button>
-      <button class="dts-adj-btn dts-now-btn" data-now="1">Now</button>
-      <button class="dts-adj-btn" data-delta="5">+5m</button>
-      <button class="dts-adj-btn" data-delta="15">+15m</button>
-      <button class="dts-adj-btn dts-skip-btn" data-skip="1">Skip</button>`;
-    container.appendChild(ctrl);
-    ctrl.addEventListener('click', e => {
-      const btn = e.target.closest('[data-delta],[data-now],[data-skip]');
-      if (!btn) return;
-      if (btn.dataset.skip) { skipStop(stop); return; }
-      if (btn.dataset.now) {
-        const nowMins2 = nowMinutes();
-        const newDur = Math.max(5, nowMins2 - (timeToMinutes(getStopTime(stop)) || nowMins2));
-        saveUndoSnapshot(); state.durOverrides[stop.id] = newDur;
-      } else {
-        extendStop(stop, parseInt(btn.dataset.delta));
-      }
-      save(); renderView(false); renderDetailTimeStrip(stop, container);
-    });
-  });
-}
-
 function openDetail(stop) {
   _detailStop = stop;
   _detailCurrent = 0;
@@ -4613,6 +4530,14 @@ function openDetail(stop) {
     toolBtns.push(`<a class="detail-tool-btn maps-tool" href="${stop.mapsUrl}" target="_blank" rel="noopener"><i class="ph ph-map-trifold"></i>Maps</a>`);
   toolbarEl.innerHTML = toolBtns.join('');
   document.getElementById('detail-edit-btn').onclick = () => openEditSheet(stop);
+
+  // Time strip
+  const timeStripEl = document.getElementById('detail-time-strip');
+  if (timeStripEl) {
+    timeStripEl.classList.add('hidden');
+    timeStripEl.innerHTML = '';
+    renderDetailTimeStrip(stop, timeStripEl);
+  }
 
   // Travel action buttons — only shown for today's stops
   const travelActEl = document.getElementById('detail-travel-actions');
@@ -4700,6 +4625,26 @@ function openDetail(stop) {
             <i class="ph ph-cloud-sun"></i> Open Weather
           </a>` : ''}`;
         detailWeatherEl.classList.remove('hidden');
+      });
+    }
+  }
+
+  // Inject Google data for food/vegan planned stops
+  const stopType = getStopType(stop);
+  if ((stopType === 'food' || stopType === 'vegan') && stop.lat && stop.lng) {
+    const cacheKey = 'stop_' + stop.id;
+    const heroEl = document.getElementById('detail-hero');
+    const bodyEl = document.getElementById('detail-body');
+    // Check cache first
+    if (_placeGoogleCache[cacheKey]) {
+      injectGoogleData(_placeGoogleCache[cacheKey], heroEl, bodyEl);
+    } else {
+      const query = [stop.name, stop.address].filter(Boolean).join(', ');
+      fetchGooglePlace(query, stop.lat, stop.lng).then(gData => {
+        if (gData) {
+          _placeGoogleCache[cacheKey] = gData;
+          injectGoogleData(gData, heroEl, bodyEl);
+        }
       });
     }
   }
@@ -5497,20 +5442,6 @@ document.addEventListener('DOMContentLoaded', () => {
         // Do NOT unregister the SW — that destroys the push subscription
       } catch (e) { /* ignore */ }
       window.location.reload(true);
-    });
-
-    // Nav app toggle
-    function updateNavAppBtn() {
-      const lbl = document.getElementById('nav-app-label');
-      if (lbl) lbl.textContent = state.navApp === 'apple' ? 'Navigate with Apple Maps' : 'Navigate with Google Maps';
-    }
-    try { const saved = localStorage.getItem('annecy_nav_app'); if (saved) state.navApp = saved; } catch {}
-    updateNavAppBtn();
-    const navAppBtn = document.getElementById('nav-app-btn');
-    if (navAppBtn) navAppBtn.addEventListener('click', () => {
-      state.navApp = state.navApp === 'apple' ? 'google' : 'apple';
-      try { localStorage.setItem('annecy_nav_app', state.navApp); } catch {}
-      updateNavAppBtn();
     });
 
     // Units toggle (km / miles)
