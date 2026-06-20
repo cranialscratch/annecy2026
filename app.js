@@ -4268,7 +4268,29 @@ function renderTimeline(container, scrollToNow) {
     return c;
   })() : null;
 
-  const _tlStops = getDayStops(day).filter(s => passesFilter(s) || getStopType(s) === 'depart');
+  // Depart stops removed from timeline; overnight lead card injected instead
+  const _allDayStops = getDayStops(day);
+  const _tlStops = _allDayStops.filter(s => getStopType(s) !== 'depart' && (passesFilter(s)));
+
+  // Overnight lead: first depart on this day → find its matching non-depart stop from another day
+  const _overnight = (() => {
+    const firstDepart = _allDayStops.find(s => getStopType(s) === 'depart');
+    if (!firstDepart) return null;
+    const name = getStopName(firstDepart).toLowerCase();
+    for (const d of TRIP_DATA.days) {
+      if (d.id === day.id) continue;
+      const all = [...d.stops, ...(state.addedStops?.[d.id] || [])];
+      const match = all.find(s => getStopType(s) !== 'depart' && getStopName(s).toLowerCase() === name);
+      if (match) return { stop: match, checkoutTime: getStopTime(firstDepart) };
+    }
+    return null;
+  })();
+
+  if (_overnight) {
+    const oCard = buildOvernightCard(_overnight.stop, _overnight.checkoutTime, day);
+    (compactCard || container).appendChild(oCard);
+  }
+
   _tlStops.forEach((stop, idx) => {
     const stopMins = timeToMinutes(getStopTime(stop));
     if (isToday && !nowInserted && stopMins !== null && stopMins > now) {
@@ -4381,6 +4403,48 @@ function buildCompactItem(stop, isLast, day) {
     </div>`;
 
   item.addEventListener('click', () => openDetail(stop));
+  return item;
+}
+
+/* ── Overnight lead card ───────────────────────────────────────────── */
+function buildOvernightCard(stop, checkoutTime, day) {
+  const item = document.createElement('div');
+  item.className = 'tl-item';
+  item.dataset.type = getStopType(stop);
+  item.id = `overnight-${stop.id}`;
+
+  item.innerHTML = `
+    <div class="tl-left">
+      <div class="tl-time-overnight">
+        <span class="overnight-label">Overnight</span>
+        ${checkoutTime ? `<span class="overnight-checkout"><i class="ph ph-sign-out"></i>${checkoutTime}</span>` : ''}
+      </div>
+    </div>
+    <div class="tl-line-wrap">
+      <div class="tl-dot tl-dot--overnight"></div>
+      <div class="tl-line"></div>
+    </div>
+    <div class="tl-swipe-wrap">
+      <div class="tl-swipe-track">
+      <div class="tl-card tl-card--overnight" data-stop-id="${stop.id}" style="cursor:pointer">
+        ${buildSlider(stop, 'card')}
+        <div class="card-body">
+          <div class="card-top-row">
+            <div class="card-name">${stopTypeIcon(stop)} ${getStopName(stop)}</div>
+            <span class="overnight-stay-badge"><i class="ph ph-moon"></i> Overnight</span>
+          </div>
+          ${stop.address || stop.location ? `<div class="card-address">${stop.address || stop.location}</div>` : ''}
+          <div class="card-meta-row">
+            <span class="tl-card-badge">${typeLabel(getStopType(stop))}</span>
+            ${isStopFixed(stop) ? '<span class="fixed-badge"><i class="ph ph-lock"></i> Fixed</span>' : ''}
+          </div>
+          ${getStopReason(stop) ? `<div class="card-reason">${getStopReason(stop)}</div>` : ''}
+        </div>
+      </div>
+      </div>
+    </div>`;
+
+  item.querySelector('.tl-card--overnight').addEventListener('click', () => openDetail(stop));
   return item;
 }
 

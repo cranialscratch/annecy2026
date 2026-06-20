@@ -510,6 +510,23 @@ body.light .tl-depart-row {
 }
 .tl-dot--depart { opacity: 0.4; }
 .tl-dot--skipped { opacity: 0.25; }
+.tl-dot--overnight { background: var(--purple); opacity: 0.7; }
+
+/* ─── Overnight lead card ───────────────────────────────────────────── */
+.tl-time-overnight {
+  display: flex; flex-direction: column; align-items: flex-end; gap: 2px;
+  font-size: 11px; font-weight: 700; color: var(--purple);
+  padding: 4px 0; min-width: 52px;
+}
+.overnight-label { text-transform: uppercase; letter-spacing: .4px; opacity: .8; }
+.overnight-checkout { display: flex; align-items: center; gap: 3px; font-size: 13px; font-weight: 800; color: var(--text); }
+.tl-card--overnight { opacity: 0.85; border-left: 3px solid var(--purple); }
+.overnight-stay-badge {
+  display: inline-flex; align-items: center; gap: 4px; margin-left: auto;
+  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .3px;
+  padding: 3px 8px; border-radius: 20px; white-space: nowrap;
+  background: rgba(191,90,242,.15); color: var(--purple);
+}
 
 /* Skipped depart row */
 .tl-depart-row.depart-skipped {
