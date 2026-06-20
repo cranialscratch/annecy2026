@@ -199,7 +199,10 @@ function getStopTime(stop)     { return state.overrides[stop.id]          ?? sto
 function getStopLat(stop)      { return state.locOverrides[stop.id]?.lat  ?? stop.lat; }
 function getStopLng(stop)      { return state.locOverrides[stop.id]?.lng  ?? stop.lng; }
 function getStopName(stop)     { return state.locOverrides[stop.id]?.name ?? stop.location; }
-function getStopDuration(stop) { return state.durOverrides[stop.id]       ?? stop.duration ?? 30; }
+function getStopDuration(stop) {
+  if (getStopType(stop) === 'depart') return 0;
+  return state.durOverrides[stop.id] ?? stop.duration ?? 30;
+}
 function getStopType(stop)     { return state.typeOverrides[stop.id]     ?? stop.type; }
 function isStopFixed(stop)     {
   if (!stop) return false;
@@ -5108,31 +5111,49 @@ async function fetchTravelMins(fromLat, fromLng, toLat, toLng) {
 async function recalculateFromStop(day, fromIdx, statusCb) {
   const btn = document.getElementById('edit-recalc-btn');
   if (btn) { btn.disabled = true; btn.textContent = 'Recalculating…'; }
-  const allStops = getDayStops(day);
 
-  for (let i = fromIdx; i < allStops.length - 1; i++) {
-    const from = allStops[i];
-    const to   = allStops[i + 1];
-    const fromLat = getStopLat(from), fromLng = getStopLng(from);
-    const toLat   = getStopLat(to),   toLng   = getStopLng(to);
-    if (!fromLat || !toLat) continue;
-
-    const arrMins  = timeToMinutes(getStopTime(from));
-    if (arrMins === null) continue;
-    const durMins  = getStopDuration(from);
-    const depMins  = arrMins + durMins;
-    const travelMins = await fetchTravelMins(fromLat, fromLng, toLat, toLng);
-    if (travelMins === null) continue;
-    state.overrides[to.id] = minutesToTime(depMins + travelMins);
-
-    if (btn) btn.textContent = `Recalculating… (${i - fromIdx + 1}/${allStops.length - 1 - fromIdx})`;
-    if (statusCb) statusCb(i - fromIdx + 1, allStops.length - 1 - fromIdx);
-  }
+  await _recalcChain(day, fromIdx, (done, total) => {
+    if (btn) btn.textContent = `Recalculating… (${done}/${total})`;
+    if (statusCb) statusCb(done, total);
+  });
 
   save();
   renderView(false);
   if (_editStop !== null) closeEditSheet();
   if (btn) { btn.disabled = false; btn.textContent = 'Recalculate following stops'; }
+}
+
+/* Core chain: compute arrival at each stop from fromIdx onwards using OSRM.
+   Stops at any fixed stop. Skips depart-type stops in timing (they have 0 duration)
+   but uses their location as a routing waypoint. */
+async function _recalcChain(day, fromIdx, progressCb) {
+  const allStops = getDayStops(day).filter(s => !state.skipped[s.id]);
+  const total = allStops.length - 1 - fromIdx;
+  for (let i = fromIdx; i < allStops.length - 1; i++) {
+    const from = allStops[i];
+    const to   = allStops[i + 1];
+    if (isStopFixed(to)) break;
+    const fromLat = getStopLat(from), fromLng = getStopLng(from);
+    const toLat   = getStopLat(to),   toLng   = getStopLng(to);
+    if (!fromLat || !toLat) continue;
+    const arrMins    = timeToMinutes(getStopTime(from));
+    if (arrMins === null) continue;
+    const depMins    = arrMins + getStopDuration(from);
+    const travelMins = await fetchTravelMins(fromLat, fromLng, toLat, toLng);
+    if (travelMins === null) continue;
+    state.overrides[to.id] = minutesToTime(depMins + travelMins);
+    if (progressCb) progressCb(i - fromIdx + 1, total);
+  }
+}
+
+/* Ripple from a stop using actual OSRM travel times. Used by travel action. */
+async function rippleFromStop(stop, day, onProgress) {
+  const allStops = getDayStops(day);
+  const fromIdx = allStops.findIndex(s => s.id === stop.id);
+  if (fromIdx < 0) return;
+  await _recalcChain(day, fromIdx, onProgress);
+  save();
+  renderView(false);
 }
 
 function openEditSheet(stop, addToDayId) {
@@ -6352,10 +6373,6 @@ function applyTravelAction(ripple) {
   if (!_travelActionStop) return;
   saveUndoSnapshot();
 
-  const planned = timeToMinutes(getStopTime(_travelActionStop)) || 0;
-  const actual  = nowMinutes();
-  const delta   = actual - planned;
-
   // Mark skipped stops
   document.querySelectorAll('#travel-action-skip-list input:checked').forEach(cb => {
     state.skipped[cb.value] = true;
@@ -6363,17 +6380,35 @@ function applyTravelAction(ripple) {
   });
 
   // Record actual time
+  const actual = nowMinutes();
   state.overrides[_travelActionStop.id] = minutesToTime(actual);
 
-  let changed = [];
-  if (ripple && delta !== 0) {
-    const skipSet = new Set([...document.querySelectorAll('#travel-action-skip-list input:checked')].map(cb => cb.value));
-    changed = cascadeTimeDelta(_travelActionStop, delta, skipSet);
+  save(); closeTravelAction(); renderView(false);
+  const toastMsg = _travelActionType === 'departed' ? 'Departed recorded' : 'Arrival recorded';
+
+  if (ripple) {
+    // Use OSRM travel times rather than a fixed delta — prevents compounding errors
+    const day = TRIP_DATA.days.find(d => d.id === state.currentDayId);
+    if (day) {
+      showToast(`${toastMsg} · Recalculating times…`);
+      rippleFromStop(_travelActionStop, day, (done, total) => {
+        showToast(`Recalculating… ${done}/${total}`);
+      }).then(() => {
+        showUndoToast(`${toastMsg} · Times updated`);
+        const allStops = getDayStops(day);
+        const fromIdx = allStops.findIndex(s => s.id === _travelActionStop.id);
+        if (fromIdx >= 0) {
+          const changed = allStops.slice(fromIdx + 1)
+            .filter(s => !state.skipped[s.id])
+            .map(s => ({ stop: s, newTime: getStopTime(s), dayDate: day.date }));
+          if (changed.length) postCascadeCheck(changed);
+        }
+      });
+      return;
+    }
   }
 
-  save(); closeTravelAction(); renderView(false);
-  showUndoToast(_travelActionType === 'departed' ? 'Departed recorded' : 'Arrival recorded');
-  if (changed.length) postCascadeCheck(changed);
+  showUndoToast(toastMsg);
 }
 
 /* ── Opening hours check after cascade — auto-skip closed stops ─────── */
