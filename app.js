@@ -172,6 +172,7 @@ const state = {
   skipped: {},          // stopId → bool (deliberately skipped)
   removed: {},          // stopId → true (hidden from timeline, moved to bucket list)
   bucketList: [],       // [{ stop, dayLabel, originalDayId, removedAt }]
+  typeFilter: null,     // type string to filter list views, or null for all
   locOverrides: {},     // stopId → { name, lat, lng }
   durOverrides: {},     // stopId → minutes
   typeOverrides: {},    // stopId → type string
@@ -214,6 +215,7 @@ const TYPE_ICON = {
   historic:     'ph-castle-turret',
   work:         'ph-laptop',
   festival:     'ph-film-slate',
+  shopping:     'ph-shopping-bag',
 };
 function stopTypeIcon(stop) {
   const ph = TYPE_ICON[getStopType(stop)] || 'ph-map-pin';
@@ -256,7 +258,8 @@ function typeLabel(type) {
   return { charging:'Charging', hotel:'Hotel', transport:'Transport', food:'Food',
     architecture:'Architecture', village:'Village', town:'Town',
     experience:'Experience', wander:'Explore', depart:'Depart',
-    scenic:'Scenic', historic:'Historic', festival:'Festival' }[type] || type;
+    scenic:'Scenic', historic:'Historic', festival:'Festival',
+    shopping:'Shopping' }[type] || type;
 }
 function nowMinutes() {
   const n = new Date(); return n.getHours() * 60 + n.getMinutes();
@@ -1378,6 +1381,7 @@ const TYPE_GRAD = {
   scenic:       ['#4ade80','#14532d'],
   historic:     ['#fcd34d','#713f12'],
   festival:     ['#c084fc','#3b0764'],
+  shopping:     ['#f472b6','#831843'],
 };
 
 /* ── Get slides for a stop ─────────────────────────────────────────── */
@@ -1696,6 +1700,7 @@ function updateDayStrip() {
 }
 function selectDay(dayId) {
   state.currentDayId = dayId;
+  state.typeFilter = null; // clear filter when switching days
   if (!['day','map'].includes(state.currentView)) state.currentView = 'day';
   updateDayStrip();
   const isToday = dayId === findTodayDayId();
@@ -2146,7 +2151,21 @@ function renderBucketView(container) {
     return;
   }
 
-  state.bucketList.forEach((entry, idx) => {
+  renderFilterBar(container, state.bucketList.map(e => getStopType(e.stop)));
+
+  const filtered = state.bucketList.filter(e =>
+    !state.typeFilter || getStopType(e.stop) === state.typeFilter);
+
+  if (!filtered.length) {
+    const none = document.createElement('div');
+    none.className = 'bucket-empty';
+    none.innerHTML = `<div style="font-size:14px;opacity:.6">No ${typeLabel(state.typeFilter)} stops in bucket list</div>`;
+    container.appendChild(none);
+    return;
+  }
+
+  filtered.forEach((entry, idx) => {
+    const realIdx = state.bucketList.indexOf(entry);
     const { stop } = entry;
     const wrapper = document.createElement('div');
     wrapper.className = 'bucket-card-wrap';
@@ -2188,7 +2207,7 @@ function renderBucketView(container) {
 
     wrapper.querySelector('.bucket-add-btn').addEventListener('click', e => {
       e.stopPropagation();
-      openBucketAddSheet(entry, idx);
+      openBucketAddSheet(entry, realIdx);
     });
 
     const deleteBtn = wrapper.querySelector('.bucket-delete-btn');
@@ -2202,7 +2221,7 @@ function renderBucketView(container) {
       wrapper.appendChild(confirmDiv);
       confirmDiv.querySelector('.bucket-confirm-yes').addEventListener('click', ev => {
         ev.stopPropagation();
-        state.bucketList.splice(idx, 1);
+        state.bucketList.splice(realIdx, 1);
         save(); renderView(false);
         showToast('Deleted permanently');
       });
@@ -4042,6 +4061,37 @@ function renderCalView(container) {
   startLeaveByTicker();
 }
 
+/* ── Type filter bar ───────────────────────────────────────────────── */
+function renderFilterBar(container, typeList) {
+  // Deduplicate and exclude depart/hotel/work from filter (not useful as filters)
+  const HIDE_FROM_FILTER = new Set(['depart','hotel','work']);
+  const types = [...new Set(typeList)].filter(t => !HIDE_FROM_FILTER.has(t));
+  if (types.length < 2) return; // not worth showing with only one type
+
+  const bar = document.createElement('div');
+  bar.className = 'filter-bar';
+
+  const allPill = document.createElement('button');
+  allPill.className = 'filter-pill' + (!state.typeFilter ? ' active' : '');
+  allPill.textContent = 'All';
+  allPill.addEventListener('click', () => { state.typeFilter = null; renderView(false); });
+  bar.appendChild(allPill);
+
+  types.forEach(type => {
+    const pill = document.createElement('button');
+    pill.className = 'filter-pill' + (state.typeFilter === type ? ' active' : '');
+    const icon = TYPE_ICON[type] ? `<i class="ph ${TYPE_ICON[type]}"></i> ` : '';
+    pill.innerHTML = icon + typeLabel(type);
+    pill.addEventListener('click', () => {
+      state.typeFilter = state.typeFilter === type ? null : type;
+      renderView(false);
+    });
+    bar.appendChild(pill);
+  });
+
+  container.appendChild(bar);
+}
+
 /* ── Timeline ──────────────────────────────────────────────────────── */
 function renderTimeline(container, scrollToNow) {
   container.innerHTML = '';
@@ -4065,6 +4115,10 @@ function renderTimeline(container, scrollToNow) {
   let nowLineEl = null;
   let nowInserted = false;
 
+  // Filter bar — collect types present in this day's stops
+  const allDayStops = getDayStops(day).filter(s => getStopType(s) !== 'depart');
+  renderFilterBar(container, allDayStops.map(s => getStopType(s)));
+
   // In compact mode wrap everything in a single glass card
   const compactCard = state.cardView === 'compact' ? (() => {
     const c = document.createElement('div');
@@ -4073,7 +4127,8 @@ function renderTimeline(container, scrollToNow) {
     return c;
   })() : null;
 
-  const _tlStops = getDayStops(day);
+  const _tlStops = getDayStops(day).filter(s =>
+    !state.typeFilter || getStopType(s) === state.typeFilter || getStopType(s) === 'depart');
   _tlStops.forEach((stop, idx) => {
     const stopMins = timeToMinutes(getStopTime(stop));
     if (isToday && !nowInserted && stopMins !== null && stopMins > now) {

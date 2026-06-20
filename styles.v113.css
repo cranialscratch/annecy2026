@@ -2744,3 +2744,27 @@ body.light .cl-text { color: #475569; }
   border-radius: 0 0 16px 16px;
 }
 .detail-reschedule-btn { background: rgba(14,165,233,.15); color: #0ea5e9; border-color: rgba(14,165,233,.3); margin-top: 6px; }
+
+/* ── Filter bar ─────────────────────────────────────────────────────── */
+.filter-bar {
+  display: flex; gap: 8px; padding: 10px 16px 4px;
+  overflow-x: auto; -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.filter-bar::-webkit-scrollbar { display: none; }
+.filter-pill {
+  flex-shrink: 0;
+  display: flex; align-items: center; gap: 5px;
+  padding: 6px 14px; border-radius: 100px;
+  background: var(--glass-bg); border: 1px solid var(--glass-border);
+  color: var(--text2); font-size: 13px; font-weight: 600;
+  cursor: pointer; font-family: inherit;
+  -webkit-tap-highlight-color: transparent;
+  transition: background .15s, color .15s, border-color .15s;
+}
+.filter-pill i { font-size: 14px; }
+.filter-pill.active {
+  background: var(--accent); border-color: var(--accent);
+  color: #fff;
+}
+.filter-pill:active { opacity: .75; }
