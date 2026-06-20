@@ -4751,6 +4751,7 @@ let _editSearchTimer = null;
 let _editSelectedType = null;
 let _editSelectedPriority = null;
 let _editFixed = false;
+let _editGpsLat = null, _editGpsLng = null;
 
 const TYPE_DEFS = [
   { type:'depart',       ph:'ph-car',            label:'Depart' },
@@ -4851,7 +4852,10 @@ async function runEditSearch() {
   if (query.length < 2) { el.innerHTML = ''; return; }
   el.innerHTML = '<div class="edit-loc-no-results">Searching…</div>';
   try {
-    const r = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=6&accept-language=en`);
+    // If we have a GPS bias, search near current location
+    const lat = _editGpsLat, lng = _editGpsLng;
+    const biasParam = (lat && lng) ? `&viewbox=${lng-0.3},${lat+0.2},${lng+0.3},${lat-0.2}&bounded=0` : '';
+    const r = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=6&accept-language=en${biasParam}`);
     const results = await r.json();
     if (!results.length) { el.innerHTML = '<div class="edit-loc-no-results">No results found</div>'; return; }
     el.innerHTML = results.map((item, i) =>
@@ -4866,6 +4870,52 @@ async function runEditSearch() {
   } catch(err) {
     el.innerHTML = '<div class="edit-loc-no-results">Search failed — check connection</div>';
   }
+}
+
+async function runNearbySearch() {
+  const el = document.getElementById('edit-loc-results');
+  const btn = document.getElementById('edit-loc-gps-btn');
+  if (!navigator.geolocation) { el.innerHTML = '<div class="edit-loc-no-results">Location not available on this device</div>'; return; }
+  el.innerHTML = '<div class="edit-loc-no-results"><i class="ph ph-crosshair"></i> Getting location…</div>';
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ph ph-circle-notch ph-spin"></i>'; }
+  navigator.geolocation.getCurrentPosition(async pos => {
+    const { latitude: lat, longitude: lng } = pos.coords;
+    _editGpsLat = lat; _editGpsLng = lng;
+    // Drop pin at GPS position
+    placeEditPin(lat, lng, null);
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ph ph-crosshair" style="color:var(--accent)"></i>'; }
+    // Fetch nearby POIs via Nominatim reverse + amenity search
+    try {
+      const r = await fetch(`https://nominatim.openstreetmap.org/search?q=&format=json&limit=12&accept-language=en&viewbox=${lng-0.05},${lat+0.04},${lng+0.05},${lat-0.04}&bounded=1&addressdetails=1`);
+      let results = await r.json();
+      if (!results.length) {
+        // Broaden search area
+        const r2 = await fetch(`https://nominatim.openstreetmap.org/search?q=place&format=json&limit=12&accept-language=en&viewbox=${lng-0.15},${lat+0.1},${lng+0.15},${lat-0.1}&bounded=0`);
+        results = await r2.json();
+      }
+      if (!results.length) { el.innerHTML = '<div class="edit-loc-no-results">No places found nearby — type a name to search</div>'; return; }
+      el.innerHTML = '<div class="edit-loc-nearby-label"><i class="ph ph-map-pin"></i> Nearby places</div>' +
+        results.map(item => {
+          const name = item.name || item.display_name.split(',')[0];
+          const sub  = item.display_name.split(',').slice(1, 3).join(',').trim();
+          return `<button class="edit-loc-result" data-lat="${item.lat}" data-lng="${item.lon}"><span class="edit-loc-result-name">${name}</span>${sub ? `<span class="edit-loc-result-sub">${sub}</span>` : ''}</button>`;
+        }).join('');
+      el.querySelectorAll('.edit-loc-result').forEach(b => {
+        b.addEventListener('pointerdown', e => {
+          e.preventDefault();
+          const name = b.querySelector('.edit-loc-result-name')?.textContent || b.textContent;
+          placeEditPin(parseFloat(b.dataset.lat), parseFloat(b.dataset.lng), name);
+          const nameInput = document.getElementById('edit-name');
+          if (nameInput && !nameInput.value.trim()) nameInput.value = name;
+        });
+      });
+    } catch {
+      el.innerHTML = '<div class="edit-loc-no-results">Could not load nearby places — type a name to search</div>';
+    }
+  }, () => {
+    el.innerHTML = '<div class="edit-loc-no-results">Location permission denied</div>';
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ph ph-crosshair"></i>'; }
+  }, { enableHighAccuracy: true, timeout: 10000 });
 }
 
 function renderEditTypeGrid(selectedType) {
@@ -4995,6 +5045,9 @@ function openEditSheet(stop, addToDayId) {
     document.getElementById('edit-vegan').checked = false;
     document.getElementById('edit-loc-search').value = '';
     document.getElementById('edit-loc-results').innerHTML = '';
+    _editGpsLat = null; _editGpsLng = null;
+    const gpsBtn = document.getElementById('edit-loc-gps-btn');
+    if (gpsBtn) gpsBtn.innerHTML = '<i class="ph ph-crosshair"></i>';
     const durEl = document.getElementById('edit-dur-native');
     if (durEl) durEl.value = '00:30';
     renderEditTypeGrid('depart');
@@ -6798,6 +6851,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('edit-loc-search-btn').addEventListener('click', () => {
     clearTimeout(_editSearchTimer); runEditSearch();
   });
+  document.getElementById('edit-loc-gps-btn').addEventListener('click', () => runNearbySearch());
   document.getElementById('detail-check-btn').addEventListener('click', () => {
     if (!_detailStop) return;
     state.checked[_detailStop.id] = !state.checked[_detailStop.id];

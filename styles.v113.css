@@ -1233,6 +1233,16 @@ body.light .detail-tool-btn { color: rgba(0,0,0,0.75); }
   font-size: 22px; display: flex; align-items: center; justify-content: center;
   cursor: pointer; -webkit-tap-highlight-color: transparent;
 }
+.edit-gps-btn { background: var(--glass-bg2); color: var(--text2); border: 1px solid var(--glass-border); }
+.edit-gps-btn:active { background: var(--glass-bg); }
+.edit-loc-nearby-label {
+  padding: 8px 12px 4px; font-size: 12px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .5px; color: var(--text3); display: flex; align-items: center; gap: 6px;
+}
+.edit-loc-result-name { display: block; font-size: 14px; }
+.edit-loc-result-sub  { display: block; font-size: 12px; opacity: .6; margin-top: 1px; }
+@keyframes ph-spin { to { transform: rotate(360deg); } }
+.ph-spin { animation: ph-spin .8s linear infinite; display: inline-block; }
 .edit-loc-results {
   background: var(--bg2);
   border: 1px solid var(--glass-border);
