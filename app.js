@@ -4132,10 +4132,10 @@ function openFilterPopup(presentTypes) {
       });
       popup.appendChild(delBtn);
     } else {
-      // Day view: Skip matching + Restore matching
+      // Day view: Skip hidden + Restore all
       const skipBtn = document.createElement('button');
       skipBtn.className = 'filter-pop-item filter-pop-action filter-pop-only';
-      skipBtn.innerHTML = '<i class="ph ph-skip-forward-circle"></i> Skip matching';
+      skipBtn.innerHTML = '<i class="ph ph-skip-forward-circle"></i> Skip hidden';
       skipBtn.addEventListener('click', e => {
         e.stopPropagation();
         popup.classList.add('hidden');
@@ -4145,7 +4145,7 @@ function openFilterPopup(presentTypes) {
 
       const restoreBtn = document.createElement('button');
       restoreBtn.className = 'filter-pop-item filter-pop-action filter-pop-restore';
-      restoreBtn.innerHTML = '<i class="ph ph-arrow-counter-clockwise"></i> Restore matching';
+      restoreBtn.innerHTML = '<i class="ph ph-arrow-counter-clockwise"></i> Restore all';
       restoreBtn.addEventListener('click', e => {
         e.stopPropagation();
         popup.classList.add('hidden');
@@ -4180,7 +4180,7 @@ function applyFilterSkip() {
   let skippedAny = false;
   getDayStops(day).forEach(s => {
     if (getStopType(s) === 'depart') return;
-    if (passesFilter(s)) {
+    if (!passesFilter(s)) {
       state.skipped[s.id] = true;
       skippedAny = true;
     }
@@ -4193,14 +4193,14 @@ function applyFilterSkip() {
   state.typeFilter = new Set();
   updateFilterBtn();
   renderView(false);
-  showToast('Matching stops skipped');
+  showToast('Hidden stops skipped');
 }
 
 function applyFilterRestore() {
   const day = TRIP_DATA.days.find(d => d.id === state.currentDayId);
   if (!day) return;
   getDayStops(day).forEach(s => {
-    if (passesFilter(s)) delete state.skipped[s.id];
+    delete state.skipped[s.id];
   });
   const stops = getDayStops(day).filter(s => !state.skipped[s.id] && getStopType(s) !== 'depart');
   if (stops.length) cascadeTimeDelta(stops[0], 0);
@@ -4208,7 +4208,7 @@ function applyFilterRestore() {
   state.typeFilter = new Set();
   updateFilterBtn();
   renderView(false);
-  showToast('Matching stops restored');
+  showToast('All stops restored');
 }
 
 function applyFilterBucketDelete() {
