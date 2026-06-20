@@ -182,6 +182,7 @@ const state = {
   addedStops: {},       // dayId → [stop, ...]
   crossDayMoves: {},    // stopId → dayId (stops moved to a different day by cascade overflow)
   customTags: [],       // user-defined type strings
+  fixedOverrides: {},   // stopId → bool (true = fixed anchor, false = explicitly flexible)
 };
 
 /* ── Helpers ───────────────────────────────────────────────────────── */
@@ -200,7 +201,11 @@ function getStopLng(stop)      { return state.locOverrides[stop.id]?.lng  ?? sto
 function getStopName(stop)     { return state.locOverrides[stop.id]?.name ?? stop.location; }
 function getStopDuration(stop) { return state.durOverrides[stop.id]       ?? stop.duration ?? 30; }
 function getStopType(stop)     { return state.typeOverrides[stop.id]     ?? stop.type; }
-
+function isStopFixed(stop)     {
+  if (!stop) return false;
+  if (stop.id in (state.fixedOverrides || {})) return state.fixedOverrides[stop.id];
+  return stop.fixed === true;
+}
 const TYPE_ICON = {
   depart:       'ph-car',
   charging:     'ph-lightning',
@@ -1617,6 +1622,7 @@ function localSave() {
     localStorage.setItem('annecy_removed',            JSON.stringify(state.removed || {}));
     localStorage.setItem('annecy_bucket_list',        JSON.stringify(state.bucketList || []));
     localStorage.setItem('annecy_custom_tags',        JSON.stringify(state.customTags || []));
+    localStorage.setItem('annecy_fixed_overrides',    JSON.stringify(state.fixedOverrides || {}));
   } catch {}
 }
 function save() {
@@ -1652,6 +1658,8 @@ function load() {
     if (bl) state.bucketList = JSON.parse(bl);
     const ct = localStorage.getItem('annecy_custom_tags');
     if (ct) state.customTags = JSON.parse(ct);
+    const fx = localStorage.getItem('annecy_fixed_overrides');
+    if (fx) state.fixedOverrides = JSON.parse(fx);
   } catch {}
   try {
     if (localStorage.getItem('annecy_theme') === 'light') document.body.classList.add('light');
@@ -2188,6 +2196,7 @@ function renderBucketView(container) {
           ${addr ? `<div class="card-address">${addr}</div>` : ''}
           <div class="card-meta-row">
             <span class="tl-card-badge">${typeLabel(getStopType(stop))}</span>
+            ${isStopFixed(stop) ? '<span class="fixed-badge"><i class="ph ph-lock"></i> Fixed</span>' : ''}
             ${stop.rating ? `<span style="font-size:13px;opacity:.8">⭐ ${stop.rating}</span>` : ''}
           </div>
           ${stop.reason ? `<div class="card-reason">${stop.reason}</div>` : ''}
@@ -4203,16 +4212,16 @@ function applyFilterSkip() {
 function applyFilterRestore() {
   const day = TRIP_DATA.days.find(d => d.id === state.currentDayId);
   if (!day) return;
+  const restored = [];
   getDayStops(day).forEach(s => {
-    delete state.skipped[s.id];
+    if (state.skipped[s.id]) { delete state.skipped[s.id]; restored.push(s); }
   });
-  const stops = getDayStops(day).filter(s => !state.skipped[s.id] && getStopType(s) !== 'depart');
-  if (stops.length) cascadeTimeDelta(stops[0], 0);
   save();
   state.typeFilter = new Set();
   updateFilterBtn();
   renderView(false);
   showToast('All stops restored');
+  if (restored.length) postCascadeCheck(restored.map(s => ({ stop: s, newTime: getStopTime(s), dayDate: day.date })));
 }
 
 function applyFilterBucketDelete() {
@@ -4540,6 +4549,9 @@ function buildTimelineItem(stop, isLast, day, nextStop, prevStop) {
     if (state.skipped[stop.id]) {
       delete state.skipped[stop.id];
       save(); renderView(false);
+      // Re-check the restored stop's own time against opening hours
+      const day = TRIP_DATA.days.find(d => d.id === state.currentDayId);
+      if (day) postCascadeCheck([{ stop, newTime: getStopTime(stop), dayDate: day.date }]);
     } else {
       skipStop(stop);
     }
@@ -4729,6 +4741,7 @@ let _editLat = null, _editLng = null;
 let _editSearchTimer = null;
 let _editSelectedType = null;
 let _editSelectedPriority = null;
+let _editFixed = false;
 
 const TYPE_DEFS = [
   { type:'depart',       ph:'ph-car',            label:'Depart' },
@@ -4977,6 +4990,9 @@ function openEditSheet(stop, addToDayId) {
     if (durEl) durEl.value = '00:30';
     renderEditTypeGrid('depart');
     renderEditPriority(2);
+    _editFixed = false;
+    const fixedCb = document.getElementById('edit-fixed');
+    if (fixedCb) fixedCb.checked = false;
     document.querySelector('.edit-sheet-title').textContent = 'Add stop';
     document.getElementById('edit-delete-btn').style.display = 'none';
   } else {
@@ -4998,6 +5014,9 @@ function openEditSheet(stop, addToDayId) {
     if (durEl) durEl.value = minsToHHMM(getStopDuration(stop));
     renderEditTypeGrid(getStopType(stop));
     renderEditPriority(getStopPriority(stop));
+    _editFixed = isStopFixed(stop);
+    const fixedCb = document.getElementById('edit-fixed');
+    if (fixedCb) fixedCb.checked = _editFixed;
     document.querySelector('.edit-sheet-title').textContent = 'Edit stop';
     // Show delete button only for added stops
     const isAdded = Object.values(state.addedStops || {}).some(arr => arr.some(s => s.id === stop.id));
@@ -5026,6 +5045,7 @@ function saveEditSheet() {
   const reason = document.getElementById('edit-reason').value.trim();
   const vegan  = document.getElementById('edit-vegan').checked;
   const dur    = HHMMtoMins(document.getElementById('edit-dur-native')?.value);
+  _editFixed   = document.getElementById('edit-fixed')?.checked ?? _editFixed;
 
   if (_addMode) {
     if (!_editDay) return;
@@ -5050,6 +5070,7 @@ function saveEditSheet() {
   }
 
   if (!_editStop) return;
+  const prevTime = getStopTime(_editStop);
   state.locOverrides[_editStop.id] = {
     name: name || _editStop.location,
     lat: _editLat ?? getStopLat(_editStop),
@@ -5061,6 +5082,13 @@ function saveEditSheet() {
   state.veganOverrides[_editStop.id] = vegan;
   if (_editSelectedType) state.typeOverrides[_editStop.id] = _editSelectedType;
   if (_editSelectedPriority !== null) state.priorityOverrides[_editStop.id] = _editSelectedPriority;
+  state.fixedOverrides[_editStop.id] = _editFixed;
+
+  // Cascade if time changed
+  const newTime = time || prevTime;
+  const delta = newTime && prevTime ? timeToMinutes(newTime) - timeToMinutes(prevTime) : 0;
+  let changed = [];
+  if (delta !== 0) changed = cascadeTimeDelta(_editStop, delta);
 
   save();
   renderView(false);
@@ -5069,6 +5097,7 @@ function saveEditSheet() {
     document.getElementById('detail-time').textContent = getStopTime(_editStop) + (_editStop.tz ? ' ' + _editStop.tz : '');
   }
   closeEditSheet();
+  if (changed.length) postCascadeCheck(changed);
 }
 
 /* ── Detail page ───────────────────────────────────────────────────── */
@@ -5898,10 +5927,7 @@ function saveModal() {
       changedStops.push({ stop, newTime: newTimeStr, dayDate: days[targetDayIdx]?.date });
     });
 
-    if (changedStops.length) {
-      const firstDate = changedStops[0].dayDate;
-      checkCascadedStops(changedStops.filter(s => s.dayDate === firstDate), firstDate);
-    }
+    if (changedStops.length) postCascadeCheck(changedStops);
   }
   save(); closeModal(); renderView(false);
 }
@@ -6092,34 +6118,30 @@ function closeTravelAction() {
 // Departure cascade: anchors all following stops to actualDepMins using ORIGINAL
 // data times as the base. Avoids compounding errors from earlier arrival cascades.
 function cascadeFromDeparture(fromStop, actualDepMins) {
-  // Use original (data) departure as the reference, not whatever overrides exist
   const origArr = timeToMinutes(fromStop.time);
   const origDur = fromStop.duration ?? 30;
   if (origArr === null) {
-    // Added stop with no original time — fall back to current state departure
     const curArr = timeToMinutes(getStopTime(fromStop));
-    if (curArr === null) return;
+    if (curArr === null) return [];
     const curDur = getStopDuration(fromStop);
-    cascadeTimeDelta(fromStop, actualDepMins - (curArr + curDur));
-    return;
+    return cascadeTimeDelta(fromStop, actualDepMins - (curArr + curDur));
   }
   const origDep = origArr + origDur;
   const delta = actualDepMins - origDep;
 
   const day = TRIP_DATA.days.find(d => d.stops.concat(state.addedStops?.[d.id] || []).some(s => s.id === fromStop.id));
-  if (!day) return;
+  if (!day) return [];
   const days = TRIP_DATA.days;
   const dayIdx = days.findIndex(d => d.id === day.id);
   if (!state.crossDayMoves) state.crossDayMoves = {};
   const allStops = [...day.stops, ...(state.addedStops?.[day.id] || [])];
   const sorted = [...allStops].sort((a, b) => (a.order ?? 9999) - (b.order ?? 9999));
   let found = false;
+  const changed = [];
   for (const s of sorted) {
     if (!found) { if (s.id === fromStop.id) found = true; continue; }
-    if (s.fixed) break;
-    if (['hotel','sleep'].includes(getStopType(s))) break; // overnight stop — don't shift next day
+    if (isStopFixed(s)) break;
     if (state.skipped[s.id]) continue;
-    // Use ORIGINAL data time so we don't compound previous arrival cascades
     const origTime = timeToMinutes(s.time) ?? timeToMinutes(getStopTime(s));
     if (origTime === null) continue;
     const newAbsolute = dayIdx * 1440 + origTime + delta;
@@ -6127,23 +6149,25 @@ function cascadeFromDeparture(fromStop, actualDepMins) {
     state.overrides[s.id] = minutesToTime(newAbsolute);
     if (targetDayIdx !== dayIdx) state.crossDayMoves[s.id] = days[targetDayIdx].id;
     else delete state.crossDayMoves[s.id];
+    changed.push({ stop: s, newTime: minutesToTime(newAbsolute), dayDate: days[targetDayIdx]?.date || day.date });
   }
+  return changed;
 }
 
 function cascadeTimeDelta(fromStop, delta, skipSet = new Set()) {
-  if (!delta) return;
+  if (!delta) return [];
   const day = TRIP_DATA.days.find(d => d.stops.concat(state.addedStops?.[d.id] || []).some(s => s.id === fromStop.id));
-  if (!day) return;
+  if (!day) return [];
   const days = TRIP_DATA.days;
   const dayIdx = days.findIndex(d => d.id === day.id);
   if (!state.crossDayMoves) state.crossDayMoves = {};
   const homeDayStops = [...day.stops, ...(state.addedStops?.[day.id] || [])];
   const sorted = [...homeDayStops].sort((a, b) => (a.order ?? 9999) - (b.order ?? 9999));
   let found = false;
+  const changed = [];
   for (const s of sorted) {
     if (!found) { if (s.id === fromStop.id) found = true; continue; }
-    if (s.fixed) break;
-    if (['hotel','sleep'].includes(getStopType(s))) break; // overnight stop — don't shift next day
+    if (isStopFixed(s)) break;
     if (skipSet.has(s.id) || state.skipped[s.id]) continue;
     const cur = timeToMinutes(getStopTime(s));
     if (cur === null) continue;
@@ -6153,7 +6177,9 @@ function cascadeTimeDelta(fromStop, delta, skipSet = new Set()) {
     state.overrides[s.id] = minutesToTime(newAbsolute);
     if (targetDayIdx !== dayIdx) state.crossDayMoves[s.id] = days[targetDayIdx].id;
     else delete state.crossDayMoves[s.id];
+    changed.push({ stop: s, newTime: minutesToTime(newAbsolute), dayDate: days[targetDayIdx]?.date || day.date });
   }
+  return changed;
 }
 
 function applyTravelAction(ripple) {
@@ -6173,48 +6199,60 @@ function applyTravelAction(ripple) {
   // Record actual time
   state.overrides[_travelActionStop.id] = minutesToTime(actual);
 
+  let changed = [];
   if (ripple && delta !== 0) {
     const skipSet = new Set([...document.querySelectorAll('#travel-action-skip-list input:checked')].map(cb => cb.value));
-    cascadeTimeDelta(_travelActionStop, delta, skipSet);
+    changed = cascadeTimeDelta(_travelActionStop, delta, skipSet);
   }
 
   save(); closeTravelAction(); renderView(false);
   showUndoToast(_travelActionType === 'departed' ? 'Departed recorded' : 'Arrival recorded');
+  if (changed.length) postCascadeCheck(changed);
 }
 
-/* ── Opening hours check after cascade ─────────────────────────────── */
-async function checkCascadedStops(changedStops, dayDate) {
-  const date = new Date(dayDate + 'T12:00:00');
-  const toCheck = changedStops.filter(({ stop }) => {
-    const type = getStopType(stop);
-    return type !== 'depart' && type !== 'charging' && type !== 'sleep';
+/* ── Opening hours check after cascade — auto-skip closed stops ─────── */
+async function postCascadeCheck(changedStops) {
+  if (!changedStops || !changedStops.length) return;
+  const SKIP_TYPES = new Set(['depart','charging','sleep','work','festival']);
+  const byDate = {};
+  changedStops.forEach(entry => {
+    if (!entry.dayDate) return;
+    (byDate[entry.dayDate] = byDate[entry.dayDate] || []).push(entry);
   });
-  if (!toCheck.length) return;
+  const toSkip = [];
+  for (const [dayDate, entries] of Object.entries(byDate)) {
+    const date = new Date(dayDate + 'T12:00:00');
+    const toCheck = entries.filter(({ stop }) => !SKIP_TYPES.has(getStopType(stop)) && !state.skipped[stop.id]);
+    if (!toCheck.length) continue;
+    await Promise.allSettled(toCheck.map(({ stop }) => fetchOpeningHours(stop)));
+    toCheck.forEach(({ stop, newTime }) => {
+      if (isStopOpenAt(stop, newTime, date) === 'closed') toSkip.push(stop);
+    });
+  }
+  if (!toSkip.length) return;
+  toSkip.forEach(s => { state.skipped[s.id] = true; delete state.checked[s.id]; });
+  save();
+  renderView(false);
+  showClosedSkipToast(toSkip);
+}
 
-  // Fetch opening hours for any stops that don't have them cached yet
-  await Promise.allSettled(toCheck.map(({ stop }) => fetchOpeningHours(stop)));
-
-  // Only prompt for stops that are definitively closed
-  const closed = toCheck.filter(({ stop, newTime }) => {
-    const status = isStopOpenAt(stop, newTime, date);
-    return status === 'closed';
+function showClosedSkipToast(stops) {
+  let el = document.getElementById('app-toast');
+  if (!el) { el = document.createElement('div'); el.id = 'app-toast'; document.getElementById('app').appendChild(el); }
+  const names = stops.map(s => getStopName(s));
+  const msg = names.length === 1
+    ? `"${names[0]}" skipped — may be closed`
+    : `${names.length} stops skipped (may be closed)`;
+  el.innerHTML = `${msg} <button id="closed-restore-btn" style="margin-left:10px;font-weight:700;text-decoration:underline;background:none;border:none;color:inherit;cursor:pointer;font-size:inherit">Restore</button>`;
+  el.classList.add('visible');
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove('visible'), 12000);
+  document.getElementById('closed-restore-btn').addEventListener('click', () => {
+    stops.forEach(s => { delete state.skipped[s.id]; });
+    save(); renderView(false);
+    el.classList.remove('visible');
+    showToast('Stops restored');
   });
-  if (!closed.length) return;
-
-  // Show the skip prompt
-  const list = document.getElementById('skip-prompt-list');
-  list.innerHTML = '';
-  closed.forEach(({ stop, newTime }) => {
-    const row = document.createElement('div');
-    row.className = 'skip-stop-row';
-    row.innerHTML = `
-      <input type="checkbox" id="skip-${stop.id}" value="${stop.id}" checked>
-      <label for="skip-${stop.id}">${stopTypeIcon(stop)} ${getStopName(stop)}</label>
-      <span class="skip-time">${newTime}</span>
-      <span class="closed-badge">Closed</span>`;
-    list.appendChild(row);
-  });
-  document.getElementById('skip-prompt-overlay').classList.remove('hidden');
 }
 
 function closeSkipPrompt() {
@@ -6735,6 +6773,8 @@ document.addEventListener('DOMContentLoaded', () => {
     state.veganOverrides[stop.id] = vegan;
     if (_editSelectedType) state.typeOverrides[stop.id] = _editSelectedType;
     if (_editSelectedPriority !== null) state.priorityOverrides[stop.id] = _editSelectedPriority;
+    _editFixed = document.getElementById('edit-fixed')?.checked ?? _editFixed;
+    state.fixedOverrides[stop.id] = _editFixed;
     save();
     const fromIdx = getDayStops(day).findIndex(s => s.id === stop.id);
     await recalculateFromStop(day, fromIdx);

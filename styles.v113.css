@@ -677,6 +677,12 @@ body.light .tl-card.skipped {
 .check-btn.checked { background: var(--green); border-color: var(--green); color: #fff; box-shadow: 0 0 0 3px rgba(48,209,88,0.3); }
 
 .card-meta-row { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
+.fixed-badge {
+  display: inline-flex; align-items: center; gap: 3px;
+  font-size: 11px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase;
+  padding: 3px 8px; border-radius: 20px;
+  background: rgba(255,149,0,.15); color: #ff9500;
+}
 
 .tl-card-badge {
   font-size: 13px; font-weight: 700; padding: 4px 10px;
