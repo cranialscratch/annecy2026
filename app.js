@@ -4429,7 +4429,17 @@ function buildTimelineItem(stop, isLast, day, nextStop, prevStop) {
       </div>`;
     const _d = TRIP_DATA.days.find(d => d.id === state.currentDayId);
     item.querySelector('.tl-time-btn').addEventListener('click', () => openTimeModal(stop, _d));
-    item.querySelector('.tl-depart-row').addEventListener('click', () => openDetail(stop));
+    item.querySelector('.tl-depart-row').addEventListener('click', () => {
+      // Find the real stop for this location (may be on a previous day, e.g. overnight hotel)
+      const name = getStopName(stop).toLowerCase();
+      let target = null;
+      for (const d of TRIP_DATA.days) {
+        const all = [...d.stops, ...(state.addedStops?.[d.id] || [])];
+        target = all.find(s => s.id !== stop.id && getStopType(s) !== 'depart' && getStopName(s).toLowerCase() === name);
+        if (target) break;
+      }
+      openDetail(target || stop);
+    });
     item.querySelector('.tl-depart-row').style.cursor = 'pointer';
     return item;
   }
