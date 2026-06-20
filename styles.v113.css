@@ -2745,26 +2745,36 @@ body.light .cl-text { color: #475569; }
 }
 .detail-reschedule-btn { background: rgba(14,165,233,.15); color: #0ea5e9; border-color: rgba(14,165,233,.3); margin-top: 6px; }
 
-/* ── Filter bar ─────────────────────────────────────────────────────── */
-.filter-bar {
-  display: flex; gap: 8px; padding: 10px 16px 4px;
-  overflow-x: auto; -webkit-overflow-scrolling: touch;
-  scrollbar-width: none;
+/* ── Filter popup ───────────────────────────────────────────────────── */
+#filter-wrap { position: relative; }
+#filter-btn.filter-active { color: var(--accent); }
+#filter-btn.filter-active i::before { /* dot indicator */ }
+.filter-popup {
+  position: absolute; top: calc(100% + 8px); right: 0; z-index: 900;
+  background: var(--glass-bg2, rgba(18,18,36,.97));
+  backdrop-filter: blur(24px) saturate(1.4);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+  border: 1px solid var(--glass-border);
+  border-radius: 16px;
+  min-width: 210px;
+  box-shadow: 0 8px 32px rgba(0,0,0,.45);
+  overflow: hidden;
+  padding: 6px 0;
 }
-.filter-bar::-webkit-scrollbar { display: none; }
-.filter-pill {
-  flex-shrink: 0;
-  display: flex; align-items: center; gap: 5px;
-  padding: 6px 14px; border-radius: 100px;
-  background: var(--glass-bg); border: 1px solid var(--glass-border);
-  color: var(--text2); font-size: 13px; font-weight: 600;
-  cursor: pointer; font-family: inherit;
+.filter-pop-item {
+  display: flex; align-items: center; gap: 10px;
+  width: 100%; padding: 11px 16px;
+  background: none; border: none;
+  color: var(--text); font-size: 14px; font-weight: 500; font-family: inherit;
+  cursor: pointer; text-align: left;
   -webkit-tap-highlight-color: transparent;
-  transition: background .15s, color .15s, border-color .15s;
+  transition: background .1s;
 }
-.filter-pill i { font-size: 14px; }
-.filter-pill.active {
-  background: var(--accent); border-color: var(--accent);
-  color: #fff;
-}
-.filter-pill:active { opacity: .75; }
+.filter-pop-item i { font-size: 16px; color: var(--accent); flex-shrink: 0; }
+.filter-pop-item.active { font-weight: 700; }
+.filter-pop-item.dimmed { opacity: .38; }
+.filter-pop-item.active .filter-pop-check { margin-left: auto; font-size: 16px; color: var(--accent); }
+.filter-pop-item:active { background: rgba(255,255,255,.06); }
+.filter-pop-sep { height: 1px; background: var(--glass-border); margin: 4px 0; }
+.filter-pop-only { color: #f59e0b; }
+.filter-pop-only i { color: #f59e0b; }
