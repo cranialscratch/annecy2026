@@ -4114,21 +4114,45 @@ function openFilterPopup(presentTypes) {
     popup.appendChild(row);
   });
 
-  // "Only visit filtered" option — shown when filter active
+  // Bulk actions — shown when filter active
   if (filterActive()) {
     const sep2 = document.createElement('div');
     sep2.className = 'filter-pop-sep';
     popup.appendChild(sep2);
 
-    const onlyBtn = document.createElement('button');
-    onlyBtn.className = 'filter-pop-item filter-pop-only';
-    onlyBtn.innerHTML = '<i class="ph ph-skip-forward-circle"></i> Skip non-matching stops';
-    onlyBtn.addEventListener('click', e => {
-      e.stopPropagation();
-      popup.classList.add('hidden');
-      applyFilterSkip();
-    });
-    popup.appendChild(onlyBtn);
+    if (state.currentView === 'bucket') {
+      // Bucket list: delete matching entries
+      const delBtn = document.createElement('button');
+      delBtn.className = 'filter-pop-item filter-pop-action filter-pop-danger';
+      delBtn.innerHTML = '<i class="ph ph-trash"></i> Delete matching';
+      delBtn.addEventListener('click', e => {
+        e.stopPropagation();
+        popup.classList.add('hidden');
+        applyFilterBucketDelete();
+      });
+      popup.appendChild(delBtn);
+    } else {
+      // Day view: Skip matching + Restore matching
+      const skipBtn = document.createElement('button');
+      skipBtn.className = 'filter-pop-item filter-pop-action filter-pop-only';
+      skipBtn.innerHTML = '<i class="ph ph-skip-forward-circle"></i> Skip matching';
+      skipBtn.addEventListener('click', e => {
+        e.stopPropagation();
+        popup.classList.add('hidden');
+        applyFilterSkip(true);
+      });
+      popup.appendChild(skipBtn);
+
+      const restoreBtn = document.createElement('button');
+      restoreBtn.className = 'filter-pop-item filter-pop-action filter-pop-restore';
+      restoreBtn.innerHTML = '<i class="ph ph-arrow-counter-clockwise"></i> Restore matching';
+      restoreBtn.addEventListener('click', e => {
+        e.stopPropagation();
+        popup.classList.add('hidden');
+        applyFilterRestore();
+      });
+      popup.appendChild(restoreBtn);
+    }
   }
 }
 
@@ -4156,15 +4180,12 @@ function applyFilterSkip() {
   let skippedAny = false;
   getDayStops(day).forEach(s => {
     if (getStopType(s) === 'depart') return;
-    if (!passesFilter(s)) {
+    if (passesFilter(s)) {
       state.skipped[s.id] = true;
       skippedAny = true;
-    } else {
-      delete state.skipped[s.id];
     }
   });
   if (skippedAny) {
-    // Ripple from first non-skipped stop
     const stops = getDayStops(day).filter(s => !state.skipped[s.id] && getStopType(s) !== 'depart');
     if (stops.length) cascadeTimeDelta(stops[0], 0);
   }
@@ -4172,7 +4193,31 @@ function applyFilterSkip() {
   state.typeFilter = new Set();
   updateFilterBtn();
   renderView(false);
-  showToast('Non-matching stops skipped');
+  showToast('Matching stops skipped');
+}
+
+function applyFilterRestore() {
+  const day = TRIP_DATA.days.find(d => d.id === state.currentDayId);
+  if (!day) return;
+  getDayStops(day).forEach(s => {
+    if (passesFilter(s)) delete state.skipped[s.id];
+  });
+  const stops = getDayStops(day).filter(s => !state.skipped[s.id] && getStopType(s) !== 'depart');
+  if (stops.length) cascadeTimeDelta(stops[0], 0);
+  save();
+  state.typeFilter = new Set();
+  updateFilterBtn();
+  renderView(false);
+  showToast('Matching stops restored');
+}
+
+function applyFilterBucketDelete() {
+  state.bucketList = state.bucketList.filter(e => !passesFilter(e.stop));
+  save();
+  state.typeFilter = new Set();
+  updateFilterBtn();
+  renderView(false);
+  showToast('Matching entries deleted');
 }
 
 /* ── Timeline ──────────────────────────────────────────────────────── */
@@ -6449,13 +6494,14 @@ document.addEventListener('DOMContentLoaded', () => {
       openFilterPopup(getPresentTypes());
     }
   });
-  // Dismiss on tap outside
+  // Dismiss on tap outside — capture phase so we intercept before card handlers fire
   document.addEventListener('click', e => {
     if (!_filterPopup.classList.contains('hidden') &&
         !document.getElementById('filter-wrap').contains(e.target)) {
       _filterPopup.classList.add('hidden');
+      e.stopPropagation();
     }
-  });
+  }, true);
   // Dismiss on vertical scroll
   document.getElementById('main-content').addEventListener('scroll', () => {
     _filterPopup.classList.add('hidden');

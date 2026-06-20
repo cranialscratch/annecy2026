@@ -2778,3 +2778,7 @@ body.light .cl-text { color: #475569; }
 .filter-pop-sep { height: 1px; background: var(--glass-border); margin: 4px 0; }
 .filter-pop-only { color: #f59e0b; }
 .filter-pop-only i { color: #f59e0b; }
+.filter-pop-restore { color: #34d399; }
+.filter-pop-restore i { color: #34d399; }
+.filter-pop-danger { color: #f87171; }
+.filter-pop-danger i { color: #f87171; }
