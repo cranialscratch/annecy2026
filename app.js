@@ -4881,41 +4881,81 @@ async function runNearbySearch() {
   navigator.geolocation.getCurrentPosition(async pos => {
     const { latitude: lat, longitude: lng } = pos.coords;
     _editGpsLat = lat; _editGpsLng = lng;
-    // Drop pin at GPS position
     placeEditPin(lat, lng, null);
     if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ph ph-crosshair" style="color:var(--accent)"></i>'; }
-    // Fetch nearby POIs via Nominatim reverse + amenity search
+    el.innerHTML = '<div class="edit-loc-no-results"><i class="ph ph-spinner"></i> Finding nearby places…</div>';
     try {
-      const r = await fetch(`https://nominatim.openstreetmap.org/search?q=&format=json&limit=12&accept-language=en&viewbox=${lng-0.05},${lat+0.04},${lng+0.05},${lat-0.04}&bounded=1&addressdetails=1`);
-      let results = await r.json();
-      if (!results.length) {
-        // Broaden search area
-        const r2 = await fetch(`https://nominatim.openstreetmap.org/search?q=place&format=json&limit=12&accept-language=en&viewbox=${lng-0.15},${lat+0.1},${lng+0.15},${lat-0.1}&bounded=0`);
-        results = await r2.json();
-      }
-      if (!results.length) { el.innerHTML = '<div class="edit-loc-no-results">No places found nearby — type a name to search</div>'; return; }
-      el.innerHTML = '<div class="edit-loc-nearby-label"><i class="ph ph-map-pin"></i> Nearby places</div>' +
-        results.map(item => {
-          const name = item.name || item.display_name.split(',')[0];
-          const sub  = item.display_name.split(',').slice(1, 3).join(',').trim();
-          return `<button class="edit-loc-result" data-lat="${item.lat}" data-lng="${item.lon}"><span class="edit-loc-result-name">${name}</span>${sub ? `<span class="edit-loc-result-sub">${sub}</span>` : ''}</button>`;
-        }).join('');
-      el.querySelectorAll('.edit-loc-result').forEach(b => {
-        b.addEventListener('pointerdown', e => {
-          e.preventDefault();
-          const name = b.querySelector('.edit-loc-result-name')?.textContent || b.textContent;
-          placeEditPin(parseFloat(b.dataset.lat), parseFloat(b.dataset.lng), name);
-          const nameInput = document.getElementById('edit-name');
-          if (nameInput && !nameInput.value.trim()) nameInput.value = name;
-        });
+      // Overpass API — grab named amenity/shop/tourism/leisure nodes within 400m
+      const r = 400;
+      const q = `[out:json][timeout:15];(
+        node(around:${r},${lat},${lng})[name][amenity];
+        node(around:${r},${lat},${lng})[name][shop];
+        node(around:${r},${lat},${lng})[name][tourism];
+        node(around:${r},${lat},${lng})[name][leisure];
+        node(around:${r},${lat},${lng})[name][historic];
+      );out body 40;`;
+      const res = await fetch('https://overpass-api.de/api/interpreter', {
+        method: 'POST', body: 'data=' + encodeURIComponent(q),
       });
+      const data = await res.json();
+      let items = (data.elements || []).filter(n => n.tags?.name);
+      if (!items.length) {
+        // Widen to 1km if nothing close
+        const q2 = `[out:json][timeout:15];(
+          node(around:1000,${lat},${lng})[name][amenity];
+          node(around:1000,${lat},${lng})[name][shop];
+          node(around:1000,${lat},${lng})[name][tourism];
+          node(around:1000,${lat},${lng})[name][leisure];
+        );out body 40;`;
+        const res2 = await fetch('https://overpass-api.de/api/interpreter', { method: 'POST', body: 'data=' + encodeURIComponent(q2) });
+        const data2 = await res2.json();
+        items = (data2.elements || []).filter(n => n.tags?.name);
+      }
+      if (!items.length) { el.innerHTML = '<div class="edit-loc-no-results">No named places found nearby — try typing a name</div>'; return; }
+
+      // Sort by distance from GPS
+      items.sort((a, b) => {
+        const da = Math.hypot(a.lat - lat, a.lon - lng);
+        const db = Math.hypot(b.lat - lat, b.lon - lng);
+        return da - db;
+      });
+
+      renderNearbyResults(el, items, lat, lng);
     } catch {
-      el.innerHTML = '<div class="edit-loc-no-results">Could not load nearby places — type a name to search</div>';
+      el.innerHTML = '<div class="edit-loc-no-results">Could not load nearby places — check connection or type a name</div>';
     }
   }, () => {
     el.innerHTML = '<div class="edit-loc-no-results">Location permission denied</div>';
     if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ph ph-crosshair"></i>'; }
-  }, { enableHighAccuracy: true, timeout: 10000 });
+  }, { enableHighAccuracy: true, timeout: 12000 });
+}
+
+function renderNearbyResults(el, items, originLat, originLng) {
+  const distM = (a) => Math.round(Math.hypot((a.lat - originLat) * 111320, (a.lon - originLng) * 111320 * Math.cos(originLat * Math.PI / 180)));
+  const typeLabel = t => ({ restaurant:'Restaurant', cafe:'Café', bar:'Bar', pub:'Pub', fast_food:'Fast food',
+    hotel:'Hotel', attraction:'Attraction', museum:'Museum', viewpoint:'Viewpoint', gallery:'Gallery',
+    shop:'Shop', supermarket:'Supermarket', bakery:'Bakery', clothes:'Clothing', convenience:'Convenience',
+    hairdresser:'Salon', pharmacy:'Pharmacy', bank:'Bank' })[t] || (t ? t.replace(/_/g,' ') : '');
+  el.innerHTML = `<div class="edit-loc-nearby-label"><i class="ph ph-map-pin"></i> ${items.length} nearby places</div>` +
+    items.map(item => {
+      const name = item.tags.name;
+      const kind = typeLabel(item.tags.amenity || item.tags.shop || item.tags.tourism || item.tags.leisure || item.tags.historic || '');
+      const dist = distM(item);
+      const distStr = dist < 1000 ? `${dist}m` : `${(dist/1000).toFixed(1)}km`;
+      return `<button class="edit-loc-result" data-lat="${item.lat}" data-lng="${item.lon}">
+        <span class="edit-loc-result-name">${name}</span>
+        <span class="edit-loc-result-sub">${[kind, distStr].filter(Boolean).join(' · ')}</span>
+      </button>`;
+    }).join('');
+  el.querySelectorAll('.edit-loc-result').forEach(b => {
+    b.addEventListener('pointerdown', e => {
+      e.preventDefault();
+      const name = b.querySelector('.edit-loc-result-name')?.textContent || b.textContent;
+      placeEditPin(parseFloat(b.dataset.lat), parseFloat(b.dataset.lng), name);
+      const nameInput = document.getElementById('edit-name');
+      if (nameInput && !nameInput.value.trim()) nameInput.value = name;
+    });
+  });
 }
 
 function renderEditTypeGrid(selectedType) {
