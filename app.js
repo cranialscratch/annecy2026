@@ -181,6 +181,7 @@ const state = {
   veganOverrides: {},   // stopId → bool
   addedStops: {},       // dayId → [stop, ...]
   crossDayMoves: {},    // stopId → dayId (stops moved to a different day by cascade overflow)
+  customTags: [],       // user-defined type strings
 };
 
 /* ── Helpers ───────────────────────────────────────────────────────── */
@@ -1615,6 +1616,7 @@ function localSave() {
     localStorage.setItem('annecy_cross_day_moves',    JSON.stringify(state.crossDayMoves || {}));
     localStorage.setItem('annecy_removed',            JSON.stringify(state.removed || {}));
     localStorage.setItem('annecy_bucket_list',        JSON.stringify(state.bucketList || []));
+    localStorage.setItem('annecy_custom_tags',        JSON.stringify(state.customTags || []));
   } catch {}
 }
 function save() {
@@ -1648,6 +1650,8 @@ function load() {
     if (rm) state.removed = JSON.parse(rm);
     const bl = localStorage.getItem('annecy_bucket_list');
     if (bl) state.bucketList = JSON.parse(bl);
+    const ct = localStorage.getItem('annecy_custom_tags');
+    if (ct) state.customTags = JSON.parse(ct);
   } catch {}
   try {
     if (localStorage.getItem('annecy_theme') === 'light') document.body.classList.add('light');
@@ -4740,6 +4744,7 @@ const TYPE_DEFS = [
   { type:'scenic',       ph:'ph-mountains',       label:'Scenic' },
   { type:'historic',     ph:'ph-castle-turret',   label:'Historic' },
   { type:'festival',     ph:'ph-film-slate',      label:'Festival' },
+  { type:'shopping',     ph:'ph-shopping-bag',    label:'Shopping' },
 ];
 // Helper: render a Phosphor icon element for a type def
 function typePh(type) {
@@ -4845,10 +4850,55 @@ function renderEditTypeGrid(selectedType) {
   _editSelectedType = selectedType;
   const sel = document.getElementById('edit-type-select');
   if (!sel) return;
+  const customOpts = (state.customTags || []).map(tag =>
+    `<option value="${tag}" ${tag === selectedType ? 'selected' : ''}>${tag}</option>`
+  ).join('');
   sel.innerHTML = TYPE_DEFS.map(td =>
     `<option value="${td.type}" ${td.type === selectedType ? 'selected' : ''}>${td.label}</option>`
-  ).join('');
+  ).join('') + (customOpts ? `<optgroup label="Custom">${customOpts}</optgroup>` : '');
   sel.onchange = () => { _editSelectedType = sel.value; };
+
+  // Render custom tag input row
+  const wrap = document.getElementById('edit-custom-tag-wrap');
+  if (!wrap) return;
+  wrap.innerHTML = '';
+  if (state.customTags && state.customTags.length) {
+    const chips = document.createElement('div');
+    chips.className = 'custom-tag-chips';
+    state.customTags.forEach(tag => {
+      const chip = document.createElement('span');
+      chip.className = 'custom-tag-chip';
+      chip.innerHTML = `${tag}<button class="custom-tag-del" data-tag="${tag}" title="Remove tag"><i class="ph ph-x"></i></button>`;
+      chip.querySelector('.custom-tag-del').addEventListener('click', () => {
+        state.customTags = state.customTags.filter(t => t !== tag);
+        if (_editSelectedType === tag) _editSelectedType = 'food';
+        save();
+        renderEditTypeGrid(_editSelectedType);
+      });
+      chips.appendChild(chip);
+    });
+    wrap.appendChild(chips);
+  }
+  const addRow = document.createElement('div');
+  addRow.className = 'custom-tag-add-row';
+  addRow.innerHTML = `<input type="text" id="edit-custom-tag-input" class="edit-input custom-tag-input" placeholder="New tag name…" maxlength="24"><button id="edit-custom-tag-btn" class="edit-search-btn" type="button"><i class="ph ph-plus"></i></button>`;
+  wrap.appendChild(addRow);
+  addRow.querySelector('#edit-custom-tag-btn').addEventListener('click', () => {
+    const inp = addRow.querySelector('#edit-custom-tag-input');
+    const val = inp.value.trim();
+    if (!val) return;
+    if (!state.customTags) state.customTags = [];
+    const key = val.toLowerCase().replace(/\s+/g, '_');
+    if (!state.customTags.includes(key)) {
+      state.customTags.push(key);
+      save();
+    }
+    _editSelectedType = key;
+    renderEditTypeGrid(key);
+  });
+  addRow.querySelector('#edit-custom-tag-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); addRow.querySelector('#edit-custom-tag-btn').click(); }
+  });
 }
 
 function renderEditPriority(priority) {
