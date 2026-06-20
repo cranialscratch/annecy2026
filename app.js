@@ -4425,13 +4425,13 @@ function buildTimelineItem(stop, isLast, day, nextStop, prevStop) {
         <div class="tl-depart-from">${getStopName(stop)}</div>
         ${nextName ? `<div class="tl-depart-arrow"><i class="ph ph-arrow-right"></i></div><div class="tl-depart-to">${nextIcon} ${nextName}</div>` : ''}
         <div class="tl-depart-note">${getStopReason(stop)}</div>
-        ${nextStop ? `<div class="depart-edit-hint"><i class="ph ph-caret-right"></i> View stop details</div>` : ''}
+        ${prevStop ? `<div class="depart-edit-hint"><i class="ph ph-caret-right"></i> View stop details</div>` : ''}
       </div>`;
     const _d = TRIP_DATA.days.find(d => d.id === state.currentDayId);
     item.querySelector('.tl-time-btn').addEventListener('click', () => openTimeModal(stop, _d));
-    // Tap the depart row to open the destination stop's detail page
-    if (nextStop) {
-      item.querySelector('.tl-depart-row').addEventListener('click', () => openDetail(nextStop));
+    // Tap the depart row to open the stop being departed from
+    if (prevStop) {
+      item.querySelector('.tl-depart-row').addEventListener('click', () => openDetail(prevStop));
       item.querySelector('.tl-depart-row').style.cursor = 'pointer';
     }
     return item;
