@@ -39,18 +39,18 @@ let _ignoreNextPersonal = false;
 function getDb() { return _db; }
 
 /* ── Auth ─────────────────────────────────────────────────────────── */
-function getAuthUser() { return _auth ? _auth.currentUser : null; }
+function getAuthUser() { return firebase.auth().currentUser; }
 
 function signOut() {
-  if (_auth) _auth.signOut().catch(() => {});
+  firebase.auth().signOut().catch(() => {});
 }
 
 async function authLogin(email, password) {
-  return _auth.signInWithEmailAndPassword(email, password);
+  return firebase.auth().signInWithEmailAndPassword(email, password);
 }
 
 async function authRegister(email, password, displayName) {
-  const cred = await _auth.createUserWithEmailAndPassword(email, password);
+  const cred = await firebase.auth().createUserWithEmailAndPassword(email, password);
   await cred.user.updateProfile({ displayName });
   return cred;
 }
@@ -80,7 +80,7 @@ async function consumeInvite(token) {
   if (!snap.exists()) return;
   const invite = snap.val();
   if (invite.used || invite.tripId !== TRIP_ID) return;
-  const user = _auth.currentUser;
+  const user = firebase.auth().currentUser;
   await _db.ref(MEMBER_PATH(_uid)).set({
     name:  user.displayName || user.email,
     email: user.email,
