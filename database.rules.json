@@ -1,7 +1,20 @@
 {
   "rules": {
-    "shared":    { ".read": true,  ".write": true },
-    "pushSubs":  { ".read": true,  ".write": true },
-    "pushQueue": { ".read": true,  ".write": true }
+    "shared":    { ".read": "auth != null", ".write": "auth != null" },
+    "users": {
+      "$uid": {
+        ".read":  "auth.uid === $uid",
+        ".write": "auth.uid === $uid"
+      }
+    },
+    "trips": {
+      ".read": "auth != null",
+      "annecy_2026": {
+        "members": { ".write": "auth != null" }
+      }
+    },
+    "invites":   { ".read": "auth != null", ".write": "auth != null" },
+    "pushSubs":  { ".read": true, ".write": true },
+    "pushQueue": { ".read": true, ".write": true }
   }
 }
