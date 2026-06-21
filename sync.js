@@ -23,11 +23,11 @@ const MEMBER_PATH   = uid => 'trips/' + TRIP_ID + '/members/' + uid;
 /* Keys that belong to the shared trip state (visible to all members) */
 const SHARED_KEYS = ['overrides','crossDayMoves','locOverrides','durOverrides',
                      'typeOverrides','priorityOverrides','reasonOverrides',
-                     'veganOverrides','addedStops'];
+                     'veganOverrides','addedStops','removed','ownerCurrentStopId'];
 
 /* Keys that belong to personal state (per-user only) */
-const PERSONAL_KEYS = ['checked','skipped','removed','bucketList',
-                       'personalStops','personalTickets','personalPinned'];
+const PERSONAL_KEYS = ['checked','skipped','bucketList',
+                       'personalStops','personalTickets','personalPinned','notifLeadMins'];
 
 let _db  = null;
 let _auth = null;
@@ -39,18 +39,26 @@ let _ignoreNextPersonal = false;
 function getDb() { return _db; }
 
 /* ── Auth ─────────────────────────────────────────────────────────── */
-function getAuthUser() { return _auth ? _auth.currentUser : null; }
+function getAuthUser() { return firebase.auth().currentUser; }
 
 function signOut() {
-  if (_auth) _auth.signOut().catch(() => {});
+  if (typeof state !== 'undefined') {
+    state.checked = {}; state.skipped = {}; state.removed = {};
+    state.bucketList = []; state.personalStops = {}; state.personalTickets = {};
+    state.personalPinned = {}; state.userId = null; state.userName = null;
+    state.isOwner = false; state.memberRole = 'viewer';
+  }
+  if (_db) { _db.ref('shared/state').off(); if (_uid) _db.ref('users/' + _uid + '/personal').off(); }
+  _db = null; _uid = null;
+  firebase.auth().signOut().catch(() => {});
 }
 
 async function authLogin(email, password) {
-  return _auth.signInWithEmailAndPassword(email, password);
+  return firebase.auth().signInWithEmailAndPassword(email, password);
 }
 
 async function authRegister(email, password, displayName) {
-  const cred = await _auth.createUserWithEmailAndPassword(email, password);
+  const cred = await firebase.auth().createUserWithEmailAndPassword(email, password);
   await cred.user.updateProfile({ displayName });
   return cred;
 }
@@ -80,7 +88,7 @@ async function consumeInvite(token) {
   if (!snap.exists()) return;
   const invite = snap.val();
   if (invite.used || invite.tripId !== TRIP_ID) return;
-  const user = _auth.currentUser;
+  const user = firebase.auth().currentUser;
   await _db.ref(MEMBER_PATH(_uid)).set({
     name:  user.displayName || user.email,
     email: user.email,
@@ -145,17 +153,9 @@ function applyRemoteState(remote, isPersonal) {
   keys.forEach(k => {
     const incoming = remote[k];
     if (incoming === undefined || incoming === null) return;
-    if (Array.isArray(state[k])) {
-      if (JSON.stringify(incoming) !== JSON.stringify(state[k])) {
-        state[k] = incoming;
-        changed = true;
-      }
-    } else {
-      const merged = Object.assign({}, incoming, state[k]);
-      if (JSON.stringify(merged) !== JSON.stringify(state[k])) {
-        state[k] = merged;
-        changed = true;
-      }
+    if (JSON.stringify(incoming) !== JSON.stringify(state[k])) {
+      state[k] = incoming;
+      changed = true;
     }
   });
   if (changed) {
@@ -180,7 +180,9 @@ function syncSave() {
     veganOverrides:    state.veganOverrides     || {},
     addedStops:        state.addedStops         || {},
     crossDayMoves:     state.crossDayMoves      || {},
-    _ts:               Date.now(),
+    removed:            state.removed            || {},
+    ownerCurrentStopId: state.ownerCurrentStopId || null,
+    _ts:                Date.now(),
   };
   state._localTs = sharedPayload._ts;
   _db.ref(SHARED_PATH).set(sharedPayload)
@@ -191,11 +193,11 @@ function syncSave() {
   const personalPayload = {
     checked:        state.checked        || {},
     skipped:        state.skipped        || {},
-    removed:        state.removed        || {},
     bucketList:     state.bucketList     || [],
     personalStops:  state.personalStops  || {},
     personalTickets:state.personalTickets|| {},
-    personalPinned: state.personalPinned || {},
+    personalPinned:  state.personalPinned  || {},
+    notifLeadMins:   state.notifLeadMins   || {},
   };
   _db.ref(USER_PATH(_uid)).set(personalPayload)
     .catch(() => {});

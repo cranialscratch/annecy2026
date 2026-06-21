@@ -1,5 +1,5 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v245';
+const APP_VERSION = 'v247';
 
 const CHANGELOG = [
   { version: 'v244', title: 'Swipe to Skip or Remove, compact skipped cards, Bucket List', items: [
@@ -192,6 +192,8 @@ const state = {
   personalStops:   {},   // dayId → [stop, ...]
   personalTickets: {},   // showingId → bool (user has ticket)
   personalPinned:  {},   // stopId → bool (absorb ripple)
+  notifLeadMins:      {},   // stopId → int (minutes before departBy to notify; default 30)
+  ownerCurrentStopId: null, // shared: owner's last checked-in stop (drives group "Now" display)
 };
 
 /* ── Helpers ───────────────────────────────────────────────────────── */
@@ -221,6 +223,7 @@ function isStopFixed(stop)     {
 function isPinned(stopId) { return !!(state.personalPinned || {})[stopId]; }
 function hasTicket(stop)  { return (state.personalTickets || {})[stop.id] ?? stop.ticketed ?? false; }
 function canUnpin()       { return state.isOwner || state.memberRole === 'editor'; }
+function getNotifLead(stopId) { return state.notifLeadMins?.[stopId] ?? 30; }
 const TYPE_ICON = {
   depart:       'ph-car',
   charging:     'ph-lightning',
@@ -253,7 +256,7 @@ function formatDate(dateStr) {
 }
 function getDayLabel(day) {
   if (day.isCountdown) return '<i class="ph ph-mountains"></i>';
-  if (day.isFestival) return 'Fest';
+  if (day.isFestival && day.dateEnd) return 'Fest';
   const names = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
   return names[new Date(day.date + 'T00:00:00').getDay()];
 }
@@ -876,21 +879,30 @@ function collectTodayLeaveEvents() {
     const covers = day.date === today ||
       (day.isFestival && today >= day.date && today <= (day.dateEnd || day.date));
     if (!covers) continue;
-    for (const stop of getDayStops(day)) {
-      const type = getStopType(stop);
-      // depart stops: notify at stop time - 15
-      if (type === 'depart') {
-        const m = timeToMinutes(getStopTime(stop));
-        if (m !== null) events.push({ stop, notifMins: m - 15, label: `Departing from ${getStopName(stop)}` });
-      }
-      // stops with explicit duration: notify at leaveBy - 15
-      if (hasExplicitDuration(stop) && type !== 'depart') {
-        const arr = timeToMinutes(getStopTime(stop));
-        if (arr !== null) {
-          const leaveBy = arr + getStopDuration(stop);
-          events.push({ stop, notifMins: leaveBy - 15, label: `Leave ${getStopName(stop)} in 15 min` });
-        }
-      }
+    const stops = getDayStops(day).filter(s => !state.skipped[s.id]);
+    // Travel-aware departure reminder for each stop → next stop
+    for (let i = 0; i < stops.length - 1; i++) {
+      const stop = stops[i];
+      const next = stops[i + 1];
+      if (getStopType(stop) === 'depart') continue; // handled separately below
+      const nextMins = timeToMinutes(getStopTime(next));
+      if (nextMins === null) continue;
+      const travelKey = _travelKey(stop, next);
+      const travelMins = _travelCache[travelKey] ?? 0;
+      const departBy = nextMins - travelMins;
+      const lead = getNotifLead(stop.id);
+      const travelStr = travelMins > 0 ? ` (~${travelMins} min drive)` : '';
+      events.push({
+        stop,
+        notifMins: departBy - lead,
+        label: `Leave ${getStopName(stop)} for ${getStopName(next)}${travelStr}`,
+      });
+    }
+    // Depart stops: notify 15 min before departure time
+    for (const stop of stops) {
+      if (getStopType(stop) !== 'depart') continue;
+      const m = timeToMinutes(getStopTime(stop));
+      if (m !== null) events.push({ stop, notifMins: m - 15, label: `Departing from ${getStopName(stop)}` });
     }
   }
   return events;
@@ -1373,7 +1385,7 @@ function getDayStops(day) {
   });
 }
 
-function injectStopPhotos(stopId) {
+function _doInjectStopPhotos(stopId) {
   const item = document.getElementById(`stop-${stopId}`);
   if (!item) return;
   const stop = findStop(stopId);
@@ -1390,8 +1402,70 @@ function injectStopPhotos(stopId) {
   initSlider(newSlider, stop, 'card');
 }
 
+function injectStopPhotos(stopId) {
+  const item = document.getElementById(`stop-${stopId}`);
+  if (!item) {
+    // Card may be mid-render (e.g. sync re-render); retry after a frame
+    requestAnimationFrame(() => _doInjectStopPhotos(stopId));
+    return;
+  }
+  _doInjectStopPhotos(stopId);
+}
+
 // Keep old name as alias for detail page calls
 const injectWikiPhoto = injectStopPhotos;
+
+function updateDepartByPill(stop, nextStop) {
+  const el = document.querySelector(`[data-departby="${stop.id}"]`);
+  if (!el || !nextStop) return;
+  const travelMins = _travelCache[_travelKey(stop, nextStop)];
+  if (travelMins == null) return;
+  const nextMins = timeToMinutes(getStopTime(nextStop));
+  if (nextMins === null) return;
+  const departBy = nextMins - travelMins;
+  const lead = getNotifLead(stop.id);
+  el.classList.remove('hidden');
+  el.innerHTML = `<i class="ph ph-car-simple"></i> Depart by <strong>${minutesToTime(departBy)}</strong><span class="depart-travel-mins"> · ~${travelMins} min</span><button class="depart-lead-btn" data-stop-id="${stop.id}" onclick="openLeadTimePicker('${stop.id}',this,event)" title="Reminder ${lead} min before departure"><i class="ph ph-bell"></i> ${lead}m</button>`;
+}
+
+function openLeadTimePicker(stopId, anchorEl, e) {
+  e && e.stopPropagation();
+  const existing = document.getElementById('lead-picker-pop');
+  if (existing) { existing.remove(); return; }
+  const cur = getNotifLead(stopId);
+  const pop = document.createElement('div');
+  pop.id = 'lead-picker-pop';
+  pop.className = 'lead-picker-pop';
+  pop.innerHTML = `
+    <div class="lead-picker-label">Remind me before departure</div>
+    <div class="lead-picker-row">
+      <button class="lead-picker-step" data-delta="-5">−5</button>
+      <span class="lead-picker-val">${cur} min</span>
+      <button class="lead-picker-step" data-delta="5">+5</button>
+    </div>`;
+  pop.querySelectorAll('.lead-picker-step').forEach(btn => {
+    btn.addEventListener('click', e2 => {
+      e2.stopPropagation();
+      const delta = parseInt(btn.dataset.delta);
+      const newVal = Math.max(5, Math.min(120, getNotifLead(stopId) + delta));
+      if (!state.notifLeadMins) state.notifLeadMins = {};
+      state.notifLeadMins[stopId] = newVal;
+      save();
+      pop.querySelector('.lead-picker-val').textContent = newVal + ' min';
+      // Update the bell button label
+      const bell = document.querySelector(`.depart-lead-btn[data-stop-id="${stopId}"]`);
+      if (bell) bell.innerHTML = `<i class="ph ph-bell"></i> ${newVal}m`;
+      scheduleNotifs();
+    });
+  });
+  document.body.appendChild(pop);
+  const rect = anchorEl.getBoundingClientRect();
+  pop.style.position = 'fixed';
+  pop.style.top  = (rect.bottom + 6) + 'px';
+  pop.style.left = Math.min(rect.left, window.innerWidth - 200) + 'px';
+  const dismiss = ev => { if (!pop.contains(ev.target) && ev.target !== anchorEl) { pop.remove(); document.removeEventListener('click', dismiss); } };
+  setTimeout(() => document.addEventListener('click', dismiss), 0);
+}
 
 function lazyLoadWikiImages(stops) {
   stops.forEach(stop => {
@@ -1399,7 +1473,7 @@ function lazyLoadWikiImages(stops) {
     if (type === 'depart' || type === 'charging') return;
     // Kick off Places fetch; inject photos when it resolves
     if (_placesCache[stop.id]?.photos?.length) {
-      injectStopPhotos(stop.id);
+      requestAnimationFrame(() => injectStopPhotos(stop.id));
     } else {
       fetchPlacesPhotos(stop).then(() => injectStopPhotos(stop.id));
     }
@@ -1663,6 +1737,7 @@ function localSave() {
     localStorage.setItem('annecy_personal_stops',    JSON.stringify(state.personalStops  || {}));
     localStorage.setItem('annecy_personal_tickets',  JSON.stringify(state.personalTickets || {}));
     localStorage.setItem('annecy_personal_pinned',   JSON.stringify(state.personalPinned  || {}));
+    localStorage.setItem('annecy_notif_lead',         JSON.stringify(state.notifLeadMins   || {}));
   } catch {}
 }
 function save() {
@@ -1706,6 +1781,8 @@ function load() {
     if (pt) state.personalTickets = JSON.parse(pt);
     const pp = localStorage.getItem('annecy_personal_pinned');
     if (pp) state.personalPinned = JSON.parse(pp);
+    const nl = localStorage.getItem('annecy_notif_lead');
+    if (nl) state.notifLeadMins = JSON.parse(nl);
   } catch {}
   try {
     if (localStorage.getItem('annecy_theme') === 'light') document.body.classList.add('light');
@@ -1736,13 +1813,13 @@ function buildDayStrip() {
     const today = localDateStr();
     const isTodayChip = day.isCountdown
       ? today <= day.dateEnd
-      : day.isFestival
+      : (day.isFestival && day.dateEnd)
         ? (today >= day.date && today <= day.dateEnd)
         : today === day.date;
-    const isPast = !day.isCountdown && !day.isFestival && day.date < today;
+    const isPast = !day.isCountdown && !(day.isFestival && day.dateEnd) && day.date < today;
     if (isTodayChip) chip.classList.add('today');
     if (isPast)      chip.classList.add('past');
-    const dateStr = day.isCountdown ? 'soon' : day.isFestival ? '20–27' : formatDate(day.date);
+    const dateStr = day.isCountdown ? 'soon' : (day.isFestival && day.dateEnd) ? '20–27' : formatDate(day.date);
     chip.innerHTML = `<span class="day-chip-label">${getDayLabel(day)}</span><span class="day-chip-date">${dateStr}</span><span class="day-dot"></span>`;
     chip.addEventListener('click', () => selectDay(day.id));
     strip.appendChild(chip);
@@ -1763,6 +1840,8 @@ function selectDay(dayId) {
   updateDayStrip();
   const isToday = dayId === findTodayDayId();
   renderView(isToday);
+  const day = TRIP_DATA.days.find(d => d.id === dayId);
+  if (day) precomputeTravelTimes(day);
 }
 
 /* ── Header ────────────────────────────────────────────────────────── */
@@ -1814,6 +1893,8 @@ function renderView(scrollToNow) {
     else if (state.currentView === 'overview') { setBgClass(null); renderOverview(tl); }
     else if (state.currentView === 'vegan')    { setBgClass(null); renderVeganView(tl); }
     else if (state.currentView === 'charging') { setBgClass(null); renderChargerView(tl); }
+    else if (state.currentView === 'find')     { setBgClass(null); renderFindView(tl); return; }
+    else if (state.currentView === 'more')     { setBgClass(null); renderMoreView(tl); return; }
     else if (state.cardView === 'calendar') renderCalView(tl);
     else {
       // Inject GPS chip before timeline if not present
@@ -1852,13 +1933,15 @@ function startLocationWatch() {
     updateLocMarker(pos.coords.accuracy);
     refreshMapCarouselOrder();
     renderNearestStopChip();
-    // On first fix: refresh vegan/charger view if open (renders before GPS is ready)
-    if (firstFix && (state.currentView === 'vegan' || state.currentView === 'charging')) {
+    // On first fix: refresh vegan/charger/find view if open (renders before GPS is ready)
+    if (firstFix && (state.currentView === 'vegan' || state.currentView === 'charging' || state.currentView === 'find')) {
       const tl = document.getElementById('timeline');
-      if (tl) {
-        if (state.currentView === 'vegan') renderVeganView(tl);
-        else renderChargerView(tl);
-      }
+      if (tl) renderView(false);
+    }
+    // Refresh Now panel if on today's day view
+    if (state.currentView === 'day') {
+      const day = TRIP_DATA.days.find(d => d.id === state.currentDayId);
+      if (day) { const tl = document.getElementById('timeline'); if (tl) renderNowPanel(tl, day); }
     }
     // On first fix: re-fetch countdown POIs (which used fallback coords)
     if (firstFix && _leafletMap) {
@@ -1917,6 +2000,84 @@ function haversineM(lat1, lng1, lat2, lng2) {
   const R = 6371000, dLat = (lat2-lat1)*Math.PI/180, dLng = (lng2-lng1)*Math.PI/180;
   const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+function getCurrentStop(day) {
+  const stops = getDayStops(day).filter(s => !state.skipped[s.id] && !state.removed[s.id] && getStopType(s) !== 'depart');
+  if (!stops.length) return null;
+  // 1. GPS: nearest stop within 500 m
+  if (_userLat && _userLng) {
+    const candidates = stops.filter(s => s.lat && s.lng)
+      .map(s => ({ s, d: haversineM(_userLat, _userLng, s.lat, s.lng) }))
+      .sort((a, b) => a.d - b.d);
+    if (candidates.length && candidates[0].d < 500) return candidates[0].s;
+  }
+  // 2. Owner's last check-in (synced via shared state)
+  if (state.ownerCurrentStopId) {
+    const s = stops.find(s => s.id === state.ownerCurrentStopId);
+    if (s) return s;
+  }
+  // 3. Time-based: last stop whose scheduled time has passed
+  const now = nowMinutes();
+  const passed = stops.filter(s => (timeToMinutes(getStopTime(s)) ?? Infinity) <= now);
+  return passed[passed.length - 1] || stops[0];
+}
+
+function renderNowPanel(container, day) {
+  const existing = document.getElementById('now-panel');
+  if (existing) existing.remove();
+
+  const current = getCurrentStop(day);
+  if (!current) return;
+
+  const stops = getDayStops(day).filter(s => !state.skipped[s.id] && !state.removed[s.id] && getStopType(s) !== 'depart');
+  const curIdx = stops.findIndex(s => s.id === current.id);
+  const next   = stops[curIdx + 1] || null;
+
+  const arrTime   = getStopTime(current);
+  const arrMins   = timeToMinutes(arrTime);
+  const durMins   = getStopDuration(current);
+  const leaveInfo = leaveByInfo(current);
+
+  let nextHtml = '';
+  if (next) {
+    const tKey     = _travelKey(current, next);
+    const travelM  = _travelCache[tKey];
+    const nextTime = getStopTime(next);
+    const nextMins = timeToMinutes(nextTime);
+    const departM  = (travelM != null && nextMins != null) ? nextMins - travelM : null;
+    const travelStr = travelM != null ? `~${travelM} min drive` : '';
+    const departStr = departM != null ? `Depart ${minutesToTime(departM)}` : '';
+    const arrStr   = nextTime && timeToMinutes(nextTime) !== null ? `Arrive ${nextTime}` : '';
+    nextHtml = `
+      <div class="now-next">
+        <div class="now-next-label"><i class="ph ph-arrow-down"></i> Next stop</div>
+        <div class="now-next-name">${stopTypeIcon(next)} ${getStopName(next)}</div>
+        <div class="now-next-timing">${[travelStr, departStr, arrStr].filter(Boolean).join(' · ')}</div>
+      </div>`;
+  }
+
+  const checkedIn = !!state.checked[current.id];
+  const arrivedStr = checkedIn && arrTime && timeToMinutes(arrTime) !== null
+    ? `Arrived ${arrTime}`
+    : (arrTime && timeToMinutes(arrTime) !== null ? `Scheduled ${arrTime}` : '');
+  const leaveStr = leaveInfo ? leaveInfo.label : (arrMins !== null && durMins ? `Leave by ${minutesToTime(arrMins + durMins)}` : '');
+
+  const panel = document.createElement('div');
+  panel.id = 'now-panel';
+  panel.className = 'now-panel glass';
+  panel.innerHTML = `
+    <div class="now-here">
+      <div class="now-here-label"><i class="ph ph-map-pin-simple-area"></i> You are at</div>
+      <div class="now-here-row">
+        <div class="now-here-name">${getStopName(current)}</div>
+        <a class="now-navigate-btn" href="${navUrl(current.location, current.address, current.lat, current.lng)}" target="_blank" rel="noopener"><i class="ph ph-navigation-arrow"></i></a>
+      </div>
+      <div class="now-timing">${[arrivedStr, leaveStr].filter(Boolean).join(' · ')}</div>
+    </div>
+    ${nextHtml}`;
+
+  container.insertBefore(panel, container.firstChild);
 }
 
 async function fetchRoutePOIs(day) {
@@ -2184,7 +2345,7 @@ function renderOverview(c) {
   TRIP_DATA.days.forEach(day => {
     const card = document.createElement('div');
     card.className = 'overview-card';
-    const dateStr = day.isCountdown ? 'Until 16 Jun' : day.isFestival ? '20–27 Jun' : formatDate(day.date);
+    const dateStr = day.isCountdown ? 'Until 16 Jun' : (day.isFestival && day.dateEnd) ? '20–27 Jun' : formatDate(day.date);
     card.innerHTML = `<div class="ov-day">${getDayLabel(day)} · ${dateStr}</div><div class="ov-title">${day.title}</div><div class="ov-sub">${day.subtitle||''}</div><div class="ov-stops">${day.isCountdown ? '' : day.stops.length + ' stops'}</div>`;
     card.addEventListener('click', () => selectDay(day.id));
     grid.appendChild(card);
@@ -2408,6 +2569,47 @@ function openBucketAddSheet(entry, idx) {
   };
 }
 
+/* ── Find view (unified nearby: food + charger) ─────────────────────── */
+function renderFindView(container) {
+  container.innerHTML = '';
+  const filter = state._findFilter || 'food';
+
+  const header = document.createElement('div');
+  header.className = 'find-header';
+  header.innerHTML = `
+    <div class="find-title"><i class="ph ph-magnifying-glass"></i> Find nearby</div>
+    <div class="find-tabs">
+      <button class="find-tab${filter === 'food' ? ' active' : ''}" data-filter="food"><i class="ph ph-fork-knife"></i> Food &amp; Drink</button>
+      <button class="find-tab${filter === 'charging' ? ' active' : ''}" data-filter="charging"><i class="ph ph-lightning"></i> Charging</button>
+    </div>`;
+  header.querySelectorAll('.find-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      state._findFilter = btn.dataset.filter;
+      renderFindView(container);
+    });
+  });
+  container.appendChild(header);
+
+  if (filter === 'food') {
+    renderVeganView(container);
+  } else {
+    renderChargerView(container);
+  }
+}
+
+function renderMoreView(container) {
+  container.innerHTML = '';
+  const wrap = document.createElement('div');
+  wrap.className = 'more-view';
+  wrap.innerHTML = `
+    <div class="more-section-title">Trip</div>
+    <button class="more-row" onclick="state.currentView='overview';renderView(false)"><i class="ph ph-list-bullets"></i> All days</button>
+    <button class="more-row" onclick="state.currentView='bucket';renderView(false)"><i class="ph ph-bookmark-simple"></i> Saved for later</button>
+    <div class="more-section-title">Settings</div>
+    <button class="more-row" onclick="document.getElementById('menu-btn').click()"><i class="ph ph-gear"></i> Preferences &amp; info</button>`;
+  container.appendChild(wrap);
+}
+
 /* ── Filter list ───────────────────────────────────────────────────── */
 async function renderVeganView(container) {
   container.innerHTML = '';
@@ -2602,7 +2804,7 @@ async function renderVeganView(container) {
       found = true;
       const card = document.createElement('div');
       card.className = 'vegan-place-card';
-      const dateStr = day.isFestival ? '20–27 Jun' : formatDate(day.date);
+      const dateStr = (day.isFestival && day.dateEnd) ? '20–27 Jun' : formatDate(day.date);
       card.innerHTML = `
         <div class="vegan-place-main">
           <div class="vegan-place-name">${stop.location} <span class="vp-planned-badge"><i class="ph ph-calendar-check"></i> ${getDayLabel(day)} · ${dateStr}</span></div>
@@ -3389,7 +3591,7 @@ async function renderChargerView(container) {
       found = true;
       const card = document.createElement('div');
       card.className = 'vegan-place-card';
-      const dateStr = day.isFestival ? '20–27 Jun' : formatDate(day.date);
+      const dateStr = (day.isFestival && day.dateEnd) ? '20–27 Jun' : formatDate(day.date);
       card.innerHTML = `
         <div class="vegan-place-main">
           <div class="vegan-place-name">${stop.location} <span class="vp-planned-badge"><i class="ph ph-calendar-check"></i> ${getDayLabel(day)} · ${dateStr}</span></div>
@@ -3620,7 +3822,7 @@ function renderFilterList(container, kind) {
       card.innerHTML = `
         <span class="filter-icon">${stopTypeIcon(stop)}</span>
         <div class="filter-info">
-          <div class="filter-day">${getDayLabel(day)} · ${day.isFestival ? '20–27 Jun' : formatDate(day.date)}</div>
+          <div class="filter-day">${getDayLabel(day)} · ${(day.isFestival && day.dateEnd) ? '20–27 Jun' : formatDate(day.date)}</div>
           <div class="filter-loc">${stop.location}</div>
           <div class="filter-reason">${stop.reason}</div>
         </div>
@@ -3875,7 +4077,9 @@ function buildCalDayHeader(day, containerId) {
 /* ── Festival banner — title + today's date + weather ──────────────── */
 function buildFestivalBanner(day) {
   const todayStr = localDateStr();
-  const dateStr  = (todayStr >= day.date && todayStr <= day.dateEnd) ? todayStr : day.date;
+  const dateStr  = day.dateEnd
+    ? ((todayStr >= day.date && todayStr <= day.dateEnd) ? todayStr : day.date)
+    : day.date;
   const dateLabel = new Date(dateStr + 'T12:00:00').toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long' });
 
   const banner = document.createElement('div');
@@ -3914,16 +4118,21 @@ function renderFestivalCalView(container, day) {
     wander:'#059669', depart:'#475569', scenic:'#16a34a', historic:'#b45309', festival:'#7c3aed', work:'#6366f1',
   };
 
-  getDayStops(day).forEach(stop => {
+  const festStops = getDayStops(day);
+  festStops.forEach((stop, idx) => {
     const type = getStopType(stop);
     const col  = TYPE_COL[type] || '#334155';
     const item = document.createElement('div');
     item.className = 'fest-cal-item';
+    item.id = `stop-${stop.id}`;
     item.style.borderLeftColor = col;
     if (state.checked[stop.id]) item.classList.add('visited');
+    const timeStr = getStopTime(stop);
+    const timeDisplay = timeToMinutes(timeStr) !== null ? `<span class="fest-cal-item-time">${timeStr}</span>` : '';
     item.innerHTML = `
-      <div class="fest-cal-item-name">${stopTypeIcon(stop)} ${getStopName(stop)}</div>
-      <div class="fest-cal-item-meta">${typeLabel(type)}${stop.veganFriendly ? ' · <i class="ph ph-leaf"></i> Vegan' : ''}</div>`;
+      <div class="fest-cal-item-name">${stopTypeIcon(stop)} ${getStopName(stop)}${timeDisplay}</div>
+      <div class="fest-cal-item-meta">${typeLabel(type)}${stop.veganFriendly ? ' · <i class="ph ph-leaf"></i> Vegan' : ''}</div>
+      <div data-departby="${stop.id}" class="depart-by-pill hidden"></div>`;
     item.addEventListener('click', () => openDetail(stop));
     list.appendChild(item);
   });
@@ -4297,9 +4506,19 @@ function renderTimeline(container, scrollToNow) {
   }
 
   const today = localDateStr();
-  const isToday = day.date === today || (day.isFestival && today >= day.date && today <= day.dateEnd);
+  const isToday = day.date === today || (day.isFestival && today >= day.date && today <= (day.dateEnd || day.date));
   const now = nowMinutes();
   let nowLineEl = null;
+
+  // Now panel + FAB — only on today's day view
+  if (isToday) {
+    renderNowPanel(container, day);
+    const fab = document.getElementById('fab-add');
+    if (fab) fab.classList.remove('hidden');
+  } else {
+    const fab = document.getElementById('fab-add');
+    if (fab) fab.classList.add('hidden');
+  }
   let nowInserted = false;
 
   // Filter bar — collect types present in this day's stops
@@ -4573,20 +4792,18 @@ function buildTimelineItem(stop, isLast, day, nextStop, prevStop) {
         <div class="card-body">
           <div class="card-top-row">
             <div class="card-name">${stopTypeIcon(stop)} ${getStopName(stop)}</div>
-            ${ (stop.planStatus === 'conditional' || stop.planStatus === 'weak-vegan') ? '<span class="card-warn-icon"><i class="ph ph-warning"></i></span>' : '' }<button class="pin-btn${isPinned(stop.id) ? ' pinned' : ''}${!canUnpin() && isPinned(stop.id) ? ' locked' : ''}" data-pin-btn="${stop.id}" title="${isPinned(stop.id) ? 'Pinned — tap to unpin' : 'Unpinned — tap to pin'}" onclick="togglePin('${stop.id}',event)"><i class="ph ${isPinned(stop.id) ? 'ph-push-pin' : 'ph-push-pin'}" style="opacity:${isPinned(stop.id)?1:0.3}"></i></button><button class="check-btn${isVisited ? ' checked' : ''}" data-stop-id="${stop.id}" aria-label="Mark visited"><i class="ph ${isVisited ? 'ph-check-circle' : 'ph-circle'}"></i></button>
+            <div class="card-top-btns">
+              <button class="check-btn${isVisited ? ' checked' : ''}" data-stop-id="${stop.id}" aria-label="Mark visited"><i class="ph ${isVisited ? 'ph-check-circle' : 'ph-circle'}"></i></button>
+              <button class="more-btn" data-stop-id="${stop.id}" aria-label="More options"><i class="ph ph-dots-three"></i></button>
+            </div>
           </div>
-          ${stop.address || stop.location ? `<div class="card-address">${stop.address || stop.location}</div>` : ''}
           <div class="card-meta-row">
             <span class="tl-card-badge">${typeLabel(getStopType(stop))}</span>
-            ${getStopPriority(stop) > 0 ? `<span class="priority-stars">${priorityStars(getStopPriority(stop))}</span>` : ''}
-            <span class="vcard-rating-loading" data-stopid="${stop.id}"></span>
             <a class="weather-pill" data-stop-id="${stop.id}" data-lat="${getStopLat(stop)||''}" data-lng="${getStopLng(stop)||''}" href="#" onclick="return false;"></a>
           </div>
-          <div class="card-reason">${getStopReason(stop)}</div>
-          ${buildTags(stop)}
           ${getStopType(stop) === 'showing' ? buildShowingMeta(stop) : ''}
           ${hasExplicitDuration(stop) ? `<div data-leaveby="${stop.id}" class="leave-by-pill" style="display:none"></div>` : ''}
-          <div class="tl-actions">${buildIconActions(stop)}</div>
+          <div data-departby="${stop.id}" class="depart-by-pill hidden"></div>
         </div>
       </div>
       <div class="tl-swipe-actions">
@@ -4604,25 +4821,17 @@ function buildTimelineItem(stop, isLast, day, nextStop, prevStop) {
     e.stopPropagation();
     toggleCheck(stop.id, item);
   });
+  item.querySelector('.more-btn').addEventListener('click', e => {
+    e.stopPropagation();
+    openStopSheet(stop.id);
+  });
 
-  // Whole card opens detail; action icon links and check button stop propagation
+  // Whole card opens detail; check/more buttons stop propagation
   const card = item.querySelector('.tl-card');
   card.style.cursor = 'pointer';
   card.addEventListener('click', e => {
-    if (e.target.closest('.act-btn, .check-btn')) return;
+    if (e.target.closest('.check-btn, .more-btn, .depart-lead-btn')) return;
     openDetail(stop);
-  });
-  card.addEventListener('click', e => {
-    const actBtn = e.target.closest('.act-btn[data-action]');
-    if (!actBtn) return;
-    e.stopPropagation();
-    if (actBtn.dataset.action === 'vegan-view') {
-      if (stop.lat) { _userLat = stop.lat; _userLng = stop.lng; }
-      state.currentView = 'vegan'; renderView(true);
-    } else if (actBtn.dataset.action === 'charge-view') {
-      if (stop.lat) { _userLat = stop.lat; _userLng = stop.lng; }
-      state.currentView = 'charging'; renderView(true);
-    }
   });
 
   // Swipe-left to reveal Skip / Restore button
@@ -5153,6 +5362,36 @@ async function fetchTravelMins(fromLat, fromLng, toLat, toLng) {
   } catch { return null; }
 }
 
+const _travelCache = {};  // "lat1,lng1-lat2,lng2" → minutes
+
+function _travelKey(a, b) {
+  return `${(a.lat||0).toFixed(4)},${(a.lng||0).toFixed(4)}-${(b.lat||0).toFixed(4)},${(b.lng||0).toFixed(4)}`;
+}
+
+async function getCachedTravelMins(fromStop, toStop) {
+  const key = _travelKey(fromStop, toStop);
+  if (key in _travelCache) return _travelCache[key];
+  const mins = await fetchTravelMins(fromStop.lat, fromStop.lng, toStop.lat, toStop.lng);
+  _travelCache[key] = mins;
+  return mins;
+}
+
+async function precomputeTravelTimes(day) {
+  const stops = getDayStops(day).filter(s => !state.skipped[s.id] && s.lat && s.lng);
+  const pairs = [];
+  for (let i = 0; i < stops.length - 1; i++) pairs.push([stops[i], stops[i+1]]);
+  // Fetch all pairs in parallel, then update depart-by pills
+  await Promise.all(pairs.map(([a, b]) => getCachedTravelMins(a, b)));
+  // Update all depart-by pills now that cache is warm
+  for (let i = 0; i < stops.length - 1; i++) {
+    updateDepartByPill(stops[i], stops[i+1]);
+  }
+  // Also re-arm notifications with accurate travel times
+  if (day.date === localDateStr() || (day.isFestival && localDateStr() >= day.date && localDateStr() <= (day.dateEnd || day.date))) {
+    scheduleNotifs();
+  }
+}
+
 async function recalculateFromStop(day, fromIdx, statusCb) {
   const btn = document.getElementById('edit-recalc-btn');
   if (btn) { btn.disabled = true; btn.textContent = 'Recalculating…'; }
@@ -5675,6 +5914,107 @@ function renderLegInfo(stop) {
   });
 }
 
+function openStopSheet(stopId) {
+  const stop = findStop(stopId);
+  if (!stop) return;
+  const existing = document.getElementById('stop-sheet');
+  if (existing) existing.remove();
+
+  const isVisited = !!state.checked[stopId];
+  const isSkipped = !!state.skipped[stopId];
+  const pinned    = isPinned(stopId);
+  const canPin    = canUnpin();
+  const canEdit   = state.isOwner || state.memberRole === 'editor';
+
+  const sheet = document.createElement('div');
+  sheet.id = 'stop-sheet';
+  sheet.className = 'stop-sheet';
+  sheet.innerHTML = `
+    <div class="stop-sheet-handle"></div>
+    <div class="stop-sheet-header">
+      <div class="stop-sheet-title">${stopTypeIcon(stop)} ${getStopName(stop)}</div>
+      <button class="stop-sheet-close" aria-label="Close"><i class="ph ph-x"></i></button>
+    </div>
+    <div class="stop-sheet-body">
+      ${getStopReason(stop) ? `<p class="stop-sheet-reason">${getStopReason(stop)}</p>` : ''}
+      ${buildTags(stop)}
+      <div class="stop-sheet-actions">
+        <a class="sheet-action-btn" href="${navUrl(stop.location, stop.address, stop.lat, stop.lng)}" target="_blank" rel="noopener">
+          <i class="ph ph-navigation-arrow"></i> Navigate
+        </a>
+        <button class="sheet-action-btn" onclick="openStopSheetFind('${stopId}','food')">
+          <i class="ph ph-fork-knife"></i> Food nearby
+        </button>
+        <button class="sheet-action-btn" onclick="openStopSheetFind('${stopId}','charging')">
+          <i class="ph ph-lightning"></i> Charger nearby
+        </button>
+        ${canEdit ? `<button class="sheet-action-btn" onclick="openTimeModal(findStop('${stopId}'),TRIP_DATA.days.find(d=>d.id===state.currentDayId));closeStopSheet()">
+          <i class="ph ph-clock"></i> Edit time
+        </button>` : ''}
+        <button class="sheet-action-btn${pinned ? ' active' : ''}${!canPin && pinned ? ' locked' : ''}"
+          onclick="${canPin ? `togglePinSheet('${stopId}')` : 'showToast(\"Only editors can unpin\")'}"
+        >
+          <i class="ph ${pinned ? 'ph-push-pin' : 'ph-push-pin-slash'}"></i> ${pinned ? 'Unpin' : 'Pin'}
+        </button>
+        <button class="sheet-action-btn${isVisited ? ' active' : ''}" onclick="toggleCheck('${stopId}',null);closeStopSheet()">
+          <i class="ph ${isVisited ? 'ph-check-circle' : 'ph-circle'}"></i> ${isVisited ? 'Visited' : 'Mark visited'}
+        </button>
+        <button class="sheet-action-btn sheet-skip-btn${isSkipped ? ' active' : ''}" onclick="toggleSkip('${stopId}');closeStopSheet()">
+          <i class="ph ph-x-circle"></i> ${isSkipped ? 'Restore' : 'Skip'}
+        </button>
+        <button class="sheet-action-btn sheet-remove-btn" onclick="removeStopFromSheet('${stopId}')">
+          <i class="ph ph-trash"></i> Remove
+        </button>
+      </div>
+    </div>`;
+  sheet.querySelector('.stop-sheet-close').addEventListener('click', closeStopSheet);
+
+  const overlay = document.createElement('div');
+  overlay.id = 'stop-sheet-overlay';
+  overlay.className = 'stop-sheet-overlay';
+  overlay.addEventListener('click', closeStopSheet);
+  document.body.appendChild(overlay);
+  document.body.appendChild(sheet);
+  requestAnimationFrame(() => { sheet.classList.add('open'); overlay.classList.add('open'); });
+}
+
+function closeStopSheet() {
+  const sheet   = document.getElementById('stop-sheet');
+  const overlay = document.getElementById('stop-sheet-overlay');
+  if (sheet)   { sheet.classList.remove('open'); sheet.addEventListener('transitionend', () => sheet.remove(), { once: true }); }
+  if (overlay) { overlay.classList.remove('open'); overlay.addEventListener('transitionend', () => overlay.remove(), { once: true }); }
+}
+
+function togglePinSheet(stopId) {
+  togglePin(stopId, null);
+  closeStopSheet();
+}
+
+function toggleSkip(stopId) {
+  if (state.skipped[stopId]) {
+    delete state.skipped[stopId];
+  } else {
+    state.skipped[stopId] = true;
+  }
+  save();
+  renderView(false);
+}
+
+function removeStopFromSheet(stopId) {
+  const stop = findStop(stopId);
+  if (stop) moveStopToBucketList(stop);
+  closeStopSheet();
+}
+
+function openStopSheetFind(stopId, filter) {
+  const stop = findStop(stopId);
+  if (stop?.lat) { _userLat = stop.lat; _userLng = stop.lng; }
+  closeStopSheet();
+  state.currentView = 'find';
+  state._findFilter = filter;
+  renderView(false);
+}
+
 function openDetail(stop) {
   _detailStop = stop;
   _detailCurrent = 0;
@@ -6076,6 +6416,8 @@ function toggleCheck(stopId, itemEl) {
   if (state.checked[stopId]) {
     if (!state.personalPinned) state.personalPinned = {};
     state.personalPinned[stopId] = true;
+    // Owner check-in drives shared group position
+    if (state.isOwner) state.ownerCurrentStopId = stopId;
   }
   save();
   const card = itemEl && itemEl.querySelector('.tl-card');
@@ -6807,6 +7149,10 @@ function bootApp() {
   new ResizeObserver(updateHeaderHeight).observe(document.getElementById('app-header'));
   scheduleNotifs();
   if (state.notifsEnabled && notifGranted()) startTrafficPolling();
+  // Kick off travel time computation for the initial day so depart-by
+  // pills appear and notifications use real routing times
+  const initDay = TRIP_DATA.days.find(d => d.id === state.currentDayId);
+  if (initDay) precomputeTravelTimes(initDay);
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -6860,6 +7206,68 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (e) {
       list.innerHTML = '<div style="padding:8px 0;font-size:13px;color:#f87171">Failed to load members</div>';
     }
+  });
+
+  // FAB quick-action sheet
+  document.getElementById('fab-add').addEventListener('click', () => {
+    const existing = document.getElementById('fab-sheet');
+    if (existing) { existing.remove(); return; }
+    const overlay = document.createElement('div');
+    overlay.id = 'fab-sheet';
+    overlay.className = 'stop-sheet-overlay';
+    const currentStop = (() => {
+      const day = TRIP_DATA.days.find(d => d.id === state.currentDay);
+      return day ? getCurrentStop(day) : null;
+    })();
+    overlay.innerHTML = `
+      <div class="stop-sheet" id="fab-sheet-panel">
+        <div class="stop-sheet-handle"></div>
+        <div class="stop-sheet-header">
+          <div class="stop-sheet-title">Quick actions</div>
+          <button class="stop-sheet-close" aria-label="Close"><i class="ph ph-x"></i></button>
+        </div>
+        <div class="stop-sheet-body" style="padding-bottom:24px">
+          <button class="sheet-action-btn" id="fab-food"><i class="ph ph-fork-knife"></i> Find food nearby</button>
+          <button class="sheet-action-btn" id="fab-charge"><i class="ph ph-charging-station"></i> Find charger nearby</button>
+          <button class="sheet-action-btn" id="fab-lost"><i class="ph ph-map-pin"></i> Navigate to current stop</button>
+          <button class="sheet-action-btn" id="fab-addstop"><i class="ph ph-plus-circle"></i> Add a stop</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    requestAnimationFrame(() => {
+      overlay.classList.add('open');
+      const panel = document.getElementById('fab-sheet-panel');
+      if (panel) panel.classList.add('open');
+    });
+    const close = () => { overlay.remove(); };
+    overlay.querySelector('.stop-sheet-close').addEventListener('click', close);
+    overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+    overlay.querySelector('#fab-food').addEventListener('click', () => {
+      close();
+      state.currentView = 'find';
+      state._findFilter = 'food';
+      renderView();
+      document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.view === 'find'));
+    });
+    overlay.querySelector('#fab-charge').addEventListener('click', () => {
+      close();
+      state.currentView = 'find';
+      state._findFilter = 'charging';
+      renderView();
+      document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.view === 'find'));
+    });
+    overlay.querySelector('#fab-lost').addEventListener('click', () => {
+      close();
+      if (currentStop && currentStop.lat && currentStop.lng) {
+        window.open(`https://maps.apple.com/?daddr=${currentStop.lat},${currentStop.lng}&dirflg=d`, '_blank');
+      } else {
+        showToast('Current stop location not available');
+      }
+    });
+    overlay.querySelector('#fab-addstop').addEventListener('click', () => {
+      close();
+      openEditSheet(null, state.currentDayId);
+    });
   });
 
   // Auth state observer — fires once on load and again on sign-in/out

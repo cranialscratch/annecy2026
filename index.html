@@ -62,11 +62,12 @@
     </main>
 
     <nav id="bottom-nav">
-      <button class="nav-btn active" data-view="day"><i class="ph ph-calendar-dots nav-icon"></i><span class="nav-label">Day</span></button>
+      <button class="nav-btn active" data-view="day"><i class="ph ph-sun-horizon nav-icon"></i><span class="nav-label">Today</span></button>
       <button class="nav-btn" data-view="map"><i class="ph ph-map-trifold nav-icon"></i><span class="nav-label">Map</span></button>
-<button class="nav-btn" data-view="vegan"><i class="ph ph-leaf nav-icon"></i><span class="nav-label">Vegan</span></button>
-      <button class="nav-btn" data-view="charging"><i class="ph ph-lightning nav-icon"></i><span class="nav-label">Charging</span></button>
+      <button class="nav-btn" data-view="find"><i class="ph ph-magnifying-glass nav-icon"></i><span class="nav-label">Find</span></button>
+      <button class="nav-btn" data-view="more"><i class="ph ph-dots-three-outline nav-icon"></i><span class="nav-label">More</span></button>
     </nav>
+    <button id="fab-add" class="fab-btn hidden" aria-label="Quick add"><i class="ph ph-plus"></i></button>
   </div>
 
   <!-- Auth overlay — shown before app renders until signed in -->
@@ -137,7 +138,7 @@
           <button class="drawer-item drawer-sub-item" data-action="reset-checks"><i class="ph ph-check-square drawer-icon"></i> Clear visited</button>
         </div>
       </div>
-      <button class="drawer-item drawer-sub-item" id="signout-btn"><i class="ph ph-sign-out drawer-icon"></i> <span id="signout-label">Sign out</span></button>
+      <button class="drawer-item" id="signout-btn"><i class="ph ph-sign-out drawer-icon"></i> <span id="signout-label">Sign out</span></button>
     </div>
   </aside>
 
@@ -503,8 +504,8 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
-  <script src="data.js?v=245"></script>
-  <script src="sync.js?v=245"></script>
-  <script src="app.js?v=245"></script>
+  <script src="data.js?v=247"></script>
+  <script src="sync.js?v=247"></script>
+  <script src="app.js?v=247"></script>
 </body>
 </html>
