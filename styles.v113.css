@@ -2958,3 +2958,47 @@ body.light .cl-text { color: #475569; }
 }
 .pin-btn.pinned { color: var(--accent); }
 .pin-btn.locked { opacity: .3; cursor: default; }
+
+/* ── Depart-by pill ─────────────────────────────────────────────────── */
+.depart-by-pill {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 500;
+  background: rgba(56,189,248,.12); color: #38bdf8;
+  margin-top: 4px;
+}
+.depart-by-pill.hidden { display: none; }
+.depart-by-pill strong { font-weight: 700; }
+.depart-travel-mins { opacity: .7; font-size: 11px; }
+.depart-lead-btn {
+  background: rgba(56,189,248,.15); border: none; border-radius: 12px;
+  color: #38bdf8; font-size: 11px; font-weight: 600; padding: 2px 7px;
+  cursor: pointer; margin-left: 4px; font-family: inherit;
+  -webkit-tap-highlight-color: transparent;
+  display: inline-flex; align-items: center; gap: 3px;
+}
+.depart-lead-btn:active { background: rgba(56,189,248,.3); }
+
+/* ── Lead time picker popover ──────────────────────────────────────── */
+.lead-picker-pop {
+  background: var(--surface2, #1e293b); border: 1px solid rgba(255,255,255,.1);
+  border-radius: 12px; padding: 12px 14px; box-shadow: 0 8px 32px rgba(0,0,0,.5);
+  z-index: 9999; min-width: 180px;
+}
+.lead-picker-label {
+  font-size: 11px; color: var(--text3, #64748b); margin-bottom: 8px;
+  text-align: center; font-weight: 500;
+}
+.lead-picker-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+}
+.lead-picker-step {
+  background: rgba(255,255,255,.08); border: none; border-radius: 8px;
+  color: var(--text1, #f1f5f9); font-size: 16px; font-weight: 600;
+  width: 36px; height: 36px; cursor: pointer; font-family: inherit;
+  -webkit-tap-highlight-color: transparent;
+}
+.lead-picker-step:active { background: rgba(255,255,255,.18); }
+.lead-picker-val {
+  font-size: 14px; font-weight: 600; color: var(--text1, #f1f5f9);
+  flex: 1; text-align: center;
+}

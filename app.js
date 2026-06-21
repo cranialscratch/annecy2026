@@ -192,6 +192,7 @@ const state = {
   personalStops:   {},   // dayId → [stop, ...]
   personalTickets: {},   // showingId → bool (user has ticket)
   personalPinned:  {},   // stopId → bool (absorb ripple)
+  notifLeadMins:   {},   // stopId → int (minutes before departBy to notify; default 30)
 };
 
 /* ── Helpers ───────────────────────────────────────────────────────── */
@@ -221,6 +222,7 @@ function isStopFixed(stop)     {
 function isPinned(stopId) { return !!(state.personalPinned || {})[stopId]; }
 function hasTicket(stop)  { return (state.personalTickets || {})[stop.id] ?? stop.ticketed ?? false; }
 function canUnpin()       { return state.isOwner || state.memberRole === 'editor'; }
+function getNotifLead(stopId) { return state.notifLeadMins?.[stopId] ?? 30; }
 const TYPE_ICON = {
   depart:       'ph-car',
   charging:     'ph-lightning',
@@ -876,21 +878,30 @@ function collectTodayLeaveEvents() {
     const covers = day.date === today ||
       (day.isFestival && today >= day.date && today <= (day.dateEnd || day.date));
     if (!covers) continue;
-    for (const stop of getDayStops(day)) {
-      const type = getStopType(stop);
-      // depart stops: notify at stop time - 15
-      if (type === 'depart') {
-        const m = timeToMinutes(getStopTime(stop));
-        if (m !== null) events.push({ stop, notifMins: m - 15, label: `Departing from ${getStopName(stop)}` });
-      }
-      // stops with explicit duration: notify at leaveBy - 15
-      if (hasExplicitDuration(stop) && type !== 'depart') {
-        const arr = timeToMinutes(getStopTime(stop));
-        if (arr !== null) {
-          const leaveBy = arr + getStopDuration(stop);
-          events.push({ stop, notifMins: leaveBy - 15, label: `Leave ${getStopName(stop)} in 15 min` });
-        }
-      }
+    const stops = getDayStops(day).filter(s => !state.skipped[s.id]);
+    // Travel-aware departure reminder for each stop → next stop
+    for (let i = 0; i < stops.length - 1; i++) {
+      const stop = stops[i];
+      const next = stops[i + 1];
+      if (getStopType(stop) === 'depart') continue; // handled separately below
+      const nextMins = timeToMinutes(getStopTime(next));
+      if (nextMins === null) continue;
+      const travelKey = _travelKey(stop, next);
+      const travelMins = _travelCache[travelKey] ?? 0;
+      const departBy = nextMins - travelMins;
+      const lead = getNotifLead(stop.id);
+      const travelStr = travelMins > 0 ? ` (~${travelMins} min drive)` : '';
+      events.push({
+        stop,
+        notifMins: departBy - lead,
+        label: `Leave ${getStopName(stop)} for ${getStopName(next)}${travelStr}`,
+      });
+    }
+    // Depart stops: notify 15 min before departure time
+    for (const stop of stops) {
+      if (getStopType(stop) !== 'depart') continue;
+      const m = timeToMinutes(getStopTime(stop));
+      if (m !== null) events.push({ stop, notifMins: m - 15, label: `Departing from ${getStopName(stop)}` });
     }
   }
   return events;
@@ -1403,6 +1414,58 @@ function injectStopPhotos(stopId) {
 // Keep old name as alias for detail page calls
 const injectWikiPhoto = injectStopPhotos;
 
+function updateDepartByPill(stop, nextStop) {
+  const el = document.querySelector(`[data-departby="${stop.id}"]`);
+  if (!el || !nextStop) return;
+  const travelMins = _travelCache[_travelKey(stop, nextStop)];
+  if (travelMins == null) return;
+  const nextMins = timeToMinutes(getStopTime(nextStop));
+  if (nextMins === null) return;
+  const departBy = nextMins - travelMins;
+  const lead = getNotifLead(stop.id);
+  el.classList.remove('hidden');
+  el.innerHTML = `<i class="ph ph-car-simple"></i> Depart by <strong>${minutesToTime(departBy)}</strong><span class="depart-travel-mins"> · ~${travelMins} min</span><button class="depart-lead-btn" data-stop-id="${stop.id}" onclick="openLeadTimePicker('${stop.id}',this,event)" title="Reminder ${lead} min before departure"><i class="ph ph-bell"></i> ${lead}m</button>`;
+}
+
+function openLeadTimePicker(stopId, anchorEl, e) {
+  e && e.stopPropagation();
+  const existing = document.getElementById('lead-picker-pop');
+  if (existing) { existing.remove(); return; }
+  const cur = getNotifLead(stopId);
+  const pop = document.createElement('div');
+  pop.id = 'lead-picker-pop';
+  pop.className = 'lead-picker-pop';
+  pop.innerHTML = `
+    <div class="lead-picker-label">Remind me before departure</div>
+    <div class="lead-picker-row">
+      <button class="lead-picker-step" data-delta="-5">−5</button>
+      <span class="lead-picker-val">${cur} min</span>
+      <button class="lead-picker-step" data-delta="5">+5</button>
+    </div>`;
+  pop.querySelectorAll('.lead-picker-step').forEach(btn => {
+    btn.addEventListener('click', e2 => {
+      e2.stopPropagation();
+      const delta = parseInt(btn.dataset.delta);
+      const newVal = Math.max(5, Math.min(120, getNotifLead(stopId) + delta));
+      if (!state.notifLeadMins) state.notifLeadMins = {};
+      state.notifLeadMins[stopId] = newVal;
+      save();
+      pop.querySelector('.lead-picker-val').textContent = newVal + ' min';
+      // Update the bell button label
+      const bell = document.querySelector(`.depart-lead-btn[data-stop-id="${stopId}"]`);
+      if (bell) bell.innerHTML = `<i class="ph ph-bell"></i> ${newVal}m`;
+      scheduleNotifs();
+    });
+  });
+  document.body.appendChild(pop);
+  const rect = anchorEl.getBoundingClientRect();
+  pop.style.position = 'fixed';
+  pop.style.top  = (rect.bottom + 6) + 'px';
+  pop.style.left = Math.min(rect.left, window.innerWidth - 200) + 'px';
+  const dismiss = ev => { if (!pop.contains(ev.target) && ev.target !== anchorEl) { pop.remove(); document.removeEventListener('click', dismiss); } };
+  setTimeout(() => document.addEventListener('click', dismiss), 0);
+}
+
 function lazyLoadWikiImages(stops) {
   stops.forEach(stop => {
     const type = getStopType(stop);
@@ -1673,6 +1736,7 @@ function localSave() {
     localStorage.setItem('annecy_personal_stops',    JSON.stringify(state.personalStops  || {}));
     localStorage.setItem('annecy_personal_tickets',  JSON.stringify(state.personalTickets || {}));
     localStorage.setItem('annecy_personal_pinned',   JSON.stringify(state.personalPinned  || {}));
+    localStorage.setItem('annecy_notif_lead',         JSON.stringify(state.notifLeadMins   || {}));
   } catch {}
 }
 function save() {
@@ -1716,6 +1780,8 @@ function load() {
     if (pt) state.personalTickets = JSON.parse(pt);
     const pp = localStorage.getItem('annecy_personal_pinned');
     if (pp) state.personalPinned = JSON.parse(pp);
+    const nl = localStorage.getItem('annecy_notif_lead');
+    if (nl) state.notifLeadMins = JSON.parse(nl);
   } catch {}
   try {
     if (localStorage.getItem('annecy_theme') === 'light') document.body.classList.add('light');
@@ -1773,6 +1839,8 @@ function selectDay(dayId) {
   updateDayStrip();
   const isToday = dayId === findTodayDayId();
   renderView(isToday);
+  const day = TRIP_DATA.days.find(d => d.id === dayId);
+  if (day) precomputeTravelTimes(day);
 }
 
 /* ── Header ────────────────────────────────────────────────────────── */
@@ -4598,6 +4666,7 @@ function buildTimelineItem(stop, isLast, day, nextStop, prevStop) {
           ${buildTags(stop)}
           ${getStopType(stop) === 'showing' ? buildShowingMeta(stop) : ''}
           ${hasExplicitDuration(stop) ? `<div data-leaveby="${stop.id}" class="leave-by-pill" style="display:none"></div>` : ''}
+          <div data-departby="${stop.id}" class="depart-by-pill hidden"></div>
           <div class="tl-actions">${buildIconActions(stop)}</div>
         </div>
       </div>
@@ -5163,6 +5232,36 @@ async function fetchTravelMins(fromLat, fromLng, toLat, toLng) {
     const d = await r.json();
     return Math.ceil((d.routes?.[0]?.duration ?? 0) / 60);
   } catch { return null; }
+}
+
+const _travelCache = {};  // "lat1,lng1-lat2,lng2" → minutes
+
+function _travelKey(a, b) {
+  return `${(a.lat||0).toFixed(4)},${(a.lng||0).toFixed(4)}-${(b.lat||0).toFixed(4)},${(b.lng||0).toFixed(4)}`;
+}
+
+async function getCachedTravelMins(fromStop, toStop) {
+  const key = _travelKey(fromStop, toStop);
+  if (key in _travelCache) return _travelCache[key];
+  const mins = await fetchTravelMins(fromStop.lat, fromStop.lng, toStop.lat, toStop.lng);
+  _travelCache[key] = mins;
+  return mins;
+}
+
+async function precomputeTravelTimes(day) {
+  const stops = getDayStops(day).filter(s => !state.skipped[s.id] && s.lat && s.lng);
+  const pairs = [];
+  for (let i = 0; i < stops.length - 1; i++) pairs.push([stops[i], stops[i+1]]);
+  // Fetch all pairs in parallel, then update depart-by pills
+  await Promise.all(pairs.map(([a, b]) => getCachedTravelMins(a, b)));
+  // Update all depart-by pills now that cache is warm
+  for (let i = 0; i < stops.length - 1; i++) {
+    updateDepartByPill(stops[i], stops[i+1]);
+  }
+  // Also re-arm notifications with accurate travel times
+  if (day.date === localDateStr() || (day.isFestival && localDateStr() >= day.date && localDateStr() <= (day.dateEnd || day.date))) {
+    scheduleNotifs();
+  }
 }
 
 async function recalculateFromStop(day, fromIdx, statusCb) {
