@@ -23,10 +23,10 @@ const MEMBER_PATH   = uid => 'trips/' + TRIP_ID + '/members/' + uid;
 /* Keys that belong to the shared trip state (visible to all members) */
 const SHARED_KEYS = ['overrides','crossDayMoves','locOverrides','durOverrides',
                      'typeOverrides','priorityOverrides','reasonOverrides',
-                     'veganOverrides','addedStops'];
+                     'veganOverrides','addedStops','removed'];
 
 /* Keys that belong to personal state (per-user only) */
-const PERSONAL_KEYS = ['checked','skipped','removed','bucketList',
+const PERSONAL_KEYS = ['checked','skipped','bucketList',
                        'personalStops','personalTickets','personalPinned'];
 
 let _db  = null;
@@ -180,6 +180,7 @@ function syncSave() {
     veganOverrides:    state.veganOverrides     || {},
     addedStops:        state.addedStops         || {},
     crossDayMoves:     state.crossDayMoves      || {},
+    removed:           state.removed            || {},
     _ts:               Date.now(),
   };
   state._localTs = sharedPayload._ts;
@@ -191,7 +192,6 @@ function syncSave() {
   const personalPayload = {
     checked:        state.checked        || {},
     skipped:        state.skipped        || {},
-    removed:        state.removed        || {},
     bucketList:     state.bucketList     || [],
     personalStops:  state.personalStops  || {},
     personalTickets:state.personalTickets|| {},

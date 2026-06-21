@@ -1373,7 +1373,7 @@ function getDayStops(day) {
   });
 }
 
-function injectStopPhotos(stopId) {
+function _doInjectStopPhotos(stopId) {
   const item = document.getElementById(`stop-${stopId}`);
   if (!item) return;
   const stop = findStop(stopId);
@@ -1390,6 +1390,16 @@ function injectStopPhotos(stopId) {
   initSlider(newSlider, stop, 'card');
 }
 
+function injectStopPhotos(stopId) {
+  const item = document.getElementById(`stop-${stopId}`);
+  if (!item) {
+    // Card may be mid-render (e.g. sync re-render); retry after a frame
+    requestAnimationFrame(() => _doInjectStopPhotos(stopId));
+    return;
+  }
+  _doInjectStopPhotos(stopId);
+}
+
 // Keep old name as alias for detail page calls
 const injectWikiPhoto = injectStopPhotos;
 
@@ -1399,7 +1409,7 @@ function lazyLoadWikiImages(stops) {
     if (type === 'depart' || type === 'charging') return;
     // Kick off Places fetch; inject photos when it resolves
     if (_placesCache[stop.id]?.photos?.length) {
-      injectStopPhotos(stop.id);
+      requestAnimationFrame(() => injectStopPhotos(stop.id));
     } else {
       fetchPlacesPhotos(stop).then(() => injectStopPhotos(stop.id));
     }
