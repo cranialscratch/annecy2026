@@ -1,6 +1,7 @@
 /* ── Firebase sync ─────────────────────────────────────────────────────
-   Single shared state for all devices. Last-write-wins per key.
-   Offline edits are queued by Firebase SDK and flushed on reconnect.
+   Shared trip state at shared/state (all authenticated members).
+   Personal state at users/{uid}/personal (per-user, isolated).
+   Auth via Firebase Auth email/password.
 ──────────────────────────────────────────────────────────────────────── */
 
 const FIREBASE_CONFIG = {
@@ -13,59 +14,148 @@ const FIREBASE_CONFIG = {
   appId:             "1:276799646622:web:1741bce7d545ec50d3c48f",
 };
 
-const DB_PATH = 'shared/state';
+const OWNER_EMAIL   = 'matt@cranialscratch.com';
+const SHARED_PATH   = 'shared/state';
+const TRIP_ID       = 'annecy_2026';
+const USER_PATH     = uid => 'users/' + uid + '/personal';
+const MEMBER_PATH   = uid => 'trips/' + TRIP_ID + '/members/' + uid;
 
-let _db = null;
-let _ignoreNextRemote = false; // suppress echo after local save
+/* Keys that belong to the shared trip state (visible to all members) */
+const SHARED_KEYS = ['overrides','crossDayMoves','locOverrides','durOverrides',
+                     'typeOverrides','priorityOverrides','reasonOverrides',
+                     'veganOverrides','addedStops'];
 
-function syncInit() {
+/* Keys that belong to personal state (per-user only) */
+const PERSONAL_KEYS = ['checked','skipped','removed','bucketList',
+                       'personalStops','personalTickets','personalPinned'];
+
+let _db  = null;
+let _auth = null;
+let _uid  = null;
+let _ignoreNextShared   = false;
+let _ignoreNextPersonal = false;
+
+/* Allow app.js push-notification code to reach the DB handle */
+function getDb() { return _db; }
+
+/* ── Auth ─────────────────────────────────────────────────────────── */
+function getAuthUser() { return _auth ? _auth.currentUser : null; }
+
+function signOut() {
+  if (_auth) _auth.signOut().catch(() => {});
+}
+
+async function authLogin(email, password) {
+  return _auth.signInWithEmailAndPassword(email, password);
+}
+
+async function authRegister(email, password, displayName) {
+  const cred = await _auth.createUserWithEmailAndPassword(email, password);
+  await cred.user.updateProfile({ displayName });
+  return cred;
+}
+
+/* ── Invite helpers ───────────────────────────────────────────────── */
+function _randomToken() {
+  const arr = new Uint8Array(16);
+  crypto.getRandomValues(arr);
+  return Array.from(arr).map(b => b.toString(16).padStart(2,'0')).join('');
+}
+
+async function createInvite() {
+  if (!_db || !_uid) return null;
+  const token = _randomToken();
+  await _db.ref('invites/' + token).set({
+    tripId: TRIP_ID,
+    role: 'editor',
+    createdAt: Date.now(),
+    used: false,
+  });
+  return token;
+}
+
+async function consumeInvite(token) {
+  if (!_db || !_uid) return;
+  const snap = await _db.ref('invites/' + token).get();
+  if (!snap.exists()) return;
+  const invite = snap.val();
+  if (invite.used || invite.tripId !== TRIP_ID) return;
+  const user = _auth.currentUser;
+  await _db.ref(MEMBER_PATH(_uid)).set({
+    name:  user.displayName || user.email,
+    email: user.email,
+    role:  invite.role || 'editor',
+    active: true,
+  });
+  await _db.ref('invites/' + token).update({ used: true });
+}
+
+async function getMembers() {
+  if (!_db) return {};
+  const snap = await _db.ref('trips/' + TRIP_ID + '/members').get();
+  return snap.exists() ? snap.val() : {};
+}
+
+async function setMemberActive(uid, active) {
+  if (!_db) return;
+  await _db.ref(MEMBER_PATH(uid)).update({ active });
+}
+
+/* ── DB sync ──────────────────────────────────────────────────────── */
+function syncInit(user) {
+  _uid = user.uid;
   try {
-    firebase.initializeApp(FIREBASE_CONFIG);
     _db = firebase.database();
-    // Realtime Database queues writes offline automatically.
-    // State is also persisted to localStorage via localSave() as fallback.
 
-    // Listen for remote changes and apply them
-    _db.ref(DB_PATH).on('value', snap => {
-      if (_ignoreNextRemote) { _ignoreNextRemote = false; return; }
+    /* Listen: shared trip state */
+    _db.ref(SHARED_PATH).on('value', snap => {
+      if (_ignoreNextShared) { _ignoreNextShared = false; return; }
       const remote = snap.val();
       if (!remote) return;
-      applyRemoteState(remote);
+      applyRemoteState(remote, false);
+    });
+
+    /* Listen: personal state */
+    _db.ref(USER_PATH(_uid)).on('value', snap => {
+      if (_ignoreNextPersonal) { _ignoreNextPersonal = false; return; }
+      const remote = snap.val();
+      if (!remote) return;
+      applyRemoteState(remote, true);
     });
 
     setSyncStatus('connected');
-    console.log('[sync] Firebase connected');
-    // One-time reset trigger
-    if (window._pendingResetTimes) {
-      window._pendingResetTimes = false;
-      _db.ref('shared/state').update({ overrides: null, durOverrides: null, crossDayMoves: null })
-        .then(() => { if (typeof renderView === 'function') renderView(false); });
-    }
-    // Refresh push subscription now that _db is available
+
     if (typeof subscribePush === 'function' && typeof state !== 'undefined' && state.notifsEnabled) {
       subscribePush();
     }
   } catch (e) {
-    console.warn('[sync] Firebase init failed:', e);
+    console.warn('[sync] Firebase DB init failed:', e);
     setSyncStatus('error');
   }
 }
 
 /* Merge remote state into local, re-render if anything changed */
-function applyRemoteState(remote) {
-  // Don't let stale remote data overwrite a more recent local save
-  if (remote._ts && state._localTs && remote._ts < state._localTs) return;
+function applyRemoteState(remote, isPersonal) {
+  if (!isPersonal) {
+    if (remote._ts && state._localTs && remote._ts < state._localTs) return;
+  }
 
   let changed = false;
-  const keys = ['overrides','checked','skipped','locOverrides','durOverrides',
-                 'typeOverrides','priorityOverrides','reasonOverrides','veganOverrides','addedStops','crossDayMoves'];
+  const keys = isPersonal ? PERSONAL_KEYS : SHARED_KEYS;
   keys.forEach(k => {
-    const incoming = remote[k] || {};
-    // Local wins for keys we've touched more recently; remote fills in anything we don't have
-    const merged = Object.assign({}, incoming, state[k]);
-    if (JSON.stringify(merged) !== JSON.stringify(state[k])) {
-      state[k] = merged;
-      changed = true;
+    const incoming = remote[k];
+    if (incoming === undefined || incoming === null) return;
+    if (Array.isArray(state[k])) {
+      if (JSON.stringify(incoming) !== JSON.stringify(state[k])) {
+        state[k] = incoming;
+        changed = true;
+      }
+    } else {
+      const merged = Object.assign({}, incoming, state[k]);
+      if (JSON.stringify(merged) !== JSON.stringify(state[k])) {
+        state[k] = merged;
+        changed = true;
+      }
     }
   });
   if (changed) {
@@ -75,28 +165,40 @@ function applyRemoteState(remote) {
   }
 }
 
-/* Push local state to Firebase */
+/* Push local state to Firebase — split shared vs personal */
 function syncSave() {
-  if (!_db) return;
-  _ignoreNextRemote = true;
-  const payload = {
-    overrides:         state.overrides,
-    checked:           state.checked,
-    skipped:           state.skipped,
-    locOverrides:      state.locOverrides,
-    durOverrides:      state.durOverrides,
-    typeOverrides:     state.typeOverrides,
-    priorityOverrides: state.priorityOverrides,
-    reasonOverrides:   state.reasonOverrides,
-    veganOverrides:    state.veganOverrides,
-    addedStops:        state.addedStops,
-    crossDayMoves:     state.crossDayMoves || {},
+  if (!_db || !_uid) return;
+
+  _ignoreNextShared = true;
+  const sharedPayload = {
+    overrides:         state.overrides         || {},
+    locOverrides:      state.locOverrides       || {},
+    durOverrides:      state.durOverrides       || {},
+    typeOverrides:     state.typeOverrides      || {},
+    priorityOverrides: state.priorityOverrides  || {},
+    reasonOverrides:   state.reasonOverrides    || {},
+    veganOverrides:    state.veganOverrides     || {},
+    addedStops:        state.addedStops         || {},
+    crossDayMoves:     state.crossDayMoves      || {},
     _ts:               Date.now(),
   };
-  state._localTs = payload._ts;
-  _db.ref(DB_PATH).set(payload)
+  state._localTs = sharedPayload._ts;
+  _db.ref(SHARED_PATH).set(sharedPayload)
     .then(() => setSyncStatus('synced'))
     .catch(() => setSyncStatus('error'));
+
+  _ignoreNextPersonal = true;
+  const personalPayload = {
+    checked:        state.checked        || {},
+    skipped:        state.skipped        || {},
+    removed:        state.removed        || {},
+    bucketList:     state.bucketList     || [],
+    personalStops:  state.personalStops  || {},
+    personalTickets:state.personalTickets|| {},
+    personalPinned: state.personalPinned || {},
+  };
+  _db.ref(USER_PATH(_uid)).set(personalPayload)
+    .catch(() => {});
 }
 
 /* ── Sync status dot ──────────────────────────────────────────────────── */

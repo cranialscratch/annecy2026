@@ -2830,3 +2830,131 @@ body.light .cl-text { color: #475569; }
 .filter-pop-restore i { color: #34d399; }
 .filter-pop-danger { color: #f87171; }
 .filter-pop-danger i { color: #f87171; }
+
+/* ── Auth overlay ──────────────────────────────────────────────────── */
+#auth-overlay,
+#access-disabled-overlay {
+  position: fixed; inset: 0; z-index: 9000;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,.65);
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  padding: 20px;
+}
+#auth-overlay.hidden,
+#access-disabled-overlay.hidden { display: none; }
+.auth-card {
+  width: 100%; max-width: 380px;
+  border-radius: 20px;
+  padding: 28px 24px 24px;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.auth-logo {
+  font-size: 20px; font-weight: 700; color: var(--text);
+  text-align: center; margin-bottom: 4px;
+}
+.auth-logo i { color: var(--accent); }
+.auth-tabs {
+  display: flex; gap: 4px;
+  background: rgba(255,255,255,.07);
+  border-radius: 10px; padding: 3px;
+}
+.auth-tab {
+  flex: 1; padding: 8px;
+  background: none; border: none; border-radius: 8px;
+  color: var(--text2); font-size: 14px; font-weight: 500; font-family: inherit;
+  cursor: pointer; transition: background .15s, color .15s;
+}
+.auth-tab.active {
+  background: var(--accent); color: #fff;
+}
+.auth-invite-notice {
+  background: rgba(99,210,164,.15);
+  border: 1px solid rgba(99,210,164,.35);
+  border-radius: 10px; padding: 10px 14px;
+  font-size: 13px; color: #63d2a4;
+  display: flex; align-items: center; gap: 8px;
+}
+.auth-invite-notice.hidden { display: none; }
+#auth-name-wrap.hidden { display: none; }
+#auth-overlay input,
+#auth-overlay .auth-card input {
+  width: 100%; padding: 12px 14px;
+  background: rgba(255,255,255,.08);
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  color: var(--text); font-size: 15px; font-family: inherit;
+  box-sizing: border-box; outline: none;
+  transition: border-color .15s;
+}
+#auth-overlay input:focus { border-color: var(--accent); }
+.auth-error {
+  font-size: 13px; color: #f87171; text-align: center;
+}
+.auth-error.hidden { display: none; }
+
+/* ── Invite URL strip ──────────────────────────────────────────────── */
+.invite-url-wrap {
+  display: flex; gap: 8px; padding: 10px 16px;
+}
+.invite-url-wrap.hidden { display: none; }
+.invite-url-input {
+  flex: 1; padding: 8px 10px;
+  background: rgba(255,255,255,.08);
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  color: var(--text); font-size: 12px; font-family: inherit;
+  min-width: 0;
+}
+
+/* ── Members list ──────────────────────────────────────────────────── */
+#members-list { padding: 6px 16px 10px; }
+#members-list.hidden { display: none; }
+.member-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 0; border-bottom: 1px solid var(--glass-border);
+}
+.member-row:last-child { border-bottom: none; }
+.member-name { flex: 1; font-size: 14px; color: var(--text); }
+.member-role { font-size: 11px; color: var(--text3); }
+.member-toggle {
+  width: 36px; height: 20px;
+  background: rgba(255,255,255,.15); border: none;
+  border-radius: 10px; cursor: pointer; position: relative;
+  transition: background .2s; flex-shrink: 0;
+}
+.member-toggle.active { background: var(--accent); }
+.member-toggle::after {
+  content: ''; position: absolute; top: 2px; left: 2px;
+  width: 16px; height: 16px; border-radius: 50%;
+  background: #fff; transition: transform .2s;
+}
+.member-toggle.active::after { transform: translateX(16px); }
+
+/* ── Showing stop type ─────────────────────────────────────────────── */
+.showing-meta {
+  display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+  margin-top: 4px;
+}
+.ticket-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 8px; border-radius: 20px; font-size: 11px; font-weight: 600;
+  cursor: pointer; user-select: none; border: none; font-family: inherit;
+  transition: background .15s;
+}
+.ticket-badge.have    { background: rgba(52,211,153,.2); color: #34d399; }
+.ticket-badge.queuing { background: rgba(245,158,11,.2);  color: #f59e0b; }
+.arrive-by-pill {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 8px; border-radius: 20px; font-size: 11px; font-weight: 600;
+  background: rgba(99,102,241,.2); color: #818cf8;
+}
+
+/* ── Pin icon on stop cards ────────────────────────────────────────── */
+.pin-btn {
+  background: none; border: none; padding: 4px;
+  color: var(--text3); cursor: pointer; font-size: 16px;
+  line-height: 1; flex-shrink: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+.pin-btn.pinned { color: var(--accent); }
+.pin-btn.locked { opacity: .3; cursor: default; }

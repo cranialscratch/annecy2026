@@ -1,5 +1,5 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v244';
+const APP_VERSION = 'v245';
 
 const CHANGELOG = [
   { version: 'v244', title: 'Swipe to Skip or Remove, compact skipped cards, Bucket List', items: [
@@ -183,6 +183,15 @@ const state = {
   crossDayMoves: {},    // stopId → dayId (stops moved to a different day by cascade overflow)
   customTags: [],       // user-defined type strings
   fixedOverrides: {},   // stopId → bool (true = fixed anchor, false = explicitly flexible)
+  /* Auth / multi-user */
+  userId:          null,
+  userName:        null,
+  isOwner:         false,
+  memberRole:      'viewer',   // 'editor' | 'viewer'
+  /* Personal state (per-user, not shared) */
+  personalStops:   {},   // dayId → [stop, ...]
+  personalTickets: {},   // showingId → bool (user has ticket)
+  personalPinned:  {},   // stopId → bool (absorb ripple)
 };
 
 /* ── Helpers ───────────────────────────────────────────────────────── */
@@ -209,6 +218,9 @@ function isStopFixed(stop)     {
   if (stop.id in (state.fixedOverrides || {})) return state.fixedOverrides[stop.id];
   return stop.fixed === true;
 }
+function isPinned(stopId) { return !!(state.personalPinned || {})[stopId]; }
+function hasTicket(stop)  { return (state.personalTickets || {})[stop.id] ?? stop.ticketed ?? false; }
+function canUnpin()       { return state.isOwner || state.memberRole === 'editor'; }
 const TYPE_ICON = {
   depart:       'ph-car',
   charging:     'ph-lightning',
@@ -225,6 +237,7 @@ const TYPE_ICON = {
   work:         'ph-laptop',
   festival:     'ph-film-slate',
   shopping:     'ph-shopping-bag',
+  showing:      'ph-film-strip',
 };
 function stopTypeIcon(stop) {
   const ph = TYPE_ICON[getStopType(stop)] || 'ph-map-pin';
@@ -268,7 +281,7 @@ function typeLabel(type) {
     architecture:'Architecture', village:'Village', town:'Town',
     experience:'Experience', wander:'Explore', depart:'Depart',
     scenic:'Scenic', historic:'Historic', festival:'Festival',
-    shopping:'Shopping' }[type] || type;
+    shopping:'Shopping', showing:'Showing' }[type] || type;
 }
 function nowMinutes() {
   const n = new Date(); return n.getHours() * 60 + n.getMinutes();
@@ -458,7 +471,7 @@ function urlB64ToUint8(b64) {
 }
 
 async function subscribePush() {
-  if (!('PushManager' in window) || !_db) return;
+  if (!('PushManager' in window) || !getDb()) return;
   try {
     const reg = await navigator.serviceWorker.ready;
     // Re-subscribe whenever VAPID key changes — track by full key hash
@@ -476,12 +489,12 @@ async function subscribePush() {
       });
       localStorage.setItem('vapid_key_ver', currentKeyVer);
     }
-    await _db.ref(`pushSubs/${getDeviceId()}`).set(JSON.parse(JSON.stringify(sub)));
+    await getDb().ref(`pushSubs/${getDeviceId()}`).set(JSON.parse(JSON.stringify(sub)));
   } catch (e) { console.warn('Push subscribe failed', e); }
 }
 
 async function writePushQueue() {
-  if (!_db || !state.notifsEnabled || !notifGranted()) return;
+  if (!getDb() || !state.notifsEnabled || !notifGranted()) return;
   const now = new Date();
   const nowMs = now.getTime();
   const todayStartMs = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
@@ -498,7 +511,7 @@ async function writePushQueue() {
     };
   });
   // Use update() so test_* and countdown_* entries are never wiped
-  const deviceRef = _db.ref(`pushQueue/${getDeviceId()}`);
+  const deviceRef = getDb().ref(`pushQueue/${getDeviceId()}`);
   const snap = await deviceRef.once('value');
   const existing = snap.val() || {};
   const updates = {};
@@ -509,7 +522,7 @@ async function writePushQueue() {
 }
 
 async function scheduleHourlyCountdown() {
-  if (!_db || !state.notifsEnabled || !notifGranted()) return;
+  if (!getDb() || !state.notifsEnabled || !notifGranted()) return;
   const day1 = TRIP_DATA.days.find(d => d.id === 'day1');
   if (!day1) return;
   // Departure = first stop of Day 1 (read its time field)
@@ -519,7 +532,7 @@ async function scheduleHourlyCountdown() {
   const nowMs = Date.now();
   if (nowMs >= departureMs) return;
 
-  const deviceRef = _db.ref(`pushQueue/${getDeviceId()}`);
+  const deviceRef = getDb().ref(`pushQueue/${getDeviceId()}`);
   const snap = await deviceRef.once('value');
   const existing = snap.val() || {};
   const updates = {};
@@ -563,10 +576,10 @@ function updateNotifBtn() {
 
 
 async function testServerPush() {
-  if (!_db) { showToast('Firebase not connected'); return; }
+  if (!getDb()) { showToast('Firebase not connected'); return; }
   await subscribePush();
   const key = 'test_' + Date.now();
-  await _db.ref(`pushQueue/${getDeviceId()}/${key}`).set({
+  await getDb().ref(`pushQueue/${getDeviceId()}/${key}`).set({
     fireAt: Date.now(),
     title: '🔔 Test notification',
     body: 'Server push is working!',
@@ -590,8 +603,8 @@ async function refreshServerPushStatus() {
     if (!sub) {
       _serverPushStatus = 'warn'; _serverPushNote = 'No push subscription — tap "Send test push" to subscribe'; return;
     }
-    if (_db) {
-      const snap = await _db.ref(`pushSubs/${getDeviceId()}`).once('value');
+    if (getDb()) {
+      const snap = await getDb().ref(`pushSubs/${getDeviceId()}`).once('value');
       if (snap.exists()) {
         _serverPushStatus = 'ok'; _serverPushNote = 'Subscribed + registered in Firebase';
       } else {
@@ -627,7 +640,7 @@ function getFeatureStatuses() {
     { cat:'UI',            name:'Add / edit stops',                 status:'ok',                                                         note:'Always available' },
     { cat:'UI',            name:'Map view (Leaflet)',               status: typeof L !== 'undefined' ? 'ok' : 'warn',                    note: typeof L !== 'undefined' ? 'Leaflet loaded' : 'Leaflet not yet loaded — loads on first use' },
     { cat:'Data',          name:'Trip itinerary',                   status: TRIP_DATA?.days?.length > 3 ? 'ok' : 'error',               note: `${TRIP_DATA?.days?.length || 0} days in TRIP_DATA` },
-    { cat:'Data',          name:'Firebase sync',                    status: _db ? 'ok' : 'error',                                       note: _db ? 'Connected — shared state live' : 'Not connected' },
+    { cat:'Data',          name:'Firebase sync',                    status: getDb() ? 'ok' : 'error',                                       note: getDb() ? 'Connected — shared state live' : 'Not connected' },
     { cat:'Photos',        name:'Google Places photo pipeline',     status: placesTotal === 0 ? 'warn' : placesWithPhotos > 0 ? 'ok' : 'warn', note: `${placesWithPhotos} of ${placesTotal} stops have photos cached` },
     { cat:'Photos',        name:'Wikipedia article photos',         status: wikiCached > 0 ? 'ok' : 'warn',                            note: `${wikiCached} articles cached` },
     { cat:'Photos',        name:'Street View / Satellite fallback', status:'ok',                                                         note:'Always available via Google Static Maps' },
@@ -739,7 +752,7 @@ async function copyDevData() {
     notifPermission: typeof Notification !== 'undefined' ? Notification.permission : 'N/A',
     pushAPISupported: 'PushManager' in window,
     pushEndpoint,
-    firebaseConnected: !!_db,
+    firebaseConnected: !!getDb(),
     swController: !!navigator.serviceWorker?.controller,
     placesCacheStops: Object.keys(_placesCache).length,
     placesWithPhotos: Object.values(_placesCache).filter(v => v?.photos?.length).length,
@@ -751,14 +764,14 @@ async function copyDevData() {
   };
 
   // Read push diagnostics from Firebase
-  if (_db) {
+  if (getDb()) {
     try {
       const deviceId = getDeviceId();
       const [subSnap, qSnap] = await Promise.all([
-        _db.ref(`pushSubs/${deviceId}`).once('value'),
-        _db.ref(`pushQueue/${deviceId}`).once('value'),
+        getDb().ref(`pushSubs/${deviceId}`).once('value'),
+        getDb().ref(`pushQueue/${deviceId}`).once('value'),
       ]);
-      const errSnap = await _db.ref(`pushErrors/${deviceId}`).limitToLast(5).once('value');
+      const errSnap = await getDb().ref(`pushErrors/${deviceId}`).limitToLast(5).once('value');
       data.pushSubInFirebase  = subSnap.exists() ? '…' + (subSnap.val()?.endpoint || '').slice(-40) : null;
       data.pushQueueEntries   = qSnap.exists() ? Object.keys(qSnap.val() || {}).length : 0;
       data.pushErrors         = errSnap.exists() ? Object.values(errSnap.val()) : [];
@@ -989,6 +1002,23 @@ function buildTags(stop) {
   if (getStopType(stop) === 'charging') tags.push(`<span class="tl-tag charge"><i class="ph ph-lightning"></i> Supercharger</span>`);
   if (getStopPriority(stop) >= 3)       tags.push(`<span class="tl-tag poi">★ Must-see</span>`);
   return tags.length ? `<div class="tl-card-tags">${tags.join('')}</div>` : '';
+}
+
+/* ── Showing stop meta (ticket toggle + arrive-by) ─────────────────── */
+function buildShowingMeta(stop) {
+  const ticketed = hasTicket(stop);
+  const timeMins = timeToMinutes(getStopTime(stop));
+  const bufferMins = ticketed ? 20 : 120;
+  const arriveMins = timeMins !== null ? timeMins - bufferMins : null;
+  const arriveStr  = arriveMins !== null ? minutesToTime(arriveMins) : null;
+  const venue = stop.location || '';
+  return `<div class="showing-meta">
+    ${venue ? `<span style="font-size:12px;color:var(--text2)">${venue}</span>` : ''}
+    <button class="ticket-badge ${ticketed ? 'have' : 'queuing'}" data-toggle-ticket="${stop.id}" onclick="toggleTicket('${stop.id}',event)">
+      <i class="ph ph-ticket"></i> ${ticketed ? 'Have ticket' : 'Queuing'}
+    </button>
+    ${arriveStr ? `<span class="arrive-by-pill"><i class="ph ph-clock"></i> Arrive by ${arriveStr}</span>` : ''}
+  </div>`;
 }
 
 /* ── Wikipedia article titles per stop (free API, no key needed) ───── */
@@ -1303,7 +1333,10 @@ function findStop(stopId) {
 }
 
 function getDayStops(day) {
-  const added = (state.addedStops || {})[day.id] || [];
+  const added = [
+    ...((state.addedStops || {})[day.id] || []),
+    ...((state.personalStops || {})[day.id] || []),
+  ];
   const crossMoves = state.crossDayMoves || {};
 
   const removed = state.removed || {};
@@ -1391,6 +1424,7 @@ const TYPE_GRAD = {
   historic:     ['#fcd34d','#713f12'],
   festival:     ['#c084fc','#3b0764'],
   shopping:     ['#f472b6','#831843'],
+  showing:      ['#c084fc','#3b0764'],
 };
 
 /* ── Get slides for a stop ─────────────────────────────────────────── */
@@ -1626,6 +1660,9 @@ function localSave() {
     localStorage.setItem('annecy_bucket_list',        JSON.stringify(state.bucketList || []));
     localStorage.setItem('annecy_custom_tags',        JSON.stringify(state.customTags || []));
     localStorage.setItem('annecy_fixed_overrides',    JSON.stringify(state.fixedOverrides || {}));
+    localStorage.setItem('annecy_personal_stops',    JSON.stringify(state.personalStops  || {}));
+    localStorage.setItem('annecy_personal_tickets',  JSON.stringify(state.personalTickets || {}));
+    localStorage.setItem('annecy_personal_pinned',   JSON.stringify(state.personalPinned  || {}));
   } catch {}
 }
 function save() {
@@ -1663,6 +1700,12 @@ function load() {
     if (ct) state.customTags = JSON.parse(ct);
     const fx = localStorage.getItem('annecy_fixed_overrides');
     if (fx) state.fixedOverrides = JSON.parse(fx);
+    const ps = localStorage.getItem('annecy_personal_stops');
+    if (ps) state.personalStops = JSON.parse(ps);
+    const pt = localStorage.getItem('annecy_personal_tickets');
+    if (pt) state.personalTickets = JSON.parse(pt);
+    const pp = localStorage.getItem('annecy_personal_pinned');
+    if (pp) state.personalPinned = JSON.parse(pp);
   } catch {}
   try {
     if (localStorage.getItem('annecy_theme') === 'light') document.body.classList.add('light');
@@ -4079,7 +4122,7 @@ function renderCalView(container) {
 
 /* ── Type filter popup ─────────────────────────────────────────────── */
 const HIDE_FROM_FILTER = new Set(['depart','hotel','work','festival']);
-const ALL_FILTER_TYPES = ['food','shopping','experience','wander','architecture','historic','scenic','village','town','transport','charging'];
+const ALL_FILTER_TYPES = ['food','shopping','experience','wander','architecture','historic','scenic','village','town','transport','charging','showing'];
 
 function filterActive() { return state.typeFilter.size > 0; }
 function passesFilter(stop) {
@@ -4530,7 +4573,7 @@ function buildTimelineItem(stop, isLast, day, nextStop, prevStop) {
         <div class="card-body">
           <div class="card-top-row">
             <div class="card-name">${stopTypeIcon(stop)} ${getStopName(stop)}</div>
-            ${ (stop.planStatus === 'conditional' || stop.planStatus === 'weak-vegan') ? '<span class="card-warn-icon"><i class="ph ph-warning"></i></span>' : '' }<button class="check-btn${isVisited ? ' checked' : ''}" data-stop-id="${stop.id}" aria-label="Mark visited"><i class="ph ${isVisited ? 'ph-check-circle' : 'ph-circle'}"></i></button>
+            ${ (stop.planStatus === 'conditional' || stop.planStatus === 'weak-vegan') ? '<span class="card-warn-icon"><i class="ph ph-warning"></i></span>' : '' }<button class="pin-btn${isPinned(stop.id) ? ' pinned' : ''}${!canUnpin() && isPinned(stop.id) ? ' locked' : ''}" data-pin-btn="${stop.id}" title="${isPinned(stop.id) ? 'Pinned — tap to unpin' : 'Unpinned — tap to pin'}" onclick="togglePin('${stop.id}',event)"><i class="ph ${isPinned(stop.id) ? 'ph-push-pin' : 'ph-push-pin'}" style="opacity:${isPinned(stop.id)?1:0.3}"></i></button><button class="check-btn${isVisited ? ' checked' : ''}" data-stop-id="${stop.id}" aria-label="Mark visited"><i class="ph ${isVisited ? 'ph-check-circle' : 'ph-circle'}"></i></button>
           </div>
           ${stop.address || stop.location ? `<div class="card-address">${stop.address || stop.location}</div>` : ''}
           <div class="card-meta-row">
@@ -4541,6 +4584,7 @@ function buildTimelineItem(stop, isLast, day, nextStop, prevStop) {
           </div>
           <div class="card-reason">${getStopReason(stop)}</div>
           ${buildTags(stop)}
+          ${getStopType(stop) === 'showing' ? buildShowingMeta(stop) : ''}
           ${hasExplicitDuration(stop) ? `<div data-leaveby="${stop.id}" class="leave-by-pill" style="display:none"></div>` : ''}
           <div class="tl-actions">${buildIconActions(stop)}</div>
         </div>
@@ -4835,6 +4879,7 @@ const TYPE_DEFS = [
   { type:'historic',     ph:'ph-castle-turret',   label:'Historic' },
   { type:'festival',     ph:'ph-film-slate',      label:'Festival' },
   { type:'shopping',     ph:'ph-shopping-bag',    label:'Shopping' },
+  { type:'showing',      ph:'ph-film-strip',      label:'Showing' },
 ];
 // Helper: render a Phosphor icon element for a type def
 function typePh(type) {
@@ -5997,9 +6042,41 @@ function initDetailNavSwipe() {
   });
 }
 
+/* ── Ticket toggle (showing stops) ─────────────────────────────────── */
+function toggleTicket(stopId, e) {
+  if (e) e.stopPropagation();
+  if (!state.personalTickets) state.personalTickets = {};
+  const cur = hasTicket({ id: stopId });
+  state.personalTickets[stopId] = !cur;
+  save();
+  renderView(false);
+}
+
+/* ── Pin toggle ─────────────────────────────────────────────────────── */
+function togglePin(stopId, e) {
+  if (e) e.stopPropagation();
+  if (!canUnpin() && isPinned(stopId)) {
+    showToast('Only editors can unpin stops');
+    return;
+  }
+  if (!state.personalPinned) state.personalPinned = {};
+  state.personalPinned[stopId] = !state.personalPinned[stopId];
+  save();
+  // Re-render just the pin button without full re-render
+  document.querySelectorAll(`[data-pin-btn="${stopId}"]`).forEach(btn => {
+    btn.classList.toggle('pinned', !!state.personalPinned[stopId]);
+    btn.title = state.personalPinned[stopId] ? 'Pinned — tap to unpin' : 'Unpinned — tap to pin';
+  });
+}
+
 /* ── Check off ─────────────────────────────────────────────────────── */
 function toggleCheck(stopId, itemEl) {
   state.checked[stopId] = !state.checked[stopId];
+  // Auto-pin when checking; auto-unpin only if editor/owner
+  if (state.checked[stopId]) {
+    if (!state.personalPinned) state.personalPinned = {};
+    state.personalPinned[stopId] = true;
+  }
   save();
   const card = itemEl && itemEl.querySelector('.tl-card');
   const btn  = itemEl && itemEl.querySelector('.check-btn');
@@ -6328,6 +6405,7 @@ function cascadeFromDeparture(fromStop, actualDepMins) {
   for (const s of sorted) {
     if (!found) { if (s.id === fromStop.id) found = true; continue; }
     if (isStopFixed(s)) break;
+    if (isPinned(s.id)) break;
     if (state.skipped[s.id]) continue;
     const origTime = timeToMinutes(s.time) ?? timeToMinutes(getStopTime(s));
     if (origTime === null) continue;
@@ -6355,6 +6433,7 @@ function cascadeTimeDelta(fromStop, delta, skipSet = new Set()) {
   for (const s of sorted) {
     if (!found) { if (s.id === fromStop.id) found = true; continue; }
     if (isStopFixed(s)) break;
+    if (isPinned(s.id)) break;
     if (skipSet.has(s.id) || state.skipped[s.id]) continue;
     const cur = timeToMinutes(getStopTime(s));
     if (cur === null) continue;
@@ -6559,13 +6638,6 @@ function initPullToRefresh() {
         _weatherCache.delete(day.id);
         await fetchWeatherForDay(day);
       }
-      if (typeof syncInit === 'undefined' && typeof _db !== 'undefined' && _db) {
-        // Re-read remote state
-        _db.ref('shared/state').once('value').then(snap => {
-          const remote = snap.val();
-          if (remote) applyRemoteState(remote);
-        });
-      }
       renderView(false);
       showToast('Refreshed');
     } finally {
@@ -6590,11 +6662,134 @@ if ('serviceWorker' in navigator) {
   });
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+/* ── Auth overlay UI ─────────────────────────────────────────────────── */
+let _pendingInviteToken = null;
+
+function initAuthOverlay() {
+  // Check for invite token in URL hash
+  const hash = location.hash;
+  const inviteMatch = hash.match(/[#&]invite=([a-f0-9]+)/i);
+  if (inviteMatch) {
+    _pendingInviteToken = inviteMatch[1];
+    history.replaceState(null, '', location.pathname + location.search);
+    const notice = document.getElementById('auth-invite-notice');
+    if (notice) notice.classList.remove('hidden');
+  }
+
+  const overlay   = document.getElementById('auth-overlay');
+  const tabLogin  = document.getElementById('auth-tab-login');
+  const tabReg    = document.getElementById('auth-tab-register');
+  const nameWrap  = document.getElementById('auth-name-wrap');
+  const submitBtn = document.getElementById('auth-submit');
+  const errEl     = document.getElementById('auth-error');
+  let isRegister  = false;
+
+  function switchTab(reg) {
+    isRegister = reg;
+    tabLogin.classList.toggle('active', !reg);
+    tabReg.classList.toggle('active',  reg);
+    nameWrap.classList.toggle('hidden', !reg);
+    submitBtn.textContent = reg ? 'Create account' : 'Sign in';
+    document.getElementById('auth-password').autocomplete = reg ? 'new-password' : 'current-password';
+    errEl.textContent = ''; errEl.classList.add('hidden');
+  }
+  tabLogin.addEventListener('click', () => switchTab(false));
+  tabReg.addEventListener('click',   () => switchTab(true));
+  if (_pendingInviteToken) switchTab(true);
+
+  submitBtn.addEventListener('click', async () => {
+    const email    = document.getElementById('auth-email').value.trim();
+    const password = document.getElementById('auth-password').value;
+    const name     = document.getElementById('auth-name').value.trim();
+    errEl.classList.add('hidden');
+    submitBtn.disabled = true; submitBtn.textContent = '…';
+    try {
+      if (isRegister) {
+        if (!name) throw new Error('Enter your name');
+        await authRegister(email, password, name);
+      } else {
+        await authLogin(email, password);
+      }
+      // Auth state change handler fires next
+    } catch (err) {
+      errEl.textContent = err.message || 'Authentication failed';
+      errEl.classList.remove('hidden');
+      submitBtn.disabled = false;
+      submitBtn.textContent = isRegister ? 'Create account' : 'Sign in';
+    }
+  });
+
+  // Allow Enter key to submit
+  [document.getElementById('auth-email'),
+   document.getElementById('auth-password'),
+   document.getElementById('auth-name')].forEach(el => {
+    if (el) el.addEventListener('keydown', e => { if (e.key === 'Enter') submitBtn.click(); });
+  });
+}
+
+async function onAuthSuccess(user) {
+  const overlay = document.getElementById('auth-overlay');
+  if (overlay) overlay.classList.add('hidden');
+
+  // Set user state
+  state.userId   = user.uid;
+  state.userName = user.displayName || user.email;
+  state.isOwner  = user.email === 'matt@cranialscratch.com';
+
+  // Check membership (non-owners)
+  if (!state.isOwner) {
+    try {
+      const snap = await firebase.database().ref('trips/annecy_2026/members/' + user.uid).get();
+      if (snap.exists()) {
+        const member = snap.val();
+        state.memberRole = member.role || 'viewer';
+        if (member.active === false) {
+          document.getElementById('access-disabled-overlay').classList.remove('hidden');
+          document.getElementById('access-signout-btn').addEventListener('click', () => signOut());
+          return;
+        }
+      } else {
+        state.memberRole = 'viewer';
+      }
+    } catch (e) {
+      console.warn('[auth] membership check failed:', e);
+    }
+  } else {
+    state.memberRole = 'editor';
+  }
+
+  // Consume pending invite
+  if (_pendingInviteToken) {
+    try { await consumeInvite(_pendingInviteToken); } catch (e) {}
+    _pendingInviteToken = null;
+  }
+
+  // Owner drawer controls
+  if (state.isOwner) {
+    document.getElementById('invite-btn').classList.remove('hidden');
+    document.getElementById('members-btn').classList.remove('hidden');
+  }
+
+  // Sign-out label
+  const signoutLabel = document.getElementById('signout-label');
+  if (signoutLabel) signoutLabel.textContent = `Sign out (${state.userName})`;
+  document.getElementById('signout-btn').addEventListener('click', () => signOut());
+
+  // Init DB sync
+  syncInit(user);
+
+  // Boot the app
+  bootApp();
+}
+
+function bootApp() {
+  // Show app frame (was hidden until auth)
+  const appEl = document.getElementById('app');
+  if (appEl) appEl.style.display = '';
+
   // One-time reset trigger: open app with ?reset=times to clear all time data
   if (new URLSearchParams(location.search).get('reset') === 'times') {
     ['annecy_overrides','annecy_dur_overrides','annecy_cross_day_moves'].forEach(k => localStorage.removeItem(k));
-    // Also clear from Firebase once _db is ready (handled after syncInit)
     window._pendingResetTimes = true;
     history.replaceState(null, '', location.pathname);
   }
@@ -6607,12 +6802,75 @@ document.addEventListener('DOMContentLoaded', () => {
   loadWeatherCache();
   state.currentDayId = findTodayDayId() || TRIP_DATA.days[0].id;
   buildDayStrip();
-  renderView(true); // scroll to now only on first load
+  renderView(true);
   updateHeaderHeight();
   new ResizeObserver(updateHeaderHeight).observe(document.getElementById('app-header'));
-  if (typeof syncInit === 'function') syncInit();
-  scheduleNotifs(); // schedule any pending departure alerts for today
+  scheduleNotifs();
   if (state.notifsEnabled && notifGranted()) startTrafficPolling();
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  // Init Firebase app + auth
+  firebase.initializeApp(FIREBASE_CONFIG);
+  const auth = firebase.auth();
+
+  initAuthOverlay();
+
+  // Wire invite + members drawer buttons
+  document.getElementById('invite-btn').addEventListener('click', async () => {
+    const token = await createInvite();
+    if (!token) return;
+    const url = `${location.origin}${location.pathname}#invite=${token}`;
+    const input = document.getElementById('invite-url-input');
+    input.value = url;
+    document.getElementById('invite-url-wrap').classList.remove('hidden');
+  });
+  document.getElementById('invite-url-copy').addEventListener('click', () => {
+    const input = document.getElementById('invite-url-input');
+    navigator.clipboard.writeText(input.value).catch(() => input.select());
+    showToast('Invite link copied!');
+  });
+  document.getElementById('members-btn').addEventListener('click', async () => {
+    const list = document.getElementById('members-list');
+    list.classList.toggle('hidden');
+    if (list.classList.contains('hidden')) return;
+    list.innerHTML = '<div style="padding:8px 0;font-size:13px;color:var(--text3)">Loading…</div>';
+    try {
+      const members = await getMembers();
+      if (!Object.keys(members).length) {
+        list.innerHTML = '<div style="padding:8px 0;font-size:13px;color:var(--text3)">No members yet</div>';
+        return;
+      }
+      list.innerHTML = Object.entries(members).map(([uid, m]) => `
+        <div class="member-row">
+          <div>
+            <div class="member-name">${m.name || m.email}</div>
+            <div class="member-role">${m.role || 'viewer'}${m.email ? ' · ' + m.email : ''}</div>
+          </div>
+          <button class="member-toggle${m.active !== false ? ' active' : ''}" data-uid="${uid}" title="${m.active !== false ? 'Active — click to disable' : 'Disabled — click to enable'}"></button>
+        </div>`).join('');
+      list.querySelectorAll('.member-toggle').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const uid = btn.dataset.uid;
+          const active = !btn.classList.contains('active');
+          await setMemberActive(uid, active);
+          btn.classList.toggle('active', active);
+        });
+      });
+    } catch (e) {
+      list.innerHTML = '<div style="padding:8px 0;font-size:13px;color:#f87171">Failed to load members</div>';
+    }
+  });
+
+  // Auth state observer — fires once on load and again on sign-in/out
+  auth.onAuthStateChanged(user => {
+    if (user) {
+      onAuthSuccess(user);
+    } else {
+      // Show auth overlay
+      document.getElementById('auth-overlay').classList.remove('hidden');
+    }
+  });
 
   /* Gyroscope parallax */
   (function() {
@@ -6994,6 +7252,10 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('detail-check-btn').addEventListener('click', () => {
     if (!_detailStop) return;
     state.checked[_detailStop.id] = !state.checked[_detailStop.id];
+    if (state.checked[_detailStop.id]) {
+      if (!state.personalPinned) state.personalPinned = {};
+      state.personalPinned[_detailStop.id] = true;
+    }
     save();
     updateDetailCheckBtn();
     const itemEl = document.getElementById(`stop-${_detailStop.id}`);

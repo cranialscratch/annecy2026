@@ -25,7 +25,7 @@
     <span><i class="ph ph-arrow-clockwise"></i> Update available</span>
     <button onclick="window.location.reload()">Reload</button>
   </div>
-  <div id="app">
+  <div id="app" style="display:none">
     <div id="bg-clip"><div id="bg-layer"></div></div>
     <header id="app-header">
       <div class="header-inner">
@@ -69,6 +69,36 @@
     </nav>
   </div>
 
+  <!-- Auth overlay — shown before app renders until signed in -->
+  <div id="auth-overlay" class="hidden">
+    <div class="auth-card glass">
+      <div class="auth-logo"><i class="ph ph-mountains"></i> Annecy 2026</div>
+      <div class="auth-tabs">
+        <button class="auth-tab active" id="auth-tab-login">Sign in</button>
+        <button class="auth-tab" id="auth-tab-register">Register</button>
+      </div>
+      <div id="auth-invite-notice" class="auth-invite-notice hidden">
+        <i class="ph ph-ticket"></i> You've been invited to Annecy 2026
+      </div>
+      <div id="auth-name-wrap" class="hidden">
+        <input id="auth-name" type="text" placeholder="Your name" autocomplete="name">
+      </div>
+      <input id="auth-email"    type="email"    placeholder="Email address" autocomplete="email">
+      <input id="auth-password" type="password" placeholder="Password" autocomplete="current-password">
+      <button id="auth-submit" class="pill-btn primary full-width">Sign in</button>
+      <div id="auth-error" class="auth-error hidden"></div>
+    </div>
+  </div>
+
+  <!-- Access disabled overlay — shown when member.active = false -->
+  <div id="access-disabled-overlay" class="hidden">
+    <div class="auth-card glass">
+      <div class="auth-logo"><i class="ph ph-mountains"></i> Annecy 2026</div>
+      <p style="text-align:center;color:var(--text2);margin:1rem 0">Your access to this trip has been disabled. Contact the trip organiser.</p>
+      <button id="access-signout-btn" class="pill-btn full-width">Sign out</button>
+    </div>
+  </div>
+
   <!-- Side drawer -->
   <div id="drawer-overlay" class="hidden"></div>
   <aside id="drawer" class="hidden">
@@ -81,7 +111,13 @@
       <button class="drawer-item" data-action="bucket"><i class="ph ph-bookmark-simple drawer-icon"></i> Bucket List <span id="bucket-badge" class="drawer-badge"></span></button>
       <a class="drawer-item" href="https://www.annecy.org/festival" target="_blank" rel="noopener"><i class="ph ph-film-slate drawer-icon"></i> Festival website</a>
       <a class="drawer-item" href="https://www.le-shuttle.com" target="_blank" rel="noopener"><i class="ph ph-train drawer-icon"></i> LeShuttle</a>
-
+      <button class="drawer-item hidden" id="invite-btn"><i class="ph ph-user-plus drawer-icon"></i> Invite to trip</button>
+      <div id="invite-url-wrap" class="invite-url-wrap hidden">
+        <input id="invite-url-input" type="text" readonly class="invite-url-input">
+        <button id="invite-url-copy" class="pill-btn primary"><i class="ph ph-copy"></i> Copy</button>
+      </div>
+      <button class="drawer-item hidden" id="members-btn"><i class="ph ph-users drawer-icon"></i> Members</button>
+      <div id="members-list" class="hidden"></div>
     </nav>
     <div class="drawer-bottom">
       <button class="drawer-item" data-action="toggle-dark" id="dark-mode-btn"><i class="ph ph-moon drawer-icon" id="dark-mode-icon"></i> <span id="dark-mode-label">Dark mode</span></button>
@@ -101,6 +137,7 @@
           <button class="drawer-item drawer-sub-item" data-action="reset-checks"><i class="ph ph-check-square drawer-icon"></i> Clear visited</button>
         </div>
       </div>
+      <button class="drawer-item drawer-sub-item" id="signout-btn"><i class="ph ph-sign-out drawer-icon"></i> <span id="signout-label">Sign out</span></button>
     </div>
   </aside>
 
@@ -464,9 +501,10 @@
   </script>
   <!-- Firebase (compat SDK — no bundler needed) -->
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
-  <script src="data.js?v=204"></script>
-  <script src="sync.js?v=204"></script>
-  <script src="app.js?v=204"></script>
+  <script src="data.js?v=245"></script>
+  <script src="sync.js?v=245"></script>
+  <script src="app.js?v=245"></script>
 </body>
 </html>
