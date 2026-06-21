@@ -42,6 +42,14 @@ function getDb() { return _db; }
 function getAuthUser() { return firebase.auth().currentUser; }
 
 function signOut() {
+  if (typeof state !== 'undefined') {
+    state.checked = {}; state.skipped = {}; state.removed = {};
+    state.bucketList = []; state.personalStops = {}; state.personalTickets = {};
+    state.personalPinned = {}; state.userId = null; state.userName = null;
+    state.isOwner = false; state.memberRole = 'viewer';
+  }
+  if (_db) { _db.ref('shared/state').off(); if (_uid) _db.ref('users/' + _uid + '/personal').off(); }
+  _db = null; _uid = null;
   firebase.auth().signOut().catch(() => {});
 }
 

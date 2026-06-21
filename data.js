@@ -207,32 +207,80 @@ const TRIP_DATA = {
         { id:"d4s5", order:5, time:"20:00", tz:"FR", location:"Geneva Airport — French Side", type:"transport", priority:0, lat:46.2380, lng:6.1090, mapsUrl:"https://maps.google.com/?q=Route+Douaniere+01210+Ferney-Voltaire+France", reason:"Navigate to the French sector only; family should follow France or Secteur Francais signs. Family lands at 20:20.", planStatus:'anchor', risk:'low', fixed:true }
       ]
     },
-    /* ── Festival Week — Sat 20 Jun to Sat 27 Jun ───────────────────── */
+    /* ── Festival Week — Sun 21 Jun to Fri 26 Jun (individual days) ─── */
     {
-      id: "festival",
-      date: "2026-06-20",
-      dateEnd: "2026-06-27",
-      label: "Festival",
-      title: "Annecy Festival Week",
-      subtitle: "International Animation Film Festival 2026",
+      id: "fest_sun",
+      date: "2026-06-21",
+      label: "Sunday",
+      title: "Festival — Sunday",
+      subtitle: "Annecy International Animation Festival 2026",
       isFestival: true,
       stops: [
-        { id:"fs1", order:1, time:"All week", tz:"FR", location:"Annecy Town Centre", type:"festival", priority:3, lat:45.8992, lng:6.1294, mapsUrl:"https://maps.google.com/?q=Annecy+France", reason:"International Animation Film Festival 2026 — screenings, exhibitions and events throughout the town. Main venues: Bonlieu Theatre, the Pâquier park and the Imperial Palace on the lake." },
-        { id:"fs2", order:2, time:"Daily", tz:"FR", location:"Chalet, Menthon-Saint-Bernard", type:"hotel", priority:0, lat:45.8533, lng:6.2050, mapsUrl:"https://maps.google.com/?q=195+Chemin+de+l+Arete+74290+Menthon-Saint-Bernard", reason:"Your base for the week with spectacular views over Lake Annecy from the terrace." },
-        { id:"fs3", order:3, time:"Daily", tz:"FR", location:"Lake Annecy", type:"experience", priority:3, lat:45.8667, lng:6.1833, mapsUrl:"https://maps.google.com/?q=Lac+Annecy", reason:"Swimming, cycling and boat trips on one of Europe's clearest lakes. Hire bikes in Annecy and follow the lakeside path all the way to Talloires — flat and stunning." },
-        { id:"fs4", order:4, time:"Daily", tz:"FR", location:"Annecy Old Town", type:"wander", priority:3, lat:45.8992, lng:6.1294, mapsUrl:"https://maps.google.com/?q=Vieille+Ville+Annecy", reason:"Canal-laced old town with colourful flower-lined buildings, the 12th-century Palais de l'Isle and lively café terraces.", placesQuery:"Vieille Ville Annecy" },
-        { id:"fs5", order:5, time:"Daily", tz:"FR", location:"Château d'Annecy", type:"architecture", priority:2, lat:45.9004, lng:6.1279, mapsUrl:"https://maps.google.com/?q=Chateau+d+Annecy", reason:"Hilltop castle with panoramic views over the lake and old town. Houses the Musée d'Annecy — regional art, natural history and Alpine life." },
-        { id:"fs6", order:6, time:"Nearby", tz:"FR", location:"Château de Menthon-Saint-Bernard", type:"architecture", priority:3, lat:45.8566, lng:6.2037, mapsUrl:"https://maps.google.com/?q=Chateau+de+Menthon-Saint-Bernard", reason:"Fairytale château right next to your chalet, said to have inspired Sleeping Beauty. Open for guided tours — extraordinary lake views from the ramparts." },
-        { id:"fs7", order:7, time:"Nearby", tz:"FR", location:"Talloires", type:"village", priority:3, lat:45.8311, lng:6.2178, mapsUrl:"https://maps.google.com/?q=Talloires+France", reason:"Stunning village on the lake's east shore with a 17th-century abbey, café terraces and tranquil abbey gardens. 20 minutes from the chalet by road or bike." },
-        { id:"fs8", order:8, time:"Nearby", tz:"FR", location:"Gorges du Fier", type:"experience", priority:2, lat:45.9167, lng:6.0333, mapsUrl:"https://maps.google.com/?q=Gorges+du+Fier+Lovagny", reason:"Spectacular narrow gorge with suspended walkways over rushing glacial water — dramatic and unique. 20 minutes west of Annecy." },
-        { id:"fs9", order:9, time:"Nearby", tz:"FR", location:"Château de Thorens", type:"architecture", priority:2, lat:45.9833, lng:6.2000, mapsUrl:"https://maps.google.com/?q=Chateau+de+Thorens+France", reason:"Medieval castle in the hills north of Annecy associated with Saint Francis de Sales. Far less visited than the town castle and very atmospheric." },
-        { id:"fs10", order:10, time:"Daily", tz:"FR", location:"Pont des Amours & Jardins de l'Europe", type:"wander", priority:2, lat:45.9011, lng:6.1278, mapsUrl:"https://maps.google.com/?q=Pont+des+Amours+Annecy", reason:"The romantic canal bridge and lakeside gardens with weeping willows, swans and mountain views — perfect for a morning stroll or evening walk." },
-        { id:"fs11", order:11, time:"Daily", tz:"FR", location:"Le Green Café, Annecy", type:"food", priority:3, lat:45.8990, lng:6.1290, mapsUrl:"https://maps.google.com/?q=Le+Green+Cafe+Annecy", reason:"One of Annecy's best vegan-friendly spots, close to the Bonlieu festival venue. Salads, wraps and fresh juices — great for a quick festival lunch.", veganFriendly:true },
-        { id:"fs12", order:12, time:"Daily", tz:"FR", location:"L'Aromatic, Annecy", type:"food", priority:2, lat:45.8998, lng:6.1280, mapsUrl:"https://maps.google.com/?q=L+Aromatic+Annecy", reason:"Popular vegan-friendly restaurant near the old town — fresh seasonal dishes, good wine list and a relaxed atmosphere away from the festival crowds.", veganFriendly:true },
-        { id:"fs13", order:13, time:"Daily", tz:"FR", location:"Brasserie des Européens, Annecy", type:"food", priority:2, lat:45.8994, lng:6.1300, mapsUrl:"https://maps.google.com/?q=Brasserie+des+Europeens+Annecy", reason:"Relaxed brasserie near the Bonlieu with terrace dining and plant-based options — a reliable choice for festival lunches and casual dinners.", veganFriendly:true },
-        { id:"fs14", order:14, time:"Daily", tz:"FR", location:"Palais de l'Isle, Annecy", type:"architecture", priority:3, lat:45.8995, lng:6.1287, mapsUrl:"https://maps.google.com/?q=Palais+de+l+Isle+Annecy", reason:"The most photographed building in Annecy — 12th-century island prison on the Thiou canal. Now a local history museum and one of the most iconic sights in France." },
-        { id:"fs15", order:15, time:"Daily", tz:"FR", location:"HappyCow Vegan Map, Annecy", type:"food", priority:2, lat:45.8992, lng:6.1294, mapsUrl:"https://www.happycow.net/europe/france/annecy/", reason:"Browse all vegan and vegan-friendly restaurants near your current location in Annecy.", veganFriendly:true }
+        { id:"fs2",  order:1, time:"09:00", tz:"FR", location:"Chalet, Menthon-Saint-Bernard", type:"hotel", priority:0, lat:45.8533, lng:6.2050, mapsUrl:"https://maps.google.com/?q=195+Chemin+de+l+Arete+74290+Menthon-Saint-Bernard", reason:"Your base for the week with spectacular views over Lake Annecy from the terrace.", duration:0 },
+        { id:"fs6",  order:2, time:"10:00", tz:"FR", location:"Château de Menthon-Saint-Bernard", type:"architecture", priority:3, lat:45.8566, lng:6.2037, mapsUrl:"https://maps.google.com/?q=Chateau+de+Menthon-Saint-Bernard", reason:"Fairytale château right next to your chalet, said to have inspired Sleeping Beauty. Open for guided tours — extraordinary lake views from the ramparts.", duration:90 },
+        { id:"fs4",  order:3, time:"13:00", tz:"FR", location:"Annecy Old Town", type:"wander", priority:3, lat:45.8992, lng:6.1294, mapsUrl:"https://maps.google.com/?q=Vieille+Ville+Annecy", reason:"Canal-laced old town with colourful flower-lined buildings, the 12th-century Palais de l'Isle and lively café terraces.", placesQuery:"Vieille Ville Annecy", duration:90 },
+        { id:"fs14", order:4, time:"15:00", tz:"FR", location:"Palais de l'Isle, Annecy", type:"architecture", priority:3, lat:45.8995, lng:6.1287, mapsUrl:"https://maps.google.com/?q=Palais+de+l+Isle+Annecy", reason:"The most photographed building in Annecy — 12th-century island prison on the Thiou canal. Now a local history museum and one of the most iconic sights in France.", duration:60 },
+        { id:"fs10", order:5, time:"17:00", tz:"FR", location:"Pont des Amours & Jardins de l'Europe", type:"wander", priority:2, lat:45.9011, lng:6.1278, mapsUrl:"https://maps.google.com/?q=Pont+des+Amours+Annecy", reason:"The romantic canal bridge and lakeside gardens with weeping willows, swans and mountain views — perfect for a morning stroll or evening walk.", duration:45 }
       ]
+    },
+    {
+      id: "fest_mon",
+      date: "2026-06-22",
+      label: "Monday",
+      title: "Festival — Monday",
+      subtitle: "Annecy International Animation Festival 2026",
+      isFestival: true,
+      stops: [
+        { id:"fs1",  order:1, time:"09:00", tz:"FR", location:"Annecy Town Centre", type:"festival", priority:3, lat:45.8992, lng:6.1294, mapsUrl:"https://maps.google.com/?q=Annecy+France", reason:"International Animation Film Festival 2026 — screenings, exhibitions and events throughout the town. Main venues: Bonlieu Theatre, the Pâquier park and the Imperial Palace on the lake.", duration:60 },
+        { id:"fs5",  order:2, time:"11:00", tz:"FR", location:"Château d'Annecy", type:"architecture", priority:2, lat:45.9004, lng:6.1279, mapsUrl:"https://maps.google.com/?q=Chateau+d+Annecy", reason:"Hilltop castle with panoramic views over the lake and old town. Houses the Musée d'Annecy — regional art, natural history and Alpine life.", duration:90 },
+        { id:"fs11", order:3, time:"13:00", tz:"FR", location:"Le Green Café, Annecy", type:"food", priority:3, lat:45.8990, lng:6.1290, mapsUrl:"https://maps.google.com/?q=Le+Green+Cafe+Annecy", reason:"One of Annecy's best vegan-friendly spots, close to the Bonlieu festival venue. Salads, wraps and fresh juices — great for a quick festival lunch.", veganFriendly:true, duration:60 }
+      ]
+    },
+    {
+      id: "fest_tue",
+      date: "2026-06-23",
+      label: "Tuesday",
+      title: "Festival — Tuesday",
+      subtitle: "Annecy International Animation Festival 2026",
+      isFestival: true,
+      stops: [
+        { id:"fs3",  order:1, time:"10:00", tz:"FR", location:"Lake Annecy", type:"experience", priority:3, lat:45.8667, lng:6.1833, mapsUrl:"https://maps.google.com/?q=Lac+Annecy", reason:"Swimming, cycling and boat trips on one of Europe's clearest lakes. Hire bikes in Annecy and follow the lakeside path all the way to Talloires — flat and stunning.", duration:120 },
+        { id:"fs7",  order:2, time:"13:00", tz:"FR", location:"Talloires", type:"village", priority:3, lat:45.8311, lng:6.2178, mapsUrl:"https://maps.google.com/?q=Talloires+France", reason:"Stunning village on the lake's east shore with a 17th-century abbey, café terraces and tranquil abbey gardens. 20 minutes from the chalet by road or bike.", duration:90 },
+        { id:"fs13", order:3, time:"19:00", tz:"FR", location:"Brasserie des Européens, Annecy", type:"food", priority:2, lat:45.8994, lng:6.1300, mapsUrl:"https://maps.google.com/?q=Brasserie+des+Europeens+Annecy", reason:"Relaxed brasserie near the Bonlieu with terrace dining and plant-based options — a reliable choice for festival lunches and casual dinners.", veganFriendly:true, duration:90 }
+      ]
+    },
+    {
+      id: "fest_wed",
+      date: "2026-06-24",
+      label: "Wednesday",
+      title: "Festival — Wednesday",
+      subtitle: "Annecy International Animation Festival 2026",
+      isFestival: true,
+      stops: [
+        { id:"fs8",  order:1, time:"10:00", tz:"FR", location:"Gorges du Fier", type:"experience", priority:2, lat:45.9167, lng:6.0333, mapsUrl:"https://maps.google.com/?q=Gorges+du+Fier+Lovagny", reason:"Spectacular narrow gorge with suspended walkways over rushing glacial water — dramatic and unique. 20 minutes west of Annecy.", duration:90 },
+        { id:"fs12", order:2, time:"13:00", tz:"FR", location:"L'Aromatic, Annecy", type:"food", priority:2, lat:45.8998, lng:6.1280, mapsUrl:"https://maps.google.com/?q=L+Aromatic+Annecy", reason:"Popular vegan-friendly restaurant near the old town — fresh seasonal dishes, good wine list and a relaxed atmosphere away from the festival crowds.", veganFriendly:true, duration:90 }
+      ]
+    },
+    {
+      id: "fest_thu",
+      date: "2026-06-25",
+      label: "Thursday",
+      title: "Festival — Thursday",
+      subtitle: "Annecy International Animation Festival 2026",
+      isFestival: true,
+      stops: [
+        { id:"fs9",  order:1, time:"10:00", tz:"FR", location:"Château de Thorens", type:"architecture", priority:2, lat:45.9833, lng:6.2000, mapsUrl:"https://maps.google.com/?q=Chateau+de+Thorens+France", reason:"Medieval castle in the hills north of Annecy associated with Saint Francis de Sales. Far less visited than the town castle and very atmospheric.", duration:90 },
+        { id:"fs15", order:2, time:"19:00", tz:"FR", location:"HappyCow Vegan Map, Annecy", type:"food", priority:2, lat:45.8992, lng:6.1294, mapsUrl:"https://www.happycow.net/europe/france/annecy/", reason:"Browse all vegan and vegan-friendly restaurants near your current location in Annecy.", veganFriendly:true, duration:60 }
+      ]
+    },
+    {
+      id: "fest_fri",
+      date: "2026-06-26",
+      label: "Friday",
+      title: "Festival — Friday",
+      subtitle: "Annecy International Animation Festival 2026 — Final day",
+      isFestival: true,
+      stops: []
     },
     /* ── Return Day 1 — Sat 27 Jun — Annecy to Besançon ─────────────── */
     {

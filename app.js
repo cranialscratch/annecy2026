@@ -253,7 +253,7 @@ function formatDate(dateStr) {
 }
 function getDayLabel(day) {
   if (day.isCountdown) return '<i class="ph ph-mountains"></i>';
-  if (day.isFestival) return 'Fest';
+  if (day.isFestival && day.dateEnd) return 'Fest';
   const names = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
   return names[new Date(day.date + 'T00:00:00').getDay()];
 }
@@ -1736,13 +1736,13 @@ function buildDayStrip() {
     const today = localDateStr();
     const isTodayChip = day.isCountdown
       ? today <= day.dateEnd
-      : day.isFestival
+      : (day.isFestival && day.dateEnd)
         ? (today >= day.date && today <= day.dateEnd)
         : today === day.date;
-    const isPast = !day.isCountdown && !day.isFestival && day.date < today;
+    const isPast = !day.isCountdown && !(day.isFestival && day.dateEnd) && day.date < today;
     if (isTodayChip) chip.classList.add('today');
     if (isPast)      chip.classList.add('past');
-    const dateStr = day.isCountdown ? 'soon' : day.isFestival ? '20–27' : formatDate(day.date);
+    const dateStr = day.isCountdown ? 'soon' : (day.isFestival && day.dateEnd) ? '20–27' : formatDate(day.date);
     chip.innerHTML = `<span class="day-chip-label">${getDayLabel(day)}</span><span class="day-chip-date">${dateStr}</span><span class="day-dot"></span>`;
     chip.addEventListener('click', () => selectDay(day.id));
     strip.appendChild(chip);
@@ -2184,7 +2184,7 @@ function renderOverview(c) {
   TRIP_DATA.days.forEach(day => {
     const card = document.createElement('div');
     card.className = 'overview-card';
-    const dateStr = day.isCountdown ? 'Until 16 Jun' : day.isFestival ? '20–27 Jun' : formatDate(day.date);
+    const dateStr = day.isCountdown ? 'Until 16 Jun' : (day.isFestival && day.dateEnd) ? '20–27 Jun' : formatDate(day.date);
     card.innerHTML = `<div class="ov-day">${getDayLabel(day)} · ${dateStr}</div><div class="ov-title">${day.title}</div><div class="ov-sub">${day.subtitle||''}</div><div class="ov-stops">${day.isCountdown ? '' : day.stops.length + ' stops'}</div>`;
     card.addEventListener('click', () => selectDay(day.id));
     grid.appendChild(card);
@@ -2602,7 +2602,7 @@ async function renderVeganView(container) {
       found = true;
       const card = document.createElement('div');
       card.className = 'vegan-place-card';
-      const dateStr = day.isFestival ? '20–27 Jun' : formatDate(day.date);
+      const dateStr = (day.isFestival && day.dateEnd) ? '20–27 Jun' : formatDate(day.date);
       card.innerHTML = `
         <div class="vegan-place-main">
           <div class="vegan-place-name">${stop.location} <span class="vp-planned-badge"><i class="ph ph-calendar-check"></i> ${getDayLabel(day)} · ${dateStr}</span></div>
@@ -3389,7 +3389,7 @@ async function renderChargerView(container) {
       found = true;
       const card = document.createElement('div');
       card.className = 'vegan-place-card';
-      const dateStr = day.isFestival ? '20–27 Jun' : formatDate(day.date);
+      const dateStr = (day.isFestival && day.dateEnd) ? '20–27 Jun' : formatDate(day.date);
       card.innerHTML = `
         <div class="vegan-place-main">
           <div class="vegan-place-name">${stop.location} <span class="vp-planned-badge"><i class="ph ph-calendar-check"></i> ${getDayLabel(day)} · ${dateStr}</span></div>
@@ -3620,7 +3620,7 @@ function renderFilterList(container, kind) {
       card.innerHTML = `
         <span class="filter-icon">${stopTypeIcon(stop)}</span>
         <div class="filter-info">
-          <div class="filter-day">${getDayLabel(day)} · ${day.isFestival ? '20–27 Jun' : formatDate(day.date)}</div>
+          <div class="filter-day">${getDayLabel(day)} · ${(day.isFestival && day.dateEnd) ? '20–27 Jun' : formatDate(day.date)}</div>
           <div class="filter-loc">${stop.location}</div>
           <div class="filter-reason">${stop.reason}</div>
         </div>
@@ -3875,7 +3875,9 @@ function buildCalDayHeader(day, containerId) {
 /* ── Festival banner — title + today's date + weather ──────────────── */
 function buildFestivalBanner(day) {
   const todayStr = localDateStr();
-  const dateStr  = (todayStr >= day.date && todayStr <= day.dateEnd) ? todayStr : day.date;
+  const dateStr  = day.dateEnd
+    ? ((todayStr >= day.date && todayStr <= day.dateEnd) ? todayStr : day.date)
+    : day.date;
   const dateLabel = new Date(dateStr + 'T12:00:00').toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long' });
 
   const banner = document.createElement('div');
