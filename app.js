@@ -1,5 +1,5 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v245';
+const APP_VERSION = 'v246';
 
 const CHANGELOG = [
   { version: 'v244', title: 'Swipe to Skip or Remove, compact skipped cards, Bucket List', items: [
@@ -3994,16 +3994,21 @@ function renderFestivalCalView(container, day) {
     wander:'#059669', depart:'#475569', scenic:'#16a34a', historic:'#b45309', festival:'#7c3aed', work:'#6366f1',
   };
 
-  getDayStops(day).forEach(stop => {
+  const festStops = getDayStops(day);
+  festStops.forEach((stop, idx) => {
     const type = getStopType(stop);
     const col  = TYPE_COL[type] || '#334155';
     const item = document.createElement('div');
     item.className = 'fest-cal-item';
+    item.id = `stop-${stop.id}`;
     item.style.borderLeftColor = col;
     if (state.checked[stop.id]) item.classList.add('visited');
+    const timeStr = getStopTime(stop);
+    const timeDisplay = timeToMinutes(timeStr) !== null ? `<span class="fest-cal-item-time">${timeStr}</span>` : '';
     item.innerHTML = `
-      <div class="fest-cal-item-name">${stopTypeIcon(stop)} ${getStopName(stop)}</div>
-      <div class="fest-cal-item-meta">${typeLabel(type)}${stop.veganFriendly ? ' · <i class="ph ph-leaf"></i> Vegan' : ''}</div>`;
+      <div class="fest-cal-item-name">${stopTypeIcon(stop)} ${getStopName(stop)}${timeDisplay}</div>
+      <div class="fest-cal-item-meta">${typeLabel(type)}${stop.veganFriendly ? ' · <i class="ph ph-leaf"></i> Vegan' : ''}</div>
+      <div data-departby="${stop.id}" class="depart-by-pill hidden"></div>`;
     item.addEventListener('click', () => openDetail(stop));
     list.appendChild(item);
   });
@@ -6918,6 +6923,10 @@ function bootApp() {
   new ResizeObserver(updateHeaderHeight).observe(document.getElementById('app-header'));
   scheduleNotifs();
   if (state.notifsEnabled && notifGranted()) startTrafficPolling();
+  // Kick off travel time computation for the initial day so depart-by
+  // pills appear and notifications use real routing times
+  const initDay = TRIP_DATA.days.find(d => d.id === state.currentDayId);
+  if (initDay) precomputeTravelTimes(initDay);
 }
 
 document.addEventListener('DOMContentLoaded', () => {
