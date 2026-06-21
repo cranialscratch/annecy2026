@@ -145,17 +145,9 @@ function applyRemoteState(remote, isPersonal) {
   keys.forEach(k => {
     const incoming = remote[k];
     if (incoming === undefined || incoming === null) return;
-    if (Array.isArray(state[k])) {
-      if (JSON.stringify(incoming) !== JSON.stringify(state[k])) {
-        state[k] = incoming;
-        changed = true;
-      }
-    } else {
-      const merged = Object.assign({}, incoming, state[k]);
-      if (JSON.stringify(merged) !== JSON.stringify(state[k])) {
-        state[k] = merged;
-        changed = true;
-      }
+    if (JSON.stringify(incoming) !== JSON.stringify(state[k])) {
+      state[k] = incoming;
+      changed = true;
     }
   });
   if (changed) {
