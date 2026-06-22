@@ -3268,3 +3268,84 @@ body.light .cl-text { color: #475569; }
   margin-top: 12px;
   padding: 0 14px;
 }
+
+/* ── Notes view ─────────────────────────────────────────────── */
+.notes-view { padding: 12px 0 80px; }
+.notes-header { display:flex; align-items:center; justify-content:space-between; padding:0 16px 8px; }
+.notes-title { font-size:18px; font-weight:700; color:var(--text1); display:flex; align-items:center; gap:8px; }
+.notes-add-btn { display:flex; align-items:center; gap:6px; padding:8px 16px; border-radius:99px; background:var(--accent); color:#fff; font-size:14px; font-weight:600; border:none; cursor:pointer; }
+.notes-search-wrap { padding:0 14px 8px; }
+.notes-list { padding:0 14px; display:flex; flex-direction:column; gap:10px; }
+.note-card { background:var(--card-bg); border:1.5px solid var(--card-border); border-radius:16px; padding:14px; display:flex; align-items:flex-start; gap:10px; }
+.note-card-main { flex:1; min-width:0; }
+.note-card-title { font-size:15px; font-weight:600; color:var(--text1); margin-bottom:4px; }
+.note-card-content { font-size:13px; color:var(--text3); line-height:1.5; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
+.note-links-row { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+.note-link-chip { display:inline-flex; align-items:center; gap:4px; padding:4px 10px; border-radius:99px; background:rgba(99,102,241,.12); color:#a5b4fc; font-size:12px; text-decoration:none; }
+.note-card-btns { display:flex; flex-direction:column; gap:4px; }
+.note-order-btn, .note-edit-btn { width:30px; height:30px; border-radius:8px; border:1.5px solid var(--card-border); background:transparent; color:var(--text3); display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:14px; }
+.note-edit-input { width:100%; box-sizing:border-box; background:rgba(255,255,255,.06); border:1.5px solid var(--card-border); border-radius:10px; padding:10px 12px; color:var(--text1); font-size:15px; margin-bottom:10px; }
+.note-edit-area { width:100%; box-sizing:border-box; background:rgba(255,255,255,.06); border:1.5px solid var(--card-border); border-radius:10px; padding:10px 12px; color:var(--text1); font-size:14px; resize:vertical; font-family:inherit; margin-bottom:10px; }
+.note-link-edit-row { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+.note-link-remove-btn { width:32px; height:32px; border-radius:8px; border:1.5px solid var(--card-border); background:transparent; color:var(--text3); cursor:pointer; flex-shrink:0; }
+
+/* ── Find — category dropdown ─────────────────────────────────── */
+.find-search-wrap { padding:12px 14px 0; }
+.find-cat-row { padding:10px 14px 0; }
+.find-cat-btn { display:inline-flex; align-items:center; gap:8px; padding:10px 16px; border-radius:12px; border:1.5px solid var(--card-border); background:rgba(255,255,255,.06); color:var(--text1); font-size:15px; font-weight:600; cursor:pointer; }
+.find-cat-btn i { font-size:18px; }
+.cat-group-label { font-size:12px; font-weight:700; color:var(--text3); text-transform:uppercase; letter-spacing:.05em; padding:12px 0 6px; }
+.cat-row { display:flex; align-items:center; gap:10px; width:100%; padding:12px 8px; border-radius:10px; border:none; background:transparent; color:var(--text1); font-size:15px; cursor:pointer; text-align:left; }
+.cat-row.active { background:rgba(99,102,241,.12); color:#a5b4fc; }
+.cat-row i { font-size:18px; color:var(--text3); }
+.cat-row.active i { color:#a5b4fc; }
+
+/* ── Booking info ─────────────────────────────────────────────── */
+.stop-booking-wrap { margin-bottom:12px; }
+.booking-info-card { background:rgba(99,102,241,.08); border:1.5px solid rgba(99,102,241,.2); border-radius:14px; padding:12px 14px; }
+.booking-info-label { font-size:12px; font-weight:700; color:#a5b4fc; text-transform:uppercase; letter-spacing:.05em; margin-bottom:8px; }
+.booking-info-ref { font-size:14px; font-weight:600; color:var(--text1); margin-bottom:4px; }
+.booking-info-link { display:inline-flex; align-items:center; gap:4px; font-size:13px; color:#818cf8; text-decoration:none; margin-bottom:4px; }
+.booking-info-notes { font-size:13px; color:var(--text3); margin-top:4px; }
+.booking-edit-btn { margin-top:8px; font-size:12px; color:var(--text3); background:transparent; border:1.5px solid var(--card-border); border-radius:8px; padding:4px 10px; cursor:pointer; }
+
+/* ── Notes view ─────────────────────────────────────────────────────── */
+.notes-view { padding: 12px 0 80px; }
+.notes-header { display:flex; align-items:center; justify-content:space-between; padding:0 16px 8px; }
+.notes-title { font-size:18px; font-weight:700; color:var(--text1); display:flex; align-items:center; gap:8px; }
+.notes-add-btn { display:flex; align-items:center; gap:6px; padding:8px 16px; border-radius:99px; background:var(--accent); color:#fff; font-size:14px; font-weight:600; border:none; cursor:pointer; }
+.notes-search-wrap { padding:0 14px 8px; }
+.notes-list { padding:0 14px; display:flex; flex-direction:column; gap:10px; }
+.note-card { background:var(--card-bg); border:1.5px solid var(--card-border); border-radius:16px; padding:14px; display:flex; align-items:flex-start; gap:10px; }
+.note-card-main { flex:1; min-width:0; }
+.note-card-title { font-size:15px; font-weight:600; color:var(--text1); margin-bottom:4px; }
+.note-card-content { font-size:13px; color:var(--text3); line-height:1.5; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
+.note-links-row { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+.note-link-chip { display:inline-flex; align-items:center; gap:4px; padding:4px 10px; border-radius:99px; background:rgba(99,102,241,.12); color:#a5b4fc; font-size:12px; text-decoration:none; }
+.note-card-btns { display:flex; flex-direction:column; gap:4px; }
+.note-order-btn, .note-edit-btn { width:30px; height:30px; border-radius:8px; border:1.5px solid var(--card-border); background:transparent; color:var(--text3); display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:14px; }
+.note-edit-input { width:100%; box-sizing:border-box; background:rgba(255,255,255,.06); border:1.5px solid var(--card-border); border-radius:10px; padding:10px 12px; color:var(--text1); font-size:15px; margin-bottom:10px; }
+.note-edit-area { width:100%; box-sizing:border-box; background:rgba(255,255,255,.06); border:1.5px solid var(--card-border); border-radius:10px; padding:10px 12px; color:var(--text1); font-size:14px; resize:vertical; font-family:inherit; margin-bottom:10px; }
+.note-link-edit-row { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+.note-link-remove-btn { width:32px; height:32px; border-radius:8px; border:1.5px solid var(--card-border); background:transparent; color:var(--text3); cursor:pointer; flex-shrink:0; }
+
+/* ── Find — category dropdown ──────────────────────────────────────── */
+.find-search-wrap { padding:12px 14px 0; }
+.find-cat-row { padding:10px 14px 0; }
+.find-cat-btn { display:inline-flex; align-items:center; gap:8px; padding:10px 16px; border-radius:12px; border:1.5px solid var(--card-border); background:rgba(255,255,255,.06); color:var(--text1); font-size:15px; font-weight:600; cursor:pointer; }
+.find-cat-btn i { font-size:18px; }
+.cat-group-label { font-size:11px; font-weight:700; color:var(--text3); text-transform:uppercase; letter-spacing:.06em; padding:14px 0 4px; }
+.cat-row { display:flex; align-items:center; gap:10px; width:100%; padding:12px 8px; border-radius:10px; border:none; background:transparent; color:var(--text1); font-size:15px; cursor:pointer; text-align:left; }
+.cat-row:active { background:rgba(255,255,255,.05); }
+.cat-row.active { background:rgba(99,102,241,.12); color:#a5b4fc; }
+.cat-row i { font-size:18px; color:var(--text3); width:22px; }
+.cat-row.active i { color:#a5b4fc; }
+
+/* ── Booking info ──────────────────────────────────────────────────── */
+.stop-booking-wrap { margin-bottom:12px; }
+.booking-info-card { background:rgba(99,102,241,.08); border:1.5px solid rgba(99,102,241,.2); border-radius:14px; padding:12px 14px; }
+.booking-info-label { font-size:11px; font-weight:700; color:#a5b4fc; text-transform:uppercase; letter-spacing:.06em; margin-bottom:8px; display:flex; align-items:center; gap:6px; }
+.booking-info-ref { font-size:14px; font-weight:600; color:var(--text1); margin-bottom:4px; }
+.booking-info-link { display:inline-flex; align-items:center; gap:4px; font-size:13px; color:#818cf8; text-decoration:none; margin-bottom:4px; }
+.booking-info-notes { font-size:13px; color:var(--text3); margin-top:4px; line-height:1.5; }
+.booking-edit-btn { margin-top:8px; font-size:12px; color:var(--text3); background:transparent; border:1.5px solid var(--card-border); border-radius:8px; padding:4px 10px; cursor:pointer; display:inline-flex; align-items:center; gap:4px; }

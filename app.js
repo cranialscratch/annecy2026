@@ -1,5 +1,5 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v252';
+const APP_VERSION = 'v253';
 
 const CHANGELOG = [
   { version: 'v244', title: 'Swipe to Skip or Remove, compact skipped cards, Bucket List', items: [
@@ -194,6 +194,8 @@ const state = {
   personalPinned:  {},   // stopId → bool (absorb ripple)
   notifLeadMins:      {},   // stopId → int (minutes before departBy to notify; default 30)
   ownerCurrentStopId: null, // shared: owner's last checked-in stop (drives group "Now" display)
+  notes:              [],   // personal notes [{id,title,content,links,createdAt}]
+  bookingInfo:        {},   // stopId → {ref,link,notes}
 };
 
 /* ── Helpers ───────────────────────────────────────────────────────── */
@@ -1739,6 +1741,8 @@ function localSave() {
     localStorage.setItem('annecy_personal_tickets',  JSON.stringify(state.personalTickets || {}));
     localStorage.setItem('annecy_personal_pinned',   JSON.stringify(state.personalPinned  || {}));
     localStorage.setItem('annecy_notif_lead',         JSON.stringify(state.notifLeadMins   || {}));
+    localStorage.setItem('annecy_notes',             JSON.stringify(state.notes           || []));
+    localStorage.setItem('annecy_booking_info',      JSON.stringify(state.bookingInfo      || {}));
   } catch {}
 }
 function save() {
@@ -1784,6 +1788,10 @@ function load() {
     if (pp) state.personalPinned = JSON.parse(pp);
     const nl = localStorage.getItem('annecy_notif_lead');
     if (nl) state.notifLeadMins = JSON.parse(nl);
+    const no = localStorage.getItem('annecy_notes');
+    if (no) state.notes = JSON.parse(no);
+    const bi = localStorage.getItem('annecy_booking_info');
+    if (bi) state.bookingInfo = JSON.parse(bi);
   } catch {}
   try {
     if (localStorage.getItem('annecy_theme') === 'light') document.body.classList.add('light');
@@ -1895,7 +1903,7 @@ function renderView(scrollToNow) {
     else if (state.currentView === 'vegan')    { setBgClass(null); renderVeganView(tl); }
     else if (state.currentView === 'charging') { setBgClass(null); renderChargerView(tl); }
     else if (state.currentView === 'find')     { setBgClass(null); renderFindView(tl); return; }
-    else if (state.currentView === 'more')     { setBgClass(null); renderMoreView(tl); return; }
+    else if (state.currentView === 'more')     { setBgClass(null); renderNotesView(tl); return; }
     else if (state.cardView === 'calendar') renderCalView(tl);
     else {
       // Inject GPS chip before timeline if not present
@@ -2572,15 +2580,41 @@ function openBucketAddSheet(entry, idx) {
 
 /* ── Find view — tag-based search ─────────────────────────────────────── */
 
-const FIND_TAGS = [
-  { id:'food',        icon:'ph-fork-knife',       label:'Food',      placeTypes:['restaurant','fast_food_restaurant','meal_takeaway','bakery','food'] },
-  { id:'coffee',      icon:'ph-coffee',            label:'Coffee',    placeTypes:['coffee_shop','cafe'] },
-  { id:'charging',    icon:'ph-charging-station',  label:'Charger',   placeTypes:null },
-  { id:'bar',         icon:'ph-wine',              label:'Bar',       placeTypes:['bar','pub','wine_bar','cocktail_bar'] },
-  { id:'supermarket', icon:'ph-shopping-cart',     label:'Market',    placeTypes:['supermarket','grocery_store','convenience_store'] },
-  { id:'pharmacy',    icon:'ph-first-aid-kit',     label:'Pharmacy',  placeTypes:['pharmacy'] },
-  { id:'attraction',  icon:'ph-binoculars',        label:'Sights',    placeTypes:['tourist_attraction','museum','art_gallery','park','national_park'] },
+const FIND_TAG_GROUPS = [
+  { group:'Eating & Drinking', tags:[
+    { id:'food',       icon:'ph-fork-knife',       label:'Food & Drink',    placeTypes:['restaurant','fast_food_restaurant','meal_takeaway','bakery'] },
+    { id:'coffee',     icon:'ph-coffee',            label:'Coffee & Cafés',  placeTypes:['coffee_shop','cafe'] },
+    { id:'bar',        icon:'ph-wine',              label:'Bars & Pubs',     placeTypes:['bar','pub','wine_bar','cocktail_bar'] },
+  ]},
+  { group:'Shopping', tags:[
+    { id:'supermarket',icon:'ph-shopping-cart',    label:'Supermarket',     placeTypes:['supermarket','grocery_store','convenience_store'] },
+    { id:'clothes',    icon:'ph-t-shirt',           label:'Clothing',        placeTypes:['clothing_store','shoe_store'] },
+    { id:'electronics',icon:'ph-device-mobile',    label:'Electronics',     placeTypes:['electronics_store'] },
+    { id:'books',      icon:'ph-books',             label:'Books',           placeTypes:['book_store'] },
+    { id:'gifts',      icon:'ph-gift',              label:'Gifts & Souvenirs',placeTypes:['gift_shop','souvenir_store'] },
+    { id:'sports',     icon:'ph-sneaker',           label:'Sports & Outdoors',placeTypes:['sporting_goods_store'] },
+  ]},
+  { group:'Travel & Transport', tags:[
+    { id:'charging',   icon:'ph-charging-station', label:'EV Charger',      placeTypes:null },
+    { id:'petrol',     icon:'ph-gas-pump',          label:'Petrol Station',  placeTypes:['gas_station'] },
+    { id:'parking',    icon:'ph-parking',           label:'Parking',         placeTypes:['parking'] },
+    { id:'hotel',      icon:'ph-bed',               label:'Hotels',          placeTypes:['hotel','lodging'] },
+  ]},
+  { group:'Health & Services', tags:[
+    { id:'pharmacy',   icon:'ph-first-aid-kit',    label:'Pharmacy',        placeTypes:['pharmacy'] },
+    { id:'hospital',   icon:'ph-hospital',          label:'Hospital / A&E',  placeTypes:['hospital'] },
+    { id:'bank',       icon:'ph-bank',              label:'Bank / ATM',      placeTypes:['bank','atm'] },
+    { id:'post',       icon:'ph-envelope-simple',   label:'Post Office',     placeTypes:['post_office'] },
+    { id:'laundry',    icon:'ph-washing-machine',   label:'Laundromat',      placeTypes:['laundry'] },
+  ]},
+  { group:'Things to Do', tags:[
+    { id:'attraction', icon:'ph-binoculars',        label:'Attractions',     placeTypes:['tourist_attraction','monument'] },
+    { id:'museum',     icon:'ph-buildings',          label:'Museums',         placeTypes:['museum'] },
+    { id:'park',       icon:'ph-tree',              label:'Parks',           placeTypes:['park','national_park'] },
+    { id:'art',        icon:'ph-paint-brush',       label:'Art Galleries',   placeTypes:['art_gallery'] },
+  ]},
 ];
+const FIND_TAGS = FIND_TAG_GROUPS.flatMap(g => g.tags);
 
 const FIND_SUB_OPTS = {
   food:     [{ id:'diet',  opts:[{v:'all',l:'All'},{v:'vegan',l:'Vegan-friendly'},{v:'vegan_only',l:'Vegan only'}] }],
@@ -2668,6 +2702,39 @@ async function _doFindSearch(lat, lng, radiusM, tagDef, subOpts, resultsEl) {
   }
 }
 
+function _openCategorySheet(currentTag, onSelect) {
+  document.getElementById('cat-sheet')?.remove();
+  document.getElementById('cat-sheet-overlay')?.remove();
+  const overlay = document.createElement('div');
+  overlay.id = 'cat-sheet-overlay';
+  overlay.className = 'stop-sheet-overlay';
+  const sheet = document.createElement('div');
+  sheet.id = 'cat-sheet';
+  sheet.className = 'stop-sheet';
+  let body = '<div class="stop-sheet-handle"></div><div class="stop-sheet-header"><div class="stop-sheet-title"><i class="ph ph-magnifying-glass"></i> Category</div><button class="stop-sheet-close" id="cat-close"><i class="ph ph-x"></i></button></div><div class="stop-sheet-body" style="padding-bottom:40px">';
+  FIND_TAG_GROUPS.forEach(g => {
+    body += `<div class="cat-group-label">${g.group}</div>`;
+    g.tags.forEach(t => {
+      body += `<button class="cat-row${t.id === currentTag ? ' active' : ''}" data-tag="${t.id}"><i class="ph ${t.icon}"></i>${t.label}</button>`;
+    });
+  });
+  body += '</div>';
+  sheet.innerHTML = body;
+  document.body.appendChild(overlay);
+  document.body.appendChild(sheet);
+  requestAnimationFrame(() => { sheet.classList.add('open'); overlay.classList.add('open'); });
+  const close = () => {
+    sheet.classList.remove('open'); overlay.classList.remove('open');
+    sheet.addEventListener('transitionend', () => sheet.remove(), {once:true});
+    overlay.addEventListener('transitionend', () => overlay.remove(), {once:true});
+  };
+  sheet.querySelector('#cat-close').addEventListener('click', close);
+  overlay.addEventListener('click', close);
+  sheet.querySelectorAll('.cat-row').forEach(btn => {
+    btn.addEventListener('click', () => { close(); onSelect(btn.dataset.tag); });
+  });
+}
+
 function renderFindView(container) {
   container.innerHTML = '';
 
@@ -2680,21 +2747,29 @@ function renderFindView(container) {
   const wrap = document.createElement('div');
   wrap.className = 'find-wrap';
 
-  /* ── Tag chips ── */
-  const tagRow = document.createElement('div');
-  tagRow.className = 'find-tags';
-  tagRow.innerHTML = FIND_TAGS.map(t => `
-    <button class="find-tag-chip${t.id === tag ? ' active' : ''}" data-tag="${t.id}">
-      <i class="ph ${t.icon}"></i><span>${t.label}</span>
-    </button>`).join('');
-  tagRow.querySelectorAll('.find-tag-chip').forEach(btn => {
-    btn.addEventListener('click', () => {
-      state._findTag = btn.dataset.tag;
-      state._findSubOpts = {};
+  /* ── Free-text search bar ── */
+  const searchWrap = document.createElement('div');
+  searchWrap.className = 'find-search-wrap';
+  searchWrap.innerHTML = `
+    <div class="place-search-bar">
+      <i class="ph ph-magnifying-glass"></i>
+      <input class="place-search-input" id="find-text-input" type="search" placeholder="Search for anything…" autocomplete="off" value="${state._findTextQuery || ''}">
+      <button class="place-search-btn" id="find-text-go"><i class="ph ph-arrow-right"></i></button>
+    </div>`;
+  wrap.appendChild(searchWrap);
+
+  /* ── Category selector button ── */
+  const catRow = document.createElement('div');
+  catRow.className = 'find-cat-row';
+  const tagLabel = tagDef ? `<i class="ph ${tagDef.icon}"></i>${tagDef.label}` : 'Choose category';
+  catRow.innerHTML = `<button class="find-cat-btn" id="find-cat-btn">${tagLabel} <i class="ph ph-caret-down" style="margin-left:4px;font-size:12px"></i></button>`;
+  catRow.querySelector('#find-cat-btn').addEventListener('click', () => {
+    _openCategorySheet(tag, newTag => {
+      state._findTag = newTag; state._findSubOpts = {}; state._findTextQuery = '';
       renderFindView(container);
     });
   });
-  wrap.appendChild(tagRow);
+  wrap.appendChild(catRow);
 
   /* ── Sub-options ── */
   if (subDefs.length) {
@@ -2752,7 +2827,71 @@ function renderFindView(container) {
   wrap.appendChild(resultsEl);
   container.appendChild(wrap);
 
-  /* ── Trigger search ── */
+  /* ── Free-text search handler ── */
+  const textInput = document.getElementById('find-text-input');
+  const textGo    = document.getElementById('find-text-go');
+  const doTextSearch = async () => {
+    const q = textInput?.value.trim();
+    if (!q) { state._findTextQuery = ''; renderFindView(container); return; }
+    state._findTextQuery = q;
+    const getCenter = async () => {
+      if (locMode === 'nearme' && _userLat !== null) return { lat:_userLat, lng:_userLng, r:5000 };
+      if (locMode === 'enroute') {
+        const rd = TRIP_DATA.days.find(d => d.date === localDateStr());
+        const st = rd ? getDayStops(rd).filter(s => s.lat && s.lng) : [];
+        if (st.length >= 2) return { lat:(st[0].lat+st[st.length-1].lat)/2, lng:(st[0].lng+st[st.length-1].lng)/2, r:20000 };
+      }
+      if (locMode === 'setarea' && state._findAreaText) {
+        const res = await fetch('https://places.googleapis.com/v1/places:searchText', {
+          method:'POST', headers:{'Content-Type':'application/json','X-Goog-Api-Key':GPLACES_KEY,'X-Goog-FieldMask':'places.location'},
+          body: JSON.stringify({textQuery:state._findAreaText, maxResultCount:1}),
+        });
+        const loc = (await res.json()).places?.[0]?.location;
+        if (loc) return { lat:loc.latitude, lng:loc.longitude, r:5000 };
+      }
+      return null;
+    };
+    resultsEl.innerHTML = `<div class="vegan-searching"><i class="ph ph-spinner vegan-spin"></i> Searching…</div>`;
+    const center = await getCenter().catch(() => null);
+    const body = { textQuery:q, maxResultCount:15, languageCode:'en' };
+    if (center) body.locationBias = { circle:{ center:{latitude:center.lat,longitude:center.lng}, radius:center.r } };
+    try {
+      const res = await fetch('https://places.googleapis.com/v1/places:searchText', {
+        method:'POST',
+        headers:{'Content-Type':'application/json','X-Goog-Api-Key':GPLACES_KEY,
+          'X-Goog-FieldMask':'places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.userRatingCount,places.primaryType,places.currentOpeningHours'},
+        body: JSON.stringify(body),
+      });
+      const places = (await res.json()).places || [];
+      if (!places.length) { resultsEl.innerHTML=`<div class="vegan-empty"><i class="ph ph-magnifying-glass"></i><div>No results for "${q}"</div></div>`; return; }
+      const refLat = center?.lat ?? _userLat, refLng = center?.lng ?? _userLng;
+      if (refLat !== null) places.sort((a,b) => {
+        const dA = a.location ? haversineM(refLat,refLng,a.location.latitude,a.location.longitude) : 9e9;
+        const dB = b.location ? haversineM(refLat,refLng,b.location.latitude,b.location.longitude) : 9e9;
+        return dA-dB;
+      });
+      resultsEl.innerHTML = '';
+      places.forEach(p => {
+        const plat=p.location?.latitude, plng=p.location?.longitude;
+        const dist = (refLat!==null && plat && plng) ? Math.round(haversineM(refLat,refLng,plat,plng)) : null;
+        const distStr = dist!==null ? (dist<1000?`${dist}m`:`${(dist/1000).toFixed(1)}km`) : '';
+        const typeLabel = (p.primaryType||'').replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
+        const rHtml = p.rating ? `<span class="vcard-rating"><i class="ph ph-star-fill" style="color:#f59e0b"></i> ${p.rating.toFixed(1)} <span class="vcard-rating-count">(${(p.userRatingCount||0).toLocaleString()})</span></span>` : '';
+        const oh = p.currentOpeningHours;
+        const openHtml = !oh?'':oh.openNow===true?'<span class="vp-open-badge open">Open</span>':oh.openNow===false?'<span class="vp-open-badge closed">Closed</span>':'';
+        const card = document.createElement('div');
+        card.className = 'vegan-place-card';
+        card.innerHTML = `<div class="vegan-place-main"><div class="vegan-place-name">${p.displayName?.text||''}</div><div class="vegan-place-meta"><span class="vegan-place-type">${typeLabel}</span>${openHtml}</div><div class="vcard-bottom-row">${rHtml}${p.formattedAddress?`<span class="vegan-place-hours-mini">${p.formattedAddress}</span>`:''}</div></div><div class="vegan-place-right">${distStr?`<div class="vegan-place-dist">${distStr}</div>`:''}<div class="vegan-place-chevron"><i class="ph ph-caret-right"></i></div></div>`;
+        if (plat&&plng) card.addEventListener('click', () => window.open(`https://maps.apple.com/?daddr=${plat},${plng}&dirflg=d`,'_blank'));
+        resultsEl.appendChild(card);
+      });
+    } catch { resultsEl.innerHTML=`<div class="vegan-empty"><i class="ph ph-wifi-slash"></i><div>Search failed.</div></div>`; }
+  };
+  textGo?.addEventListener('click', doTextSearch);
+  textInput?.addEventListener('keydown', e => { if (e.key==='Enter') doTextSearch(); });
+  if (state._findTextQuery) { doTextSearch(); return; }
+
+  /* ── Category-based search ── */
   const runSearch = async () => {
     if (locMode === 'nearme') {
       if (_userLat === null) {
@@ -2812,17 +2951,153 @@ function renderFindView(container) {
   runSearch();
 }
 
-function renderMoreView(container) {
+function renderNotesView(container) {
   container.innerHTML = '';
   const wrap = document.createElement('div');
-  wrap.className = 'more-view';
-  wrap.innerHTML = `
-    <div class="more-section-title">Trip</div>
-    <button class="more-row" onclick="state.currentView='overview';renderView(false)"><i class="ph ph-list-bullets"></i> All days</button>
-    <button class="more-row" onclick="state.currentView='bucket';renderView(false)"><i class="ph ph-bookmark-simple"></i> Saved for later</button>
-    <div class="more-section-title">Settings</div>
-    <button class="more-row" onclick="document.getElementById('menu-btn').click()"><i class="ph ph-gear"></i> Preferences &amp; info</button>`;
+  wrap.className = 'notes-view';
+
+  const header = document.createElement('div');
+  header.className = 'notes-header';
+  header.innerHTML = `
+    <div class="notes-title"><i class="ph ph-notebook"></i> Notes</div>
+    <button class="notes-add-btn" id="notes-add-btn"><i class="ph ph-plus"></i> New note</button>`;
+  wrap.appendChild(header);
+
+  const searchWrap = document.createElement('div');
+  searchWrap.className = 'notes-search-wrap';
+  searchWrap.innerHTML = `<div class="place-search-bar"><i class="ph ph-magnifying-glass"></i><input class="place-search-input" id="notes-search" type="search" placeholder="Search notes…" autocomplete="off"></div>`;
+  wrap.appendChild(searchWrap);
+
+  const listEl = document.createElement('div');
+  listEl.className = 'notes-list';
+  wrap.appendChild(listEl);
   container.appendChild(wrap);
+
+  const renderList = (query = '') => {
+    listEl.innerHTML = '';
+    const notes = (state.notes || []).filter(n =>
+      !query || (n.title+' '+n.content).toLowerCase().includes(query.toLowerCase()));
+    if (!notes.length) {
+      listEl.innerHTML = `<div class="vegan-empty"><i class="ph ph-notebook"></i><div>${query ? 'No matching notes' : 'No notes yet — tap + to create one'}</div></div>`;
+      return;
+    }
+    notes.forEach((note, idx) => {
+      const card = document.createElement('div');
+      card.className = 'note-card';
+      const linksHtml = (note.links||[]).filter(l=>l.url).map(l =>
+        `<a class="note-link-chip" href="${l.url}" target="_blank" rel="noopener"><i class="ph ph-link-simple"></i>${l.label||l.url}</a>`).join('');
+      card.innerHTML = `
+        <div class="note-card-main">
+          ${note.title ? `<div class="note-card-title">${note.title}</div>` : ''}
+          ${note.content ? `<div class="note-card-content">${note.content}</div>` : ''}
+          ${linksHtml ? `<div class="note-links-row">${linksHtml}</div>` : ''}
+        </div>
+        <div class="note-card-btns">
+          ${idx > 0 ? `<button class="note-order-btn" data-dir="up" data-idx="${idx}"><i class="ph ph-caret-up"></i></button>` : '<span style="width:30px"></span>'}
+          <button class="note-edit-btn" data-id="${note.id}"><i class="ph ph-pencil-simple"></i></button>
+          ${idx < notes.length-1 ? `<button class="note-order-btn" data-dir="down" data-idx="${idx}"><i class="ph ph-caret-down"></i></button>` : '<span style="width:30px"></span>'}
+        </div>`;
+      listEl.appendChild(card);
+    });
+    listEl.querySelectorAll('.note-order-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const i = parseInt(btn.dataset.idx);
+        const dir = btn.dataset.dir;
+        const arr = state.notes || [];
+        const j = dir === 'up' ? i-1 : i+1;
+        if (j < 0 || j >= arr.length) return;
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+        save(); renderList(document.getElementById('notes-search')?.value || '');
+      });
+    });
+    listEl.querySelectorAll('.note-edit-btn').forEach(btn => {
+      btn.addEventListener('click', () => openNoteSheet(btn.dataset.id, () => renderNotesView(container)));
+    });
+  };
+
+  renderList();
+  document.getElementById('notes-search')?.addEventListener('input', e => renderList(e.target.value));
+  document.getElementById('notes-add-btn')?.addEventListener('click', () => openNoteSheet(null, () => renderNotesView(container)));
+}
+
+function openNoteSheet(noteId, onDone) {
+  document.getElementById('note-sheet')?.remove();
+  document.getElementById('note-sheet-overlay')?.remove();
+  const note = noteId ? (state.notes||[]).find(n => n.id === noteId) : null;
+  const linksData = note?.links ? [...note.links] : [];
+
+  const overlay = document.createElement('div');
+  overlay.id = 'note-sheet-overlay';
+  overlay.className = 'stop-sheet-overlay';
+
+  const sheet = document.createElement('div');
+  sheet.id = 'note-sheet';
+  sheet.className = 'stop-sheet';
+  sheet.innerHTML = `
+    <div class="stop-sheet-handle"></div>
+    <div class="stop-sheet-header">
+      <div class="stop-sheet-title"><i class="ph ph-notebook"></i> ${noteId ? 'Edit note' : 'New note'}</div>
+      <button class="stop-sheet-close" id="note-close-btn"><i class="ph ph-x"></i></button>
+    </div>
+    <div class="stop-sheet-body" style="padding-bottom:40px">
+      <input class="note-edit-input" id="note-edit-title" type="text" placeholder="Title" value="${note?.title || ''}">
+      <textarea class="note-edit-area" id="note-edit-content" placeholder="Notes, references, details…" rows="5">${note?.content || ''}</textarea>
+      <div id="note-links-area"></div>
+      <button class="sheet-action-btn" id="note-add-link"><i class="ph ph-link-simple"></i> Add link</button>
+      <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+        ${noteId ? `<button class="sheet-action-btn sheet-remove-btn" id="note-del-btn"><i class="ph ph-trash"></i> Delete</button>` : ''}
+        <button class="sheet-action-btn" id="note-save-btn" style="background:var(--accent);color:#fff;flex:1"><i class="ph ph-floppy-disk"></i> Save</button>
+      </div>
+    </div>`;
+
+  document.body.appendChild(overlay);
+  document.body.appendChild(sheet);
+  requestAnimationFrame(() => { sheet.classList.add('open'); overlay.classList.add('open'); });
+
+  const close = () => {
+    sheet.classList.remove('open'); overlay.classList.remove('open');
+    sheet.addEventListener('transitionend', () => sheet.remove(), {once:true});
+    overlay.addEventListener('transitionend', () => overlay.remove(), {once:true});
+  };
+  sheet.querySelector('#note-close-btn').addEventListener('click', close);
+  overlay.addEventListener('click', close);
+
+  const linksAreaEl = sheet.querySelector('#note-links-area');
+  const renderLinks = () => {
+    linksAreaEl.innerHTML = '';
+    linksData.forEach((l, i) => {
+      const row = document.createElement('div');
+      row.className = 'note-link-edit-row';
+      row.innerHTML = `<input class="place-search-input" style="flex:1" type="text" placeholder="Label" value="${l.label||''}"><input class="place-search-input" style="flex:2" type="url" placeholder="https://…" value="${l.url||''}"><button class="note-link-remove-btn"><i class="ph ph-x"></i></button>`;
+      row.querySelector('input:nth-child(1)').addEventListener('input', e => { linksData[i].label = e.target.value; });
+      row.querySelector('input:nth-child(2)').addEventListener('input', e => { linksData[i].url = e.target.value; });
+      row.querySelector('.note-link-remove-btn').addEventListener('click', () => { linksData.splice(i,1); renderLinks(); });
+      linksAreaEl.appendChild(row);
+    });
+  };
+  renderLinks();
+
+  sheet.querySelector('#note-add-link').addEventListener('click', () => { linksData.push({label:'',url:''}); renderLinks(); });
+
+  sheet.querySelector('#note-save-btn').addEventListener('click', () => {
+    const t  = sheet.querySelector('#note-edit-title').value.trim();
+    const c  = sheet.querySelector('#note-edit-content').value.trim();
+    const ls = linksData.filter(l => l.url?.trim());
+    if (!state.notes) state.notes = [];
+    if (noteId) {
+      const idx = state.notes.findIndex(n => n.id === noteId);
+      if (idx !== -1) state.notes[idx] = { ...state.notes[idx], title:t, content:c, links:ls };
+    } else {
+      state.notes.push({ id:'note_'+Date.now(), title:t, content:c, links:ls, createdAt:Date.now() });
+    }
+    save(); close(); if (onDone) onDone();
+  });
+
+  sheet.querySelector('#note-del-btn')?.addEventListener('click', () => {
+    if (!confirm('Delete this note?')) return;
+    state.notes = (state.notes||[]).filter(n => n.id !== noteId);
+    save(); close(); if (onDone) onDone();
+  });
 }
 
 /* ── Filter list ───────────────────────────────────────────────────── */
@@ -6153,6 +6428,13 @@ function openStopSheet(stopId) {
     <div class="stop-sheet-body">
       ${getStopReason(stop) ? `<p class="stop-sheet-reason">${getStopReason(stop)}</p>` : ''}
       ${buildTags(stop)}
+      <div class="stop-booking-wrap">
+        ${(() => {
+          const b = (state.bookingInfo||{})[stopId];
+          if (!b || (!b.ref && !b.link && !b.notes)) return `<button class="sheet-action-btn" onclick="openBookingSheet('${stopId}')"><i class="ph ph-ticket"></i> Add booking info</button>`;
+          return `<div class="booking-info-card"><div class="booking-info-label"><i class="ph ph-ticket"></i> Booking</div>${b.ref?`<div class="booking-info-ref"><i class="ph ph-hash"></i> ${b.ref}</div>`:''}${b.link?`<a class="booking-info-link" href="${b.link}" target="_blank" rel="noopener"><i class="ph ph-link-simple"></i> View booking</a>`:''}${b.notes?`<div class="booking-info-notes">${b.notes}</div>`:''}<button class="booking-edit-btn" onclick="openBookingSheet('${stopId}')"><i class="ph ph-pencil-simple"></i> Edit</button></div>`;
+        })()}
+      </div>
       <div class="stop-sheet-actions">
         <a class="sheet-action-btn" href="${navUrl(stop.location, stop.address, stop.lat, stop.lng)}" target="_blank" rel="noopener">
           <i class="ph ph-navigation-arrow"></i> Navigate
@@ -6198,6 +6480,58 @@ function closeStopSheet() {
   const overlay = document.getElementById('stop-sheet-overlay');
   if (sheet)   { sheet.classList.remove('open'); sheet.addEventListener('transitionend', () => sheet.remove(), { once: true }); }
   if (overlay) { overlay.classList.remove('open'); overlay.addEventListener('transitionend', () => overlay.remove(), { once: true }); }
+}
+
+function openBookingSheet(stopId) {
+  closeStopSheet();
+  document.getElementById('booking-sheet')?.remove();
+  document.getElementById('booking-sheet-overlay')?.remove();
+  const b = (state.bookingInfo||{})[stopId] || {};
+  const overlay = document.createElement('div');
+  overlay.id = 'booking-sheet-overlay';
+  overlay.className = 'stop-sheet-overlay';
+  const sheet = document.createElement('div');
+  sheet.id = 'booking-sheet';
+  sheet.className = 'stop-sheet';
+  sheet.innerHTML = `
+    <div class="stop-sheet-handle"></div>
+    <div class="stop-sheet-header">
+      <div class="stop-sheet-title"><i class="ph ph-ticket"></i> Booking info</div>
+      <button class="stop-sheet-close" id="bk-close"><i class="ph ph-x"></i></button>
+    </div>
+    <div class="stop-sheet-body" style="padding-bottom:40px">
+      <input class="note-edit-input" id="bk-ref" type="text" placeholder="Booking reference" value="${b.ref||''}">
+      <input class="note-edit-input" id="bk-link" type="url" placeholder="Booking link (https://…)" value="${b.link||''}">
+      <textarea class="note-edit-area" id="bk-notes" placeholder="Notes (time, special requirements…)" rows="4">${b.notes||''}</textarea>
+      <div style="margin-top:12px;display:flex;gap:8px">
+        ${b.ref||b.link||b.notes?`<button class="sheet-action-btn sheet-remove-btn" id="bk-clear"><i class="ph ph-trash"></i> Clear</button>`:''}
+        <button class="sheet-action-btn" id="bk-save" style="background:var(--accent);color:#fff;flex:1"><i class="ph ph-floppy-disk"></i> Save</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  document.body.appendChild(sheet);
+  requestAnimationFrame(() => { sheet.classList.add('open'); overlay.classList.add('open'); });
+  const close = () => {
+    sheet.classList.remove('open'); overlay.classList.remove('open');
+    sheet.addEventListener('transitionend', () => sheet.remove(), {once:true});
+    overlay.addEventListener('transitionend', () => overlay.remove(), {once:true});
+  };
+  sheet.querySelector('#bk-close').addEventListener('click', close);
+  overlay.addEventListener('click', close);
+  sheet.querySelector('#bk-save').addEventListener('click', () => {
+    const ref   = sheet.querySelector('#bk-ref').value.trim();
+    const link  = sheet.querySelector('#bk-link').value.trim();
+    const notes = sheet.querySelector('#bk-notes').value.trim();
+    if (!state.bookingInfo) state.bookingInfo = {};
+    if (ref||link||notes) state.bookingInfo[stopId] = {ref,link,notes};
+    else delete state.bookingInfo[stopId];
+    save(); close();
+  });
+  sheet.querySelector('#bk-clear')?.addEventListener('click', () => {
+    if (!state.bookingInfo) state.bookingInfo = {};
+    delete state.bookingInfo[stopId];
+    save(); close();
+  });
 }
 
 function togglePinSheet(stopId) {

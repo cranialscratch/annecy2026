@@ -27,7 +27,8 @@ const SHARED_KEYS = ['overrides','crossDayMoves','locOverrides','durOverrides',
 
 /* Keys that belong to personal state (per-user only) */
 const PERSONAL_KEYS = ['checked','skipped','bucketList',
-                       'personalStops','personalTickets','personalPinned','notifLeadMins'];
+                       'personalStops','personalTickets','personalPinned','notifLeadMins',
+                       'notes','bookingInfo'];
 
 let _db  = null;
 let _auth = null;
@@ -198,6 +199,8 @@ function syncSave() {
     personalTickets:state.personalTickets|| {},
     personalPinned:  state.personalPinned  || {},
     notifLeadMins:   state.notifLeadMins   || {},
+    notes:           state.notes           || [],
+    bookingInfo:     state.bookingInfo     || {},
   };
   _db.ref(USER_PATH(_uid)).set(personalPayload)
     .catch(() => {});
