@@ -4716,7 +4716,7 @@ function renderTimeline(container, scrollToNow) {
   }
   setBgClass('bg-day');
 
-  if (day.isFestival) {
+  if (day.isFestival && day.dateEnd) {
     container.appendChild(buildFestivalBanner(day));
   }
 
