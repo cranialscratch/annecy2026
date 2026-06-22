@@ -1,5 +1,5 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v250';
+const APP_VERSION = 'v251';
 
 const CHANGELOG = [
   { version: 'v244', title: 'Swipe to Skip or Remove, compact skipped cards, Bucket List', items: [
@@ -209,7 +209,7 @@ function minutesToTime(mins) {
 function getStopTime(stop)     { return state.overrides[stop.id]          ?? stop.time; }
 function getStopLat(stop)      { return state.locOverrides[stop.id]?.lat  ?? stop.lat; }
 function getStopLng(stop)      { return state.locOverrides[stop.id]?.lng  ?? stop.lng; }
-function getStopName(stop)     { return state.locOverrides[stop.id]?.name ?? stop.location; }
+function getStopName(stop)     { return state.locOverrides[stop.id]?.name ?? stop.title ?? stop.location; }
 function getStopDuration(stop) {
   if (getStopType(stop) === 'depart') return 0;
   return state.durOverrides[stop.id] ?? stop.duration ?? 30;
