@@ -244,6 +244,7 @@ const TRIP_DATA = {
       subtitle: "Annecy International Animation Festival 2026",
       isFestival: true,
       stops: [
+        { id:"show_tue1", order:0, time:"09:00", tz:"FR", type:"showing", title:"DreamWorks presents: Discovering Nakalimutan, the Forgotten Island", location:"Bonlieu Scène nationale, Annecy", duration:180, ticketed:false, lat:45.8998, lng:6.1296, mapsUrl:"https://maps.google.com/?q=Bonlieu+Scene+Nationale+Annecy", reason:"Competition feature from DreamWorks Animation. Grande Salle — no ticket, queue early." },
         { id:"fs3",  order:1, time:"10:00", tz:"FR", location:"Lake Annecy", type:"experience", priority:3, lat:45.8667, lng:6.1833, mapsUrl:"https://maps.google.com/?q=Lac+Annecy", reason:"Swimming, cycling and boat trips on one of Europe's clearest lakes. Hire bikes in Annecy and follow the lakeside path all the way to Talloires — flat and stunning.", duration:120 },
         { id:"fs7",  order:2, time:"13:00", tz:"FR", location:"Talloires", type:"village", priority:3, lat:45.8311, lng:6.2178, mapsUrl:"https://maps.google.com/?q=Talloires+France", reason:"Stunning village on the lake's east shore with a 17th-century abbey, café terraces and tranquil abbey gardens. 20 minutes from the chalet by road or bike.", duration:90 },
         { id:"fs13", order:3, time:"19:00", tz:"FR", location:"Brasserie des Européens, Annecy", type:"food", priority:2, lat:45.8994, lng:6.1300, mapsUrl:"https://maps.google.com/?q=Brasserie+des+Europeens+Annecy", reason:"Relaxed brasserie near the Bonlieu with terrace dining and plant-based options — a reliable choice for festival lunches and casual dinners.", veganFriendly:true, duration:90 }
@@ -258,7 +259,9 @@ const TRIP_DATA = {
       isFestival: true,
       stops: [
         { id:"fs8",  order:1, time:"10:00", tz:"FR", location:"Gorges du Fier", type:"experience", priority:2, lat:45.9167, lng:6.0333, mapsUrl:"https://maps.google.com/?q=Gorges+du+Fier+Lovagny", reason:"Spectacular narrow gorge with suspended walkways over rushing glacial water — dramatic and unique. 20 minutes west of Annecy.", duration:90 },
-        { id:"fs12", order:2, time:"13:00", tz:"FR", location:"L'Aromatic, Annecy", type:"food", priority:2, lat:45.8998, lng:6.1280, mapsUrl:"https://maps.google.com/?q=L+Aromatic+Annecy", reason:"Popular vegan-friendly restaurant near the old town — fresh seasonal dishes, good wine list and a relaxed atmosphere away from the festival crowds.", veganFriendly:true, duration:90 }
+        { id:"show_wed1", order:2, time:"11:00", tz:"FR", type:"showing", title:"Wildwood", location:"Cinéma de la Cité Internationale, Annecy", duration:180, ticketed:false, lat:45.9012, lng:6.1332, mapsUrl:"https://maps.google.com/?q=Cinema+Cite+Internationale+13+Rue+de+la+Paix+Annecy", reason:"Festival screening at Cité Internationale. No ticket — queue required." },
+        { id:"show_wed2", order:3, time:"11:00", tz:"FR", type:"showing", title:"Next on Netflix Animation", location:"Bonlieu Scène nationale, Annecy", duration:240, ticketed:false, lat:45.8998, lng:6.1296, mapsUrl:"https://maps.google.com/?q=Bonlieu+Scene+Nationale+Annecy", reason:"Netflix Animation preview showcase. Grande Salle — no ticket, queue early." },
+        { id:"fs12", order:4, time:"13:00", tz:"FR", location:"L'Aromatic, Annecy", type:"food", priority:2, lat:45.8998, lng:6.1280, mapsUrl:"https://maps.google.com/?q=L+Aromatic+Annecy", reason:"Popular vegan-friendly restaurant near the old town — fresh seasonal dishes, good wine list and a relaxed atmosphere away from the festival crowds.", veganFriendly:true, duration:90 }
       ]
     },
     {
@@ -270,7 +273,8 @@ const TRIP_DATA = {
       isFestival: true,
       stops: [
         { id:"fs9",  order:1, time:"10:00", tz:"FR", location:"Château de Thorens", type:"architecture", priority:2, lat:45.9833, lng:6.2000, mapsUrl:"https://maps.google.com/?q=Chateau+de+Thorens+France", reason:"Medieval castle in the hills north of Annecy associated with Saint Francis de Sales. Far less visited than the town castle and very atmospheric.", duration:90 },
-        { id:"fs15", order:2, time:"19:00", tz:"FR", location:"HappyCow Vegan Map, Annecy", type:"food", priority:2, lat:45.8992, lng:6.1294, mapsUrl:"https://www.happycow.net/europe/france/annecy/", reason:"Browse all vegan and vegan-friendly restaurants near your current location in Annecy.", veganFriendly:true, duration:60 }
+        { id:"fs15", order:2, time:"19:00", tz:"FR", location:"HappyCow Vegan Map, Annecy", type:"food", priority:2, lat:45.8992, lng:6.1294, mapsUrl:"https://www.happycow.net/europe/france/annecy/", reason:"Browse all vegan and vegan-friendly restaurants near your current location in Annecy.", veganFriendly:true, duration:60 },
+        { id:"show_thu1", order:3, time:"20:00", tz:"FR", type:"showing", title:"Walking with Animators #8", location:"Pathé Cinémas, Annecy", duration:165, ticketed:false, lat:45.8965, lng:6.1308, mapsUrl:"https://maps.google.com/?q=Pathe+Cinemas+7+Avenue+de+Brogny+Annecy", reason:"Annual showcase of animators' personal films. A festival institution — held at Pathé." }
       ]
     },
     {
@@ -280,7 +284,10 @@ const TRIP_DATA = {
       title: "Festival — Friday",
       subtitle: "Annecy International Animation Festival 2026 — Final day",
       isFestival: true,
-      stops: []
+      stops: [
+        { id:"show_fri1", order:1, time:"09:00", tz:"FR", type:"showing", title:"Walt Disney Showcase", location:"Bonlieu Scène nationale, Annecy", duration:165, ticketed:false, lat:45.8998, lng:6.1296, mapsUrl:"https://maps.google.com/?q=Bonlieu+Scene+Nationale+Annecy", reason:"Walt Disney Animation Studios showcase. Grande Salle — no ticket, queue early." },
+        { id:"show_fri2", order:2, time:"11:45", tz:"FR", type:"showing", title:"Pixar", location:"Bonlieu Scène nationale, Annecy", duration:150, ticketed:false, lat:45.8998, lng:6.1296, mapsUrl:"https://maps.google.com/?q=Bonlieu+Scene+Nationale+Annecy", reason:"Pixar Animation Studios showcase. Grande Salle — no ticket, queue early." },
+      ]
     },
     /* ── Return Day 1 — Sat 27 Jun — Annecy to Besançon ─────────────── */
     {
