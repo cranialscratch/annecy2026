@@ -1,5 +1,5 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v248';
+const APP_VERSION = 'v249';
 
 const CHANGELOG = [
   { version: 'v244', title: 'Swipe to Skip or Remove, compact skipped cards, Bucket List', items: [
@@ -1020,7 +1020,7 @@ function buildTags(stop) {
 function buildShowingMeta(stop) {
   const ticketed = hasTicket(stop);
   const timeMins = timeToMinutes(getStopTime(stop));
-  const bufferMins = ticketed ? 20 : 120;
+  const bufferMins = ticketed ? 20 : (stop.queueMins ?? 120);
   const arriveMins = timeMins !== null ? timeMins - bufferMins : null;
   const arriveStr  = arriveMins !== null ? minutesToTime(arriveMins) : null;
   const venue = stop.location || '';
@@ -1355,6 +1355,7 @@ function getDayStops(day) {
   // Base stops for this day, excluding any moved to a different day or removed to bucket
   const baseStops = day.stops.filter(s => {
     if (removed[s.id]) return false;
+    if (s.ownerOnly && !state.isOwner) return false;
     const movedTo = crossMoves[s.id];
     return !movedTo || movedTo === day.id;
   });
