@@ -1,5 +1,5 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v251';
+const APP_VERSION = 'v252';
 
 const CHANGELOG = [
   { version: 'v244', title: 'Swipe to Skip or Remove, compact skipped cards, Bucket List', items: [
@@ -2570,32 +2570,246 @@ function openBucketAddSheet(entry, idx) {
   };
 }
 
-/* ── Find view (unified nearby: food + charger) ─────────────────────── */
+/* ── Find view — tag-based search ─────────────────────────────────────── */
+
+const FIND_TAGS = [
+  { id:'food',        icon:'ph-fork-knife',       label:'Food',      placeTypes:['restaurant','fast_food_restaurant','meal_takeaway','bakery','food'] },
+  { id:'coffee',      icon:'ph-coffee',            label:'Coffee',    placeTypes:['coffee_shop','cafe'] },
+  { id:'charging',    icon:'ph-charging-station',  label:'Charger',   placeTypes:null },
+  { id:'bar',         icon:'ph-wine',              label:'Bar',       placeTypes:['bar','pub','wine_bar','cocktail_bar'] },
+  { id:'supermarket', icon:'ph-shopping-cart',     label:'Market',    placeTypes:['supermarket','grocery_store','convenience_store'] },
+  { id:'pharmacy',    icon:'ph-first-aid-kit',     label:'Pharmacy',  placeTypes:['pharmacy'] },
+  { id:'attraction',  icon:'ph-binoculars',        label:'Sights',    placeTypes:['tourist_attraction','museum','art_gallery','park','national_park'] },
+];
+
+const FIND_SUB_OPTS = {
+  food:     [{ id:'diet',  opts:[{v:'all',l:'All'},{v:'vegan',l:'Vegan-friendly'},{v:'vegan_only',l:'Vegan only'}] }],
+  coffee:   [{ id:'diet',  opts:[{v:'all',l:'All'},{v:'vegan',l:'Vegan milk'}] }],
+  charging: [{ id:'speed', opts:[{v:'all',l:'All speeds'},{v:'rapid',l:'Rapid 50kW+'},{v:'fast',l:'Fast 7kW+'}] }],
+};
+
+async function _doFindSearch(lat, lng, radiusM, tagDef, subOpts, resultsEl) {
+  resultsEl.innerHTML = `<div class="vegan-searching"><i class="ph ph-spinner vegan-spin"></i> Searching…</div>`;
+  try {
+    if (tagDef.id === 'charging') {
+      const chargers = await fetchChargersNearby(lat, lng, radiusM);
+      const speed = subOpts.speed || 'all';
+      const filtered = speed === 'rapid' ? chargers.filter(c => (c.maxKW||0) >= 50)
+                     : speed === 'fast'  ? chargers.filter(c => (c.maxKW||0) >= 7)
+                     : chargers;
+      if (!filtered.length) {
+        resultsEl.innerHTML = `<div class="vegan-empty"><i class="ph ph-charging-station"></i><div>No chargers found. Try a wider area or lower speed filter.</div></div>`;
+        return;
+      }
+      resultsEl.innerHTML = '';
+      filtered.forEach(c => resultsEl.appendChild(buildChargerCard(c)));
+      return;
+    }
+
+    const diet = subOpts.diet || 'all';
+    let places;
+    if ((tagDef.id === 'food' || tagDef.id === 'coffee') && diet !== 'all') {
+      const q = diet === 'vegan_only' ? 'vegan' : 'vegan OR vegetarian';
+      const typeQ = tagDef.id === 'coffee' ? 'coffee cafe' : 'restaurant cafe';
+      const res = await fetch('https://places.googleapis.com/v1/places:searchText', {
+        method:'POST',
+        headers:{ 'Content-Type':'application/json', 'X-Goog-Api-Key':GPLACES_KEY,
+          'X-Goog-FieldMask':'places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.userRatingCount,places.primaryType,places.currentOpeningHours,places.photos' },
+        body: JSON.stringify({ textQuery:`${q} ${typeQ}`, maxResultCount:15,
+          locationBias:{ circle:{ center:{ latitude:lat, longitude:lng }, radius:radiusM } }, languageCode:'en' }),
+      });
+      places = (await res.json()).places || [];
+    } else {
+      const res = await fetch('https://places.googleapis.com/v1/places:searchNearby', {
+        method:'POST',
+        headers:{ 'Content-Type':'application/json', 'X-Goog-Api-Key':GPLACES_KEY,
+          'X-Goog-FieldMask':'places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.userRatingCount,places.primaryType,places.currentOpeningHours,places.photos' },
+        body: JSON.stringify({ includedTypes:tagDef.placeTypes, maxResultCount:15,
+          locationRestriction:{ circle:{ center:{ latitude:lat, longitude:lng }, radius:radiusM } }, languageCode:'en' }),
+      });
+      places = (await res.json()).places || [];
+    }
+
+    if (!places.length) {
+      resultsEl.innerHTML = `<div class="vegan-empty"><i class="ph ph-magnifying-glass"></i><div>Nothing found here. Try a different area or tag.</div></div>`;
+      return;
+    }
+    places.sort((a,b) => {
+      const dA = a.location ? haversineM(lat,lng,a.location.latitude,a.location.longitude) : 9e9;
+      const dB = b.location ? haversineM(lat,lng,b.location.latitude,b.location.longitude) : 9e9;
+      return dA - dB;
+    });
+    resultsEl.innerHTML = '';
+    places.forEach(p => {
+      const plat = p.location?.latitude, plng = p.location?.longitude;
+      const dist = (plat && plng) ? Math.round(haversineM(lat,lng,plat,plng)) : null;
+      const distStr = dist !== null ? (dist < 1000 ? `${dist}m` : `${(dist/1000).toFixed(1)}km`) : '';
+      const typeLabel = (p.primaryType||'').replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
+      const ratingHtml = p.rating
+        ? `<span class="vcard-rating"><i class="ph ph-star-fill" style="color:#f59e0b"></i> ${p.rating.toFixed(1)} <span class="vcard-rating-count">(${(p.userRatingCount||0).toLocaleString()})</span></span>`
+        : '';
+      const oh = p.currentOpeningHours;
+      const openHtml = !oh ? '' : oh.openNow === true ? '<span class="vp-open-badge open">Open</span>'
+                             : oh.openNow === false ? '<span class="vp-open-badge closed">Closed</span>' : '';
+      const card = document.createElement('div');
+      card.className = 'vegan-place-card';
+      card.innerHTML = `
+        <div class="vegan-place-main">
+          <div class="vegan-place-name">${p.displayName?.text || ''}</div>
+          <div class="vegan-place-meta"><span class="vegan-place-type">${typeLabel}</span>${openHtml}</div>
+          <div class="vcard-bottom-row">${ratingHtml}${p.formattedAddress ? `<span class="vegan-place-hours-mini">${p.formattedAddress}</span>` : ''}</div>
+        </div>
+        <div class="vegan-place-right">${distStr ? `<div class="vegan-place-dist">${distStr}</div>` : ''}<div class="vegan-place-chevron"><i class="ph ph-caret-right"></i></div></div>`;
+      if (plat && plng) card.addEventListener('click', () => window.open(`https://maps.apple.com/?daddr=${plat},${plng}&dirflg=d`, '_blank'));
+      resultsEl.appendChild(card);
+    });
+  } catch {
+    resultsEl.innerHTML = `<div class="vegan-empty"><i class="ph ph-wifi-slash"></i><div>Search failed — check connection.</div></div>`;
+  }
+}
+
 function renderFindView(container) {
   container.innerHTML = '';
-  const filter = state._findFilter || 'food';
 
-  const header = document.createElement('div');
-  header.className = 'find-header';
-  header.innerHTML = `
-    <div class="find-title"><i class="ph ph-magnifying-glass"></i> Find nearby</div>
-    <div class="find-tabs">
-      <button class="find-tab${filter === 'food' ? ' active' : ''}" data-filter="food"><i class="ph ph-fork-knife"></i> Food &amp; Drink</button>
-      <button class="find-tab${filter === 'charging' ? ' active' : ''}" data-filter="charging"><i class="ph ph-lightning"></i> Charging</button>
-    </div>`;
-  header.querySelectorAll('.find-tab').forEach(btn => {
+  const tag      = state._findTag     || 'food';
+  const subOpts  = state._findSubOpts || {};
+  const locMode  = state._findLocMode || 'nearme';
+  const tagDef   = FIND_TAGS.find(t => t.id === tag) || FIND_TAGS[0];
+  const subDefs  = FIND_SUB_OPTS[tag] || [];
+
+  const wrap = document.createElement('div');
+  wrap.className = 'find-wrap';
+
+  /* ── Tag chips ── */
+  const tagRow = document.createElement('div');
+  tagRow.className = 'find-tags';
+  tagRow.innerHTML = FIND_TAGS.map(t => `
+    <button class="find-tag-chip${t.id === tag ? ' active' : ''}" data-tag="${t.id}">
+      <i class="ph ${t.icon}"></i><span>${t.label}</span>
+    </button>`).join('');
+  tagRow.querySelectorAll('.find-tag-chip').forEach(btn => {
     btn.addEventListener('click', () => {
-      state._findFilter = btn.dataset.filter;
+      state._findTag = btn.dataset.tag;
+      state._findSubOpts = {};
       renderFindView(container);
     });
   });
-  container.appendChild(header);
+  wrap.appendChild(tagRow);
 
-  if (filter === 'food') {
-    renderVeganView(container);
-  } else {
-    renderChargerView(container);
+  /* ── Sub-options ── */
+  if (subDefs.length) {
+    const subRow = document.createElement('div');
+    subRow.className = 'find-subopts';
+    subDefs.forEach(sub => {
+      const cur = subOpts[sub.id] || sub.opts[0].v;
+      sub.opts.forEach(o => {
+        const btn = document.createElement('button');
+        btn.className = 'find-subopt' + (cur === o.v ? ' active' : '');
+        btn.textContent = o.l;
+        btn.addEventListener('click', () => {
+          state._findSubOpts = { ...(state._findSubOpts||{}), [sub.id]: o.v };
+          renderFindView(container);
+        });
+        subRow.appendChild(btn);
+      });
+    });
+    wrap.appendChild(subRow);
   }
+
+  /* ── Location mode ── */
+  const LOC_MODES = [
+    { id:'nearme',  icon:'ph-map-pin',         label:'Near me' },
+    { id:'enroute', icon:'ph-navigation-arrow', label:'En route' },
+    { id:'setarea', icon:'ph-map-trifold',      label:'Set area' },
+  ];
+  const locRow = document.createElement('div');
+  locRow.className = 'find-loc-row';
+  LOC_MODES.forEach(m => {
+    const btn = document.createElement('button');
+    btn.className = 'find-loc-btn' + (locMode === m.id ? ' active' : '');
+    btn.innerHTML = `<i class="ph ${m.icon}"></i>${m.label}`;
+    btn.addEventListener('click', () => { state._findLocMode = m.id; renderFindView(container); });
+    locRow.appendChild(btn);
+  });
+  wrap.appendChild(locRow);
+
+  /* ── Set area input ── */
+  if (locMode === 'setarea') {
+    const areaWrap = document.createElement('div');
+    areaWrap.className = 'find-area-wrap';
+    areaWrap.innerHTML = `
+      <div class="place-search-bar">
+        <i class="ph ph-magnifying-glass"></i>
+        <input class="place-search-input" id="find-area-input" type="search" placeholder="Town, city or address…" autocomplete="off" value="${state._findAreaText || ''}">
+        <button class="place-search-btn" id="find-area-go"><i class="ph ph-arrow-right"></i></button>
+      </div>`;
+    wrap.appendChild(areaWrap);
+  }
+
+  /* ── Results ── */
+  const resultsEl = document.createElement('div');
+  resultsEl.className = 'find-results';
+  wrap.appendChild(resultsEl);
+  container.appendChild(wrap);
+
+  /* ── Trigger search ── */
+  const runSearch = async () => {
+    if (locMode === 'nearme') {
+      if (_userLat === null) {
+        resultsEl.innerHTML = `<div class="vegan-no-gps"><i class="ph ph-map-pin-slash"></i><div>Enable location to search near you</div><button class="pill-btn primary" id="find-gps-btn">Share location</button></div>`;
+        resultsEl.querySelector('#find-gps-btn')?.addEventListener('click', () => {
+          startLocationWatch();
+          resultsEl.innerHTML = `<div class="vegan-searching"><i class="ph ph-spinner vegan-spin"></i> Getting your location…</div>`;
+          setTimeout(() => { if (_userLat !== null) _doFindSearch(_userLat, _userLng, 5000, tagDef, subOpts, resultsEl); }, 3000);
+        });
+        return;
+      }
+      await _doFindSearch(_userLat, _userLng, 5000, tagDef, subOpts, resultsEl);
+
+    } else if (locMode === 'enroute') {
+      const today = localDateStr();
+      const routeDay = TRIP_DATA.days.find(d => d.date === today) || null;
+      const stops = routeDay
+        ? getDayStops(routeDay).filter(s => s.lat && s.lng && !state.skipped[s.id] && !state.removed[s.id])
+        : [];
+      if (stops.length < 2) {
+        resultsEl.innerHTML = `<div class="vegan-empty"><i class="ph ph-navigation-arrow"></i><div>No route found for today. Try "Near me" instead.</div></div>`;
+        return;
+      }
+      const first = stops[0], last = stops[stops.length - 1];
+      const midLat = (first.lat + last.lat) / 2;
+      const midLng = (first.lng + last.lng) / 2;
+      await _doFindSearch(midLat, midLng, 20000, tagDef, subOpts, resultsEl);
+
+    } else if (locMode === 'setarea') {
+      const input = document.getElementById('find-area-input');
+      const goBtn = document.getElementById('find-area-go');
+      const doArea = async () => {
+        const q = input?.value.trim();
+        if (!q) return;
+        state._findAreaText = q;
+        resultsEl.innerHTML = `<div class="vegan-searching"><i class="ph ph-spinner vegan-spin"></i> Locating "${q}"…</div>`;
+        try {
+          const res = await fetch('https://places.googleapis.com/v1/places:searchText', {
+            method:'POST',
+            headers:{ 'Content-Type':'application/json', 'X-Goog-Api-Key':GPLACES_KEY,
+              'X-Goog-FieldMask':'places.location,places.displayName' },
+            body: JSON.stringify({ textQuery:q, maxResultCount:1 }),
+          });
+          const loc = (await res.json()).places?.[0]?.location;
+          if (!loc) { resultsEl.innerHTML = `<div class="vegan-empty"><i class="ph ph-map-trifold"></i><div>Couldn't locate "${q}"</div></div>`; return; }
+          await _doFindSearch(loc.latitude, loc.longitude, 5000, tagDef, subOpts, resultsEl);
+        } catch {
+          resultsEl.innerHTML = `<div class="vegan-empty"><i class="ph ph-wifi-slash"></i><div>Search failed — check connection.</div></div>`;
+        }
+      };
+      goBtn?.addEventListener('click', doArea);
+      input?.addEventListener('keydown', e => { if (e.key === 'Enter') doArea(); });
+      if (state._findAreaText) doArea();
+    }
+  };
+
+  runSearch();
 }
 
 function renderMoreView(container) {

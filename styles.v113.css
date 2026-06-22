@@ -3170,3 +3170,101 @@ body.light .cl-text { color: #475569; }
   -webkit-tap-highlight-color: transparent; transition: background .15s;
 }
 .more-row:active { background: rgba(255,255,255,.12); }
+
+/* ── Find view — tag-based search ─────────────────────────────────── */
+.find-wrap { padding: 12px 0 80px; }
+
+.find-tags {
+  display: flex;
+  gap: 8px;
+  padding: 0 14px 2px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.find-tags::-webkit-scrollbar { display: none; }
+
+.find-tag-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 99px;
+  border: 1.5px solid var(--card-border);
+  background: rgba(255,255,255,.06);
+  color: var(--text2);
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background .15s, color .15s, border-color .15s;
+}
+.find-tag-chip.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.find-tag-chip i { font-size: 16px; }
+
+.find-subopts {
+  display: flex;
+  gap: 8px;
+  padding: 10px 14px 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.find-subopts::-webkit-scrollbar { display: none; }
+
+.find-subopt {
+  padding: 6px 12px;
+  border-radius: 99px;
+  border: 1.5px solid var(--card-border);
+  background: rgba(255,255,255,.04);
+  color: var(--text3);
+  font-size: 13px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background .15s, color .15s;
+}
+.find-subopt.active {
+  background: rgba(99,102,241,.18);
+  border-color: rgba(99,102,241,.5);
+  color: #a5b4fc;
+}
+
+.find-loc-row {
+  display: flex;
+  gap: 8px;
+  padding: 10px 14px 0;
+}
+.find-loc-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1.5px solid var(--card-border);
+  background: rgba(255,255,255,.04);
+  color: var(--text3);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background .15s, color .15s, border-color .15s;
+}
+.find-loc-btn.active {
+  background: rgba(16,185,129,.12);
+  border-color: rgba(16,185,129,.4);
+  color: #6ee7b7;
+}
+
+.find-area-wrap {
+  padding: 10px 14px 0;
+}
+
+.find-results {
+  margin-top: 12px;
+  padding: 0 14px;
+}
