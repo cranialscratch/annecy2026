@@ -1,5 +1,5 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v254';
+const APP_VERSION = 'v255';
 
 const CHANGELOG = [
   { version: 'v244', title: 'Swipe to Skip or Remove, compact skipped cards, Bucket List', items: [
@@ -5337,17 +5337,23 @@ function buildTimelineItem(stop, isLast, day, nextStop, prevStop) {
   // Swipe-left to reveal Skip / Restore button
   const swipeWrap  = item.querySelector('.tl-swipe-wrap');
   const swipeTrack = item.querySelector('.tl-swipe-track');
-  const SWIPE_REVEAL = 88;
-  let _sx = 0, _sy = 0, _sActive = false, _sOpen = false, _sMoved = false;
+  const SWIPE_REVEAL  = 88;
+  const SWIPE_COMMIT  = 60;   // must drag this far left before snap-open
+  const TAP_SLOP      = 8;    // px — moves beyond this suppress the click
+  let _sx = 0, _sy = 0, _sActive = false, _sOpen = false, _sMoved = false, _sDist = 0;
   swipeWrap.addEventListener('touchstart', e => {
     _sx = e.touches[0].clientX; _sy = e.touches[0].clientY;
-    _sActive = true; _sMoved = false;
+    _sActive = true; _sMoved = false; _sDist = 0;
   }, { passive: true });
   swipeWrap.addEventListener('touchmove', e => {
     if (!_sActive) return;
     const dx = e.touches[0].clientX - _sx;
     const dy = e.touches[0].clientY - _sy;
+    // If vertical scroll is dominant before we locked to horizontal, abandon swipe
     if (!_sMoved && Math.abs(dy) > Math.abs(dx) + 4) { _sActive = false; return; }
+    _sDist = Math.abs(dx);
+    // Only lock into horizontal swipe once finger has cleared the dead zone
+    if (_sDist < TAP_SLOP) return;
     _sMoved = true;
     const base = _sOpen ? -SWIPE_REVEAL : 0;
     const tx = Math.min(0, Math.max(-SWIPE_REVEAL, base + dx));
@@ -5355,11 +5361,12 @@ function buildTimelineItem(stop, isLast, day, nextStop, prevStop) {
     swipeTrack.style.transform = `translateX(${tx}px)`;
   }, { passive: true });
   swipeWrap.addEventListener('touchend', e => {
-    if (!_sActive || !_sMoved) { _sActive = false; return; }
+    if (!_sActive) { _sActive = false; return; }
     _sActive = false;
+    if (!_sMoved) return;  // clean tap — let click fire normally
     const dx = e.changedTouches[0].clientX - _sx;
     swipeTrack.style.transition = 'transform .22s ease';
-    if (!_sOpen && dx < -SWIPE_REVEAL / 2) {
+    if (!_sOpen && dx < -SWIPE_COMMIT) {
       swipeTrack.style.transform = `translateX(-${SWIPE_REVEAL}px)`;
       _sOpen = true;
     } else {
@@ -5367,6 +5374,10 @@ function buildTimelineItem(stop, isLast, day, nextStop, prevStop) {
       _sOpen = false;
     }
   });
+  // Suppress card click after any horizontal gesture (prevents open-detail firing at end of swipe)
+  swipeWrap.addEventListener('click', e => {
+    if (_sDist > TAP_SLOP) { e.stopImmediatePropagation(); _sDist = 0; }
+  }, true);
   // Tap the card while open → close
   card.addEventListener('click', () => {
     if (_sOpen) { swipeTrack.style.transition = 'transform .22s ease'; swipeTrack.style.transform = ''; _sOpen = false; }
