@@ -1,5 +1,5 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v255';
+const APP_VERSION = 'v256';
 
 const CHANGELOG = [
   { version: 'v244', title: 'Swipe to Skip or Remove, compact skipped cards, Bucket List', items: [
@@ -7046,6 +7046,85 @@ function updateDetailCheckBtn() {
   btn.classList.toggle('checked', checked);
 }
 
+function openPhotoViewer(photos, startIdx) {
+  document.getElementById('photo-lightbox')?.remove();
+  if (!photos || !photos.length) return;
+  const lb = document.createElement('div');
+  lb.id = 'photo-lightbox';
+
+  const total = photos.length;
+  let cur = Math.max(0, Math.min(startIdx || 0, total - 1));
+
+  const slidesHtml = photos.map(url =>
+    url ? `<div class="photo-lb-slide"><img src="${url}" loading="lazy" draggable="false"></div>`
+         : `<div class="photo-lb-slide photo-lb-slide-placeholder"><i class="ph ph-image"></i></div>`
+  ).join('');
+
+  const dotsHtml = total > 1
+    ? photos.map((_,i) => `<div class="photo-lb-dot${i===cur?' active':''}"></div>`).join('')
+    : '';
+
+  lb.innerHTML = `
+    <div id="photo-lightbox-topbar">
+      <div id="photo-lightbox-counter">${total > 1 ? `${cur+1} / ${total}` : ''}</div>
+      <button id="photo-lightbox-close"><i class="ph ph-x"></i></button>
+    </div>
+    <div id="photo-lightbox-track-wrap">
+      <div id="photo-lightbox-track">${slidesHtml}</div>
+    </div>
+    ${dotsHtml ? `<div id="photo-lightbox-dots">${dotsHtml}</div>` : ''}`;
+
+  document.body.appendChild(lb);
+  requestAnimationFrame(() => lb.classList.add('open'));
+
+  const track  = lb.querySelector('#photo-lightbox-track');
+  const dots   = lb.querySelectorAll('.photo-lb-dot');
+  const counter = lb.querySelector('#photo-lightbox-counter');
+
+  const goTo = idx => {
+    cur = Math.max(0, Math.min(total - 1, idx));
+    track.style.transform = `translateX(-${cur * 100}%)`;
+    dots.forEach((d,i) => d.classList.toggle('active', i === cur));
+    if (counter) counter.textContent = total > 1 ? `${cur+1} / ${total}` : '';
+  };
+  goTo(cur);
+
+  const close = () => {
+    lb.classList.remove('open');
+    lb.addEventListener('transitionend', () => lb.remove(), { once: true });
+  };
+  lb.querySelector('#photo-lightbox-close').addEventListener('click', close);
+
+  // Swipe between photos
+  const trackWrap = lb.querySelector('#photo-lightbox-track-wrap');
+  let lbSx = 0, lbDx = 0, lbDragging = false, lbIsHoriz = null, lbSy = 0;
+  trackWrap.addEventListener('touchstart', e => {
+    lbSx = e.touches[0].clientX; lbSy = e.touches[0].clientY;
+    lbDx = 0; lbDragging = true; lbIsHoriz = null;
+    track.style.transition = 'none';
+  }, { passive: true });
+  trackWrap.addEventListener('touchmove', e => {
+    if (!lbDragging) return;
+    lbDx = e.touches[0].clientX - lbSx;
+    const dy = e.touches[0].clientY - lbSy;
+    if (lbIsHoriz === null) lbIsHoriz = Math.abs(lbDx) > Math.abs(dy);
+    if (lbIsHoriz) {
+      e.preventDefault();
+      track.style.transform = `translateX(calc(-${cur*100}% + ${lbDx}px))`;
+    }
+  }, { passive: false });
+  trackWrap.addEventListener('touchend', () => {
+    lbDragging = false;
+    track.style.transition = 'transform .3s ease';
+    if (lbIsHoriz) {
+      if (lbDx < -40) goTo(cur + 1);
+      else if (lbDx > 40) goTo(cur - 1);
+      else goTo(cur);
+    }
+    lbIsHoriz = null;
+  });
+}
+
 function initDetailSlider() {
   const wrap = document.getElementById('detail-slider-wrap');
   const slidesEl = document.getElementById('detail-slides');
@@ -7083,6 +7162,12 @@ function initDetailSlider() {
     else if (diffX > 40) goTo(_detailCurrent - 1);
     else goTo(_detailCurrent);
     isHoriz = null;
+  });
+
+  // Tap (non-swipe) → open full-screen lightbox at current slide
+  newWrap.addEventListener('click', e => {
+    if (Math.abs(diffX) > 8) return;  // was a swipe, not a tap
+    if (_detailStop) openPhotoViewer(getPhotos(_detailStop), _detailCurrent);
   });
 }
 
