@@ -1,5 +1,5 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v257';
+const APP_VERSION = 'v258';
 
 const CHANGELOG = [
   { version: 'v244', title: 'Swipe to Skip or Remove, compact skipped cards, Bucket List', items: [
@@ -5037,11 +5037,16 @@ function renderTimeline(container, scrollToNow) {
   const _allDayStops = getDayStops(day);
   const _tlStops = _allDayStops.filter(s => getStopType(s) !== 'depart' && (passesFilter(s)));
 
-  // Overnight lead: first depart on this day → find its matching non-depart stop from another day
+  // Overnight lead: first depart on this day → find its matching non-depart stop from another day.
+  // Suppress if today already has a hotel/accommodation stop with the same name (e.g. daily
+  // chalet depart + return on same day — the return card already shows the accommodation).
   const _overnight = (() => {
     const firstDepart = _allDayStops.find(s => getStopType(s) === 'depart');
     if (!firstDepart) return null;
     const name = getStopName(firstDepart).toLowerCase();
+    // Don't show if today's own stops already have a non-depart stop with the same name
+    const alreadyInToday = _tlStops.some(s => getStopName(s).toLowerCase() === name);
+    if (alreadyInToday) return null;
     for (const d of TRIP_DATA.days) {
       if (d.id === day.id) continue;
       const all = [...d.stops, ...(state.addedStops?.[d.id] || [])];
