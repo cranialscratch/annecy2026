@@ -1,0 +1,41 @@
+name: Annecy Reservation Poller
+
+on:
+  workflow_dispatch:
+    inputs:
+      email:
+        description: 'Annecy festival login email'
+        required: true
+        type: string
+      password:
+        description: 'Annecy festival login password'
+        required: true
+        type: string
+
+jobs:
+  poll-and-book:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: claude/reservation-polling-proposal-fjswa9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Playwright
+        run: npm install playwright
+
+      - name: Install Chromium and dependencies
+        run: npx playwright install chromium --with-deps
+
+      - name: Run reservation poller
+        env:
+          ANNECY_EMAIL: ${{ inputs.email }}
+          ANNECY_PASSWORD: ${{ inputs.password }}
+        run: node scripts/poll_annecy.js
