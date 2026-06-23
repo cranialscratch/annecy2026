@@ -1,5 +1,5 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v261';
+const APP_VERSION = 'v262';
 
 const CHANGELOG = [
   { version: 'v244', title: 'Swipe to Skip or Remove, compact skipped cards, Bucket List', items: [
@@ -5260,37 +5260,14 @@ function renderTimeline(container, scrollToNow) {
     return c;
   })() : null;
 
-  // Depart stops removed from timeline; overnight lead card injected instead
   const _allDayStops = getDayStops(day);
   const _tlStops = _allDayStops.filter(s => getStopType(s) !== 'depart' && (passesFilter(s)));
 
-  // Overnight lead: first depart on this day → find its matching non-depart stop from another day.
-  // Suppress if today already has a hotel/accommodation stop with the same name (e.g. daily
-  // chalet depart + return on same day — the return card already shows the accommodation).
-  const _overnight = (() => {
-    const firstDepart = _allDayStops.find(s => getStopType(s) === 'depart');
-    if (!firstDepart) return null;
-    const name = getStopName(firstDepart).toLowerCase();
-    // Don't show if today's own stops already have a non-depart stop with the same name
-    const alreadyInToday = _tlStops.some(s => getStopName(s).toLowerCase() === name);
-    if (alreadyInToday) return null;
-    for (const d of TRIP_DATA.days) {
-      if (d.id === day.id) continue;
-      const all = [...d.stops, ...(state.addedStops?.[d.id] || [])];
-      const match = all.find(s => getStopType(s) !== 'depart' && getStopName(s).toLowerCase() === name);
-      if (match) return { stop: match, checkoutTime: getStopTime(firstDepart) };
-    }
-    return null;
-  })();
-
-  // Show departure card (solid, from depart stop) when available; fall back to overnight card.
+  // Departure card: compact solid card at top showing where we're leaving from + leave-by time
   const _firstDepart = _allDayStops.find(s => getStopType(s) === 'depart');
   if (_firstDepart) {
     const dCard = buildDepartCard(_firstDepart, _tlStops[0] || null);
     (compactCard || container).appendChild(dCard);
-  } else if (_overnight) {
-    const oCard = buildOvernightCard(_overnight.stop, _overnight.checkoutTime, day);
-    (compactCard || container).appendChild(oCard);
   }
 
   _tlStops.forEach((stop, idx) => {
@@ -5441,46 +5418,6 @@ function buildDepartCard(departStop, firstStop) {
   return item;
 }
 
-function buildOvernightCard(stop, checkoutTime, day) {
-  const item = document.createElement('div');
-  item.className = 'tl-item';
-  item.dataset.type = getStopType(stop);
-  item.id = `overnight-${stop.id}`;
-
-  item.innerHTML = `
-    <div class="tl-left">
-      <div class="tl-time-overnight">
-        <span class="overnight-label">Overnight</span>
-        ${checkoutTime ? `<span class="overnight-checkout"><i class="ph ph-sign-out"></i>${checkoutTime}</span>` : ''}
-      </div>
-    </div>
-    <div class="tl-line-wrap">
-      <div class="tl-dot tl-dot--overnight"></div>
-      <div class="tl-line"></div>
-    </div>
-    <div class="tl-swipe-wrap">
-      <div class="tl-swipe-track">
-      <div class="tl-card tl-card--overnight" data-stop-id="${stop.id}" style="cursor:pointer">
-        ${buildSlider(stop, 'card')}
-        <div class="card-body">
-          <div class="card-top-row">
-            <div class="card-name">${stopTypeIcon(stop)} ${getStopName(stop)}</div>
-            <span class="overnight-stay-badge"><i class="ph ph-moon"></i> Overnight</span>
-          </div>
-          ${stop.address || stop.location ? `<div class="card-address">${stop.address || stop.location}</div>` : ''}
-          <div class="card-meta-row">
-            <span class="tl-card-badge">${typeLabel(getStopType(stop))}</span>
-            ${isStopFixed(stop) ? '<span class="fixed-badge"><i class="ph ph-lock"></i> Fixed</span>' : ''}
-          </div>
-          ${getStopReason(stop) ? `<div class="card-reason">${getStopReason(stop)}</div>` : ''}
-        </div>
-      </div>
-      </div>
-    </div>`;
-
-  item.querySelector('.tl-card--overnight').addEventListener('click', () => openDetail(stop));
-  return item;
-}
 
 /* ── Build one timeline item ───────────────────────────────────────── */
 function buildTimelineItem(stop, isLast, day, nextStop, prevStop) {
@@ -6823,7 +6760,7 @@ function openBookingSheet(stopId) {
     delete _placesCache[stopId];
     save(); close();
     // Refresh any visible card
-    const cardEl = document.getElementById('stop-' + stopId) || document.getElementById('overnight-' + stopId);
+    const cardEl = document.getElementById('stop-' + stopId);
     if (cardEl) injectStopPhotos(stopId);
   });
   sheet.querySelector('#bk-clear')?.addEventListener('click', () => {
