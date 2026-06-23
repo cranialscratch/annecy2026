@@ -168,10 +168,11 @@ body.light #app-header {
 /* ─── Day strip — plain text tabs, no pills ─────────────────────────── */
 #day-strip-wrap {
   overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none;
-  padding: 0 16px 10px;
+  padding: 0 0 10px;
+  position: relative;
 }
 #day-strip-wrap::-webkit-scrollbar { display: none; }
-#day-strip { display: flex; gap: 0; width: max-content; }
+#day-strip { display: flex; gap: 0; width: max-content; padding-right: 16px; }
 
 .day-chip {
   display: flex; align-items: center; justify-content: center;
@@ -194,6 +195,24 @@ body.light #app-header {
 .day-chip-label i { font-size: 18px; vertical-align: -2px; }
 .day-chip-date  { display: none; }
 .day-dot { display: none; }
+
+/* Cover chip — sticky at left so days scroll behind it */
+.day-chip--cover {
+  position: sticky;
+  left: 0;
+  z-index: 4;
+  padding-left: 16px;
+  padding-right: 18px;
+  /* Solid background matching the header glass so scrolled chips disappear behind it */
+  background: var(--header-bg, rgba(15,23,42,0.92));
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border-right: 1px solid rgba(255,255,255,0.08);
+}
+body.light .day-chip--cover {
+  background: rgba(248,250,252,0.92);
+  border-right-color: rgba(0,0,0,0.07);
+}
 
 /* ─── Main scroll — mirrors .app-scroll pattern ─────────────────────
    height:100% fills #app; overflow-y:auto is the scroll container.
@@ -3540,3 +3559,69 @@ body.light .cl-text { color: #475569; }
 body.light .late-btn--adjust {
   background: rgba(0,0,0,.05); border-color: rgba(0,0,0,.1); color: var(--text2);
 }
+
+/* ─── Cover page — trip summary & progress ──────────────────────────── */
+.cover-section-label {
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .06em; color: var(--text3);
+  margin: 20px 0 10px; padding: 0 4px;
+}
+
+/* Stats row (during-trip) */
+.cover-stats {
+  display: flex; gap: 0; margin-bottom: 4px;
+  border-radius: 16px; overflow: hidden;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.08);
+}
+body.light .cover-stats { background: rgba(0,0,0,0.04); border-color: rgba(0,0,0,0.07); }
+.cover-stat {
+  flex: 1; display: flex; flex-direction: column; align-items: center;
+  padding: 14px 8px 12px; gap: 4px;
+  border-right: 1px solid rgba(255,255,255,0.06);
+}
+.cover-stat:last-child { border-right: none; }
+body.light .cover-stat { border-right-color: rgba(0,0,0,0.06); }
+.cover-stat-num  { font-size: 18px; font-weight: 800; color: var(--text); line-height: 1; }
+.cover-stat-label { font-size: 11px; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: .04em; }
+
+/* Itinerary summary */
+.cover-summary { display: flex; flex-direction: column; gap: 2px; }
+.cover-day-row {
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255,255,255,0.04);
+  transition: background .15s;
+}
+.cover-day-row--past { opacity: 0.45; }
+.cover-day-row--today {
+  background: rgba(var(--accent-rgb, 59,130,246),0.12);
+  border: 1px solid rgba(var(--accent-rgb, 59,130,246),0.2);
+}
+body.light .cover-day-row { background: rgba(0,0,0,0.025); }
+body.light .cover-day-row--today { background: rgba(59,130,246,0.08); }
+.cover-day-hdr {
+  display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+.cover-today-pip {
+  display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+  background: var(--accent); flex-shrink: 0; margin-bottom: 1px;
+}
+.cover-day-name { font-size: 13px; font-weight: 700; color: var(--text); }
+.cover-day-date-inline { font-size: 12px; font-weight: 500; color: var(--text3); }
+.cover-day-title { font-size: 11px; color: var(--text3); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cover-stop-chips { display: flex; flex-wrap: wrap; gap: 4px 6px; }
+.cover-stop-chip {
+  font-size: 12px; font-weight: 500; color: var(--text2);
+  background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 20px; padding: 3px 9px;
+  display: inline-flex; align-items: center; gap: 4px;
+  white-space: nowrap;
+}
+body.light .cover-stop-chip { background: rgba(0,0,0,0.05); border-color: rgba(0,0,0,0.09); }
+.cover-stop-chip--visited {
+  background: rgba(34,197,94,0.12); border-color: rgba(34,197,94,0.25);
+  color: #4ade80; text-decoration: line-through; opacity: 0.7;
+}
+body.light .cover-stop-chip--visited { color: #16a34a; }

@@ -1,5 +1,5 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v264';
+const APP_VERSION = 'v265';
 
 const CHANGELOG = [
   { version: 'v263', title: 'Departure card, GPS late alerts, auto arrival', items: [
@@ -2092,21 +2092,22 @@ function load() {
 function buildDayStrip() {
   const strip = document.getElementById('day-strip');
   strip.innerHTML = '';
+  const today = localDateStr();
   TRIP_DATA.days.forEach(day => {
     const chip = document.createElement('button');
     chip.className = 'day-chip';
     chip.dataset.dayId = day.id;
-    const today = localDateStr();
     const isTodayChip = day.isCountdown
       ? today <= day.dateEnd
       : (day.isFestival && day.dateEnd)
         ? (today >= day.date && today <= day.dateEnd)
         : today === day.date;
     const isPast = !day.isCountdown && !(day.isFestival && day.dateEnd) && day.date < today;
-    if (isTodayChip) chip.classList.add('today');
-    if (isPast)      chip.classList.add('past');
-    const dateStr = day.isCountdown ? 'soon' : (day.isFestival && day.dateEnd) ? '20–27' : formatDate(day.date);
-    chip.innerHTML = `<span class="day-chip-label">${getDayLabel(day)}</span><span class="day-chip-date">${dateStr}</span><span class="day-dot"></span>`;
+    if (day.isCountdown) chip.classList.add('day-chip--cover');
+    if (isTodayChip)     chip.classList.add('today');
+    if (isPast)          chip.classList.add('past');
+    const dateStr = day.isCountdown ? '' : (day.isFestival && day.dateEnd) ? '21–27' : formatDate(day.date);
+    chip.innerHTML = `<span class="day-chip-label">${getDayLabel(day)}</span>${dateStr ? `<span class="day-chip-date">${dateStr}</span>` : ''}<span class="day-dot"></span>`;
     chip.addEventListener('click', () => selectDay(day.id));
     strip.appendChild(chip);
   });
@@ -2116,8 +2117,9 @@ function buildDayStrip() {
 function updateDayStrip() {
   document.querySelectorAll('.day-chip').forEach(c =>
     c.classList.toggle('active', c.dataset.dayId === state.currentDayId));
-  const active = document.querySelector('.day-chip.active');
-  if (active) active.scrollIntoView({ behavior:'smooth', block:'nearest', inline:'center' });
+  const active = document.querySelector('.day-chip.active:not(.day-chip--cover)') ||
+                 document.querySelector('.day-chip.active');
+  if (active) active.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
 }
 function selectDay(dayId) {
   state.currentDayId = dayId;
@@ -4573,6 +4575,171 @@ function renderFilterList(container, kind) {
 /* ── Countdown banner ──────────────────────────────────────────────── */
 let _countdownInterval = null;
 
+const TRIP_DEPARTURE = new Date('2026-06-17T10:30:00+01:00');
+const TRIP_RETURN    = '2026-06-27'; // inclusive last day
+
+/* ── Collect all notable stops across all non-countdown days ─────────── */
+function _allTripStops() {
+  return TRIP_DATA.days
+    .filter(d => !d.isCountdown)
+    .flatMap(d => (d.stops || []).map(s => ({ s, day: d })))
+    .filter(({ s }) => {
+      const t = getStopType(s);
+      return t !== 'depart' && t !== 'charging' && !s.ownerOnly;
+    });
+}
+
+/* ── Estimate km driven from consecutively-checked stops ─────────────── */
+function _kmDriven() {
+  const checked = _allTripStops()
+    .filter(({ s }) => s.lat && s.lng && state.checked[s.id])
+    .map(({ s }) => s);
+  let km = 0;
+  for (let i = 1; i < checked.length; i++)
+    km += haversineKm(checked[i-1].lat, checked[i-1].lng, checked[i].lat, checked[i].lng);
+  return km;
+}
+
+/* ── Build the scrollable trip itinerary summary ────────────────────── */
+function _buildTripSummaryEl() {
+  const today = localDateStr();
+  const wrap = document.createElement('div');
+  wrap.className = 'cover-summary';
+
+  TRIP_DATA.days.filter(d => !d.isCountdown).forEach(day => {
+    const stops = (day.stops || []).filter(s => {
+      const t = getStopType(s); return t !== 'depart' && t !== 'charging' && !s.ownerOnly;
+    });
+    if (!stops.length) return;
+
+    const isToday  = day.isFestival ? (today >= day.date && today <= day.dateEnd) : today === day.date;
+    const isPast   = !day.isFestival && day.date < today;
+    const isFuture = !isPast && !isToday;
+    const dateLabel = day.isFestival && day.dateEnd
+      ? `${formatDate(day.date)}–${formatDate(day.dateEnd)}`
+      : formatDate(day.date);
+
+    const row = document.createElement('div');
+    row.className = 'cover-day-row' + (isPast ? ' cover-day-row--past' : '') + (isToday ? ' cover-day-row--today' : '');
+
+    const hdr = document.createElement('div');
+    hdr.className = 'cover-day-hdr';
+    hdr.innerHTML = `${isToday ? '<span class="cover-today-pip"></span>' : ''}
+      <span class="cover-day-name">${getDayLabel(day)} <span class="cover-day-date-inline">${dateLabel}</span></span>
+      ${day.title ? `<span class="cover-day-title">${day.title}</span>` : ''}`;
+    row.appendChild(hdr);
+
+    const chips = document.createElement('div');
+    chips.className = 'cover-stop-chips';
+    stops.forEach(s => {
+      const visited = !!state.checked[s.id];
+      const chip = document.createElement('span');
+      chip.className = 'cover-stop-chip' + (visited ? ' cover-stop-chip--visited' : '');
+      chip.innerHTML = `${stopTypeIcon(s)} ${getStopName(s)}`;
+      chips.appendChild(chip);
+    });
+    row.appendChild(chips);
+    wrap.appendChild(row);
+  });
+
+  return wrap;
+}
+
+/* ── Cover page — pre-trip countdown + trip summary ─────────────────── */
+function renderCoverPage(container) {
+  container.innerHTML = '';
+  const departed = Date.now() >= TRIP_DEPARTURE.getTime();
+
+  if (!departed) {
+    _renderPreTripCover(container);
+  } else {
+    _renderDuringTripCover(container);
+  }
+}
+
+function _renderPreTripCover(container) {
+  function pad(n) { return String(n).padStart(2, '0'); }
+  function fmt() {
+    const diff = TRIP_DEPARTURE - Date.now();
+    if (diff <= 0) return null;
+    const s = Math.floor(diff / 1000);
+    return { days: Math.floor(s/86400), hrs: pad(Math.floor(s/3600)%24), min: pad(Math.floor(s/60)%60), sec: pad(s%60) };
+  }
+
+  const banner = document.createElement('div');
+  banner.className = 'countdown-banner';
+  container.appendChild(banner);
+
+  function tick() {
+    const t = fmt();
+    if (!t) {
+      clearInterval(_countdownInterval);
+      renderCoverPage(container);
+      return;
+    }
+    banner.innerHTML = `
+      <div class="cd-emoji"><i class="ph ph-mountains"></i></div>
+      <h2 class="cd-title">Annecy 2026</h2>
+      <p class="cd-sub">Departing 17 Jun · North Cadbury 10:30</p>
+      <div class="cd-units">
+        <div class="cd-unit"><span class="cd-num">${t.days}</span><span class="cd-label">days</span></div>
+        <div class="cd-sep">:</div>
+        <div class="cd-unit"><span class="cd-num">${t.hrs}</span><span class="cd-label">hrs</span></div>
+        <div class="cd-sep">:</div>
+        <div class="cd-unit"><span class="cd-num">${t.min}</span><span class="cd-label">min</span></div>
+        <div class="cd-sep">:</div>
+        <div class="cd-unit"><span class="cd-num">${t.sec}</span><span class="cd-label">sec</span></div>
+      </div>`;
+  }
+  clearInterval(_countdownInterval);
+  tick();
+  _countdownInterval = setInterval(tick, 1000);
+
+  // Trip summary below countdown
+  const section = document.createElement('div');
+  section.className = 'cover-section-label';
+  section.textContent = 'The journey';
+  container.appendChild(section);
+  container.appendChild(_buildTripSummaryEl());
+}
+
+function _renderDuringTripCover(container) {
+  const today       = localDateStr();
+  const tripDayNums = TRIP_DATA.days.filter(d => !d.isCountdown && !d.isFestival);
+  const elapsed     = Math.max(1, Math.round((new Date(today) - new Date('2026-06-17')) / 86400000) + 1);
+  const totalDays   = Math.round((new Date(TRIP_RETURN) - new Date('2026-06-17')) / 86400000) + 1;
+  const visited     = _allTripStops().filter(({ s }) => state.checked[s.id]).length;
+  const totalStops  = _allTripStops().length;
+  const km          = _kmDriven();
+  const distStr     = state.useMetric ? `${Math.round(km)} km` : `${Math.round(km * 0.621371)} mi`;
+
+  const stats = document.createElement('div');
+  stats.className = 'cover-stats';
+  stats.innerHTML = `
+    <div class="cover-stat">
+      <span class="cover-stat-num">${distStr}</span>
+      <span class="cover-stat-label">Driven</span>
+    </div>
+    <div class="cover-stat">
+      <span class="cover-stat-num">${visited}/${totalStops}</span>
+      <span class="cover-stat-label">Places visited</span>
+    </div>
+    <div class="cover-stat">
+      <span class="cover-stat-num">Day ${elapsed}/${totalDays}</span>
+      <span class="cover-stat-label">Of the trip</span>
+    </div>`;
+  container.appendChild(stats);
+
+  const section = document.createElement('div');
+  section.className = 'cover-section-label';
+  section.textContent = 'Your journey';
+  container.appendChild(section);
+  container.appendChild(_buildTripSummaryEl());
+}
+
+/* ── Kept for backward compat (called from renderTimeline) ───────────── */
+function renderCountdownBanner(container) { renderCoverPage(container); }
+
 /* Returns { state:'travelling'|'at_stop'|'done', stop, nextStop, targetMs, day }
    based on today's trip day stops and current time. */
 function getTripState() {
@@ -4621,175 +4788,7 @@ function getTripState() {
   return { state: 'done', stop: schedule[schedule.length - 1].stop, nextStop: null, targetMs: null, day: today };
 }
 
-function renderCountdownBanner(container) {
-  // Departure: Wed 17 Jun 2026 10:30 UK time
-  const DEPARTURE = new Date('2026-06-17T10:30:00+01:00');
 
-  function formatCountdown() {
-    const diff = DEPARTURE - Date.now();
-    if (diff <= 0) return { days:0, hours:0, mins:0, secs:0, departed:true };
-    const secs  = Math.floor(diff / 1000);
-    const mins  = Math.floor(secs / 60);
-    const hours = Math.floor(mins / 60);
-    const days  = Math.floor(hours / 24);
-    return { days, hours: hours % 24, mins: mins % 60, secs: secs % 60, departed: false };
-  }
-
-  function pad(n) { return String(n).padStart(2, '0'); }
-
-  const banner = document.createElement('div');
-  banner.className = 'countdown-banner';
-  container.appendChild(banner);
-
-  function tick() {
-    const { days, hours, mins, secs, departed } = formatCountdown();
-    if (departed) {
-      renderTripProgressBanner(container, banner);
-      clearInterval(_countdownInterval);
-      return;
-    }
-    banner.innerHTML = `
-      <div class="cd-emoji"><i class="ph ph-mountains"></i></div>
-      <h2 class="cd-title">Holiday Countdown</h2>
-      <p class="cd-sub">Annecy · 17 Jun 2026 · North Cadbury 10:30</p>
-      <div class="cd-units">
-        <div class="cd-unit"><span class="cd-num">${days}</span><span class="cd-label">days</span></div>
-        <div class="cd-sep">:</div>
-        <div class="cd-unit"><span class="cd-num">${pad(hours)}</span><span class="cd-label">hrs</span></div>
-        <div class="cd-sep">:</div>
-        <div class="cd-unit"><span class="cd-num">${pad(mins)}</span><span class="cd-label">min</span></div>
-        <div class="cd-sep">:</div>
-        <div class="cd-unit"><span class="cd-num">${pad(secs)}</span><span class="cd-label">sec</span></div>
-      </div>`;
-  }
-
-  clearInterval(_countdownInterval);
-  tick();
-  _countdownInterval = setInterval(tick, 1000);
-}
-
-/* ── Trip progress banner (shown after departure countdown hits zero) ── */
-function renderTripProgressBanner(container, existingBanner) {
-  if (existingBanner) existingBanner.remove();
-  container.innerHTML = '';
-
-  const banner = document.createElement('div');
-  banner.className = 'countdown-banner';
-  container.appendChild(banner);
-
-  function pad2(n) { return String(n).padStart(2, '0'); }
-
-  function fmtHMS(ms) {
-    if (ms <= 0) return '00:00:00';
-    const s = Math.floor(ms / 1000);
-    return `${pad2(Math.floor(s/3600))}:${pad2(Math.floor(s/3600*60)%60 || Math.floor((s%3600)/60))}:${pad2(s%60)}`;
-  }
-
-  function fmtHMSfromMs(ms) {
-    if (ms <= 0) return '00:00:00';
-    const totalSec = Math.floor(ms / 1000);
-    const h = Math.floor(totalSec / 3600);
-    const m = Math.floor((totalSec % 3600) / 60);
-    const s = totalSec % 60;
-    return `${pad2(h)}:${pad2(m)}:${pad2(s)}`;
-  }
-
-  let _stopCard = null;
-  let _lastStopId = null;
-  let _weatherStr = '<i class="ph ph-spinner ph-spin" style="opacity:.4"></i>';
-
-  function getDistStr(stop) {
-    if (!stop.lat || !stop.lng) return null;
-    if (!navigator.geolocation) return null;
-    return new Promise(resolve => {
-      navigator.geolocation.getCurrentPosition(pos => {
-        const R = 6371;
-        const dLat = (stop.lat - pos.coords.latitude) * Math.PI / 180;
-        const dLon = (stop.lng - pos.coords.longitude) * Math.PI / 180;
-        const a = Math.sin(dLat/2)**2 + Math.cos(pos.coords.latitude*Math.PI/180)*Math.cos(stop.lat*Math.PI/180)*Math.sin(dLon/2)**2;
-        const km = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-        resolve(fmtDist(km));
-      }, () => resolve(null), { timeout: 5000 });
-    });
-  }
-
-  async function loadWeather(stop, day) {
-    if (!day) return;
-    try {
-      const wMap = await fetchWeatherForDay(day);
-      if (!wMap) return;
-      const w = lookupHourlyWeather(wMap, day.date, getStopTime(stop) || '12:00');
-      if (!w) return;
-      _weatherStr = `<i class="ph ${w.icon}"></i> ${w.tempC}°C`;
-      const dist = await getDistStr(stop);
-      if (dist) _weatherStr += ` · ${dist}`;
-    } catch(e) {}
-  }
-
-  function renderStopCard(stop, day) {
-    if (_lastStopId === stop.id && _stopCard) return;
-    _lastStopId = stop.id;
-    if (_stopCard) _stopCard.remove();
-    _stopCard = buildTimelineItem(stop, false, day, null);
-    _stopCard.style.marginTop = '12px';
-    container.appendChild(_stopCard);
-    loadWeather(stop, day);
-  }
-
-  function tick() {
-    const ts = getTripState();
-    if (!ts) {
-      banner.innerHTML = `<div class="cd-emoji"><i class="ph ph-confetti"></i></div><h2 class="cd-title">Enjoy the festival!</h2>`;
-      clearInterval(_countdownInterval);
-      return;
-    }
-
-    const remaining = ts.targetMs ? ts.targetMs - Date.now() : 0;
-    const timeStr = ts.targetMs ? fmtHMSfromMs(Math.max(0, remaining)) : '—';
-
-    if (ts.state === 'travelling') {
-      const name = getStopName(ts.stop);
-      banner.innerHTML = `
-        <div class="cd-emoji"><i class="ph ph-car"></i></div>
-        <h2 class="cd-title">${name}</h2>
-        <p class="cd-sub">Time to next stop</p>
-        <div class="cd-units">
-          <div class="cd-unit"><span class="cd-num">${timeStr.split(':')[0]}</span><span class="cd-label">hrs</span></div>
-          <div class="cd-sep">:</div>
-          <div class="cd-unit"><span class="cd-num">${timeStr.split(':')[1]}</span><span class="cd-label">min</span></div>
-          <div class="cd-sep">:</div>
-          <div class="cd-unit"><span class="cd-num">${timeStr.split(':')[2]}</span><span class="cd-label">sec</span></div>
-        </div>
-        <p class="cd-sub" style="margin-top:12px;margin-bottom:0">${_weatherStr}</p>`;
-      renderStopCard(ts.stop, ts.day);
-
-    } else if (ts.state === 'at_stop') {
-      const name = getStopName(ts.stop);
-      banner.innerHTML = `
-        <div class="cd-emoji"><i class="ph ph-smiley"></i></div>
-        <p class="cd-sub" style="margin-bottom:4px">Enjoy</p>
-        <h2 class="cd-title">${name}</h2>
-        <p class="cd-sub">Back on the road in</p>
-        <div class="cd-units">
-          <div class="cd-unit"><span class="cd-num">${timeStr.split(':')[0]}</span><span class="cd-label">hrs</span></div>
-          <div class="cd-sep">:</div>
-          <div class="cd-unit"><span class="cd-num">${timeStr.split(':')[1]}</span><span class="cd-label">min</span></div>
-          <div class="cd-sep">:</div>
-          <div class="cd-unit"><span class="cd-num">${timeStr.split(':')[2]}</span><span class="cd-label">sec</span></div>
-        </div>
-        <p class="cd-sub" style="margin-top:12px;margin-bottom:0">${_weatherStr}</p>`;
-      renderStopCard(ts.stop, ts.day);
-
-    } else {
-      banner.innerHTML = `<div class="cd-emoji"><i class="ph ph-confetti"></i></div><h2 class="cd-title">You've arrived!</h2><p class="cd-sub">Enjoy Annecy 2026</p>`;
-      clearInterval(_countdownInterval);
-    }
-  }
-
-  clearInterval(_countdownInterval);
-  tick();
-  _countdownInterval = setInterval(tick, 1000);
-}
 
 /* ── Date+weather header for regular calendar days ─────────────────── */
 function buildCalDayHeader(day, containerId) {
