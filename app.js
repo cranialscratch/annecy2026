@@ -1,7 +1,14 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v265';
+const APP_VERSION = 'v266';
 
 const CHANGELOG = [
+  { version: 'v266', title: 'StopStart rebrand, stop reviews & trip scrapbook', items: [
+    { type: 'feature', text: 'App renamed to StopStart — Ultimate Road Trip Planner with new icon and launch screen' },
+    { type: 'feature', text: 'Custom domain: stopst.art' },
+    { type: 'feature', text: 'Write a review for any stop — star ratings per question, heading, body, pros & cons, photos' },
+    { type: 'feature', text: 'Reviews appear as a scrapbook on the cover page once the trip is underway' },
+    { type: 'feature', text: 'Share reviews via native share sheet or open directly in Google Maps to leave a public review' },
+  ]},
   { version: 'v263', title: 'Departure card, GPS late alerts, auto arrival', items: [
     { type: 'feature', text: 'Compact departure card at the top of each day shows the venue you\'re leaving from and leave-by time, with a photo' },
     { type: 'feature', text: 'GPS monitors schedule every 15 minutes — if you\'ll be 12+ min late for the next stop, a notification fires and an in-app modal appears' },
@@ -245,6 +252,7 @@ const state = {
   ownerCurrentStopId: null, // shared: owner's last checked-in stop (drives group "Now" display)
   notes:              [],   // personal notes [{id,title,content,links,createdAt}]
   bookingInfo:        {},   // stopId → {ref,link,notes}
+  reviews:            {},   // stopId → {heading,body,pros[],cons[],photos[],questions:{},createdAt}
 };
 
 /* ── Helpers ───────────────────────────────────────────────────────── */
@@ -2018,6 +2026,7 @@ function localSave() {
     localStorage.setItem('annecy_notif_lead',         JSON.stringify(state.notifLeadMins   || {}));
     localStorage.setItem('annecy_notes',             JSON.stringify(state.notes           || []));
     localStorage.setItem('annecy_booking_info',      JSON.stringify(state.bookingInfo      || {}));
+    localStorage.setItem('annecy_reviews',            JSON.stringify(state.reviews          || {}));
   } catch {}
 }
 function save() {
@@ -2069,6 +2078,8 @@ function load() {
     _seedDefaultNotes();
     const bi = localStorage.getItem('annecy_booking_info');
     if (bi) state.bookingInfo = JSON.parse(bi);
+    const rv = localStorage.getItem('annecy_reviews');
+    if (rv) state.reviews = JSON.parse(rv);
   } catch {}
   try {
     if (localStorage.getItem('annecy_theme') === 'light') document.body.classList.add('light');
@@ -4730,6 +4741,16 @@ function _renderDuringTripCover(container) {
     </div>`;
   container.appendChild(stats);
 
+  // Scrapbook — reviewed stops
+  const scrapbook = _buildScrapbookEl();
+  if (scrapbook) {
+    const sl = document.createElement('div');
+    sl.className = 'cover-section-label';
+    sl.textContent = 'Your reviews';
+    container.appendChild(sl);
+    container.appendChild(scrapbook);
+  }
+
   const section = document.createElement('div');
   section.className = 'cover-section-label';
   section.textContent = 'Your journey';
@@ -5511,6 +5532,7 @@ function buildTimelineItem(stop, isLast, day, nextStop, prevStop) {
           <div class="card-meta-row">
             <span class="tl-card-badge">${typeLabel(getStopType(stop))}</span>
             <a class="weather-pill" data-stop-id="${stop.id}" data-lat="${getStopLat(stop)||''}" data-lng="${getStopLng(stop)||''}" href="#" onclick="return false;"></a>
+            ${(() => { const sc = _reviewScore((state.reviews||{})[stop.id]); return sc ? `<span class="review-badge"><i class="ph ph-star-fill"></i> ${sc.toFixed(1)}</span>` : ''; })()}
           </div>
           ${getStopType(stop) === 'showing' ? buildShowingMeta(stop) : ''}
           ${hasExplicitDuration(stop) ? `<div data-leaveby="${stop.id}" class="leave-by-pill" style="display:none"></div>` : ''}
@@ -6636,6 +6658,371 @@ function renderLegInfo(stop) {
   });
 }
 
+/* ══════════════════════════════════════════════════════════════════════
+   REVIEW SYSTEM
+   ══════════════════════════════════════════════════════════════════════ */
+
+const _REVIEW_QUESTIONS = {
+  food:         ['Food quality','Service','Value for money','Atmosphere'],
+  vegan:        ['Food quality','Vegan range','Service','Value for money'],
+  hotel:        ['Cleanliness','Comfort','Location','Value for money','Staff friendliness'],
+  experience:   ['How fun was it?','Value for money','Accessibility','Would you recommend?'],
+  architecture: ['Visual impact','Worth the detour?','Accessibility'],
+  historic:     ['Historical interest','Presentation','Accessibility'],
+  scenic:       ['Natural beauty','Peacefulness','Accessibility'],
+  village:      ['Charm','Things to do','Walkability'],
+  town:         ['Charm','Things to do','Walkability'],
+  wander:       ['Enjoyment','Discovery','Accessibility'],
+  festival:     ['Programme','Atmosphere','Venue','Organisation'],
+  showing:      ['Film quality','Venue atmosphere','Pacing'],
+  transport:    ['Comfort','Punctuality','Value for money'],
+  charging:     ['Speed','Availability','Ease of use'],
+  default:      ['Overall experience','Value for money','Would you recommend?'],
+};
+
+function _reviewQuestions(stop) {
+  const t = getStopType(stop);
+  return _REVIEW_QUESTIONS[t] || _REVIEW_QUESTIONS.default;
+}
+
+function _reviewScore(review) {
+  if (!review) return null;
+  const vals = Object.values(review.questions || {}).filter(v => v > 0);
+  if (!vals.length) return null;
+  return vals.reduce((a, b) => a + b, 0) / vals.length;
+}
+
+function _starsHtml(score, interactive, prefix) {
+  const full = score != null ? Math.round(score) : 0;
+  return [1,2,3,4,5].map(i => {
+    const filled = i <= full;
+    const cls = filled ? 'ph-star-fill review-star--filled' : 'ph-star review-star--empty';
+    const attr = interactive ? ` data-val="${i}" data-prefix="${prefix}"` : '';
+    return `<i class="ph ${cls} review-star"${attr}></i>`;
+  }).join('');
+}
+
+async function _resizePhotoToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const MAX = 800;
+      let w = img.naturalWidth, h = img.naturalHeight;
+      if (w > MAX) { h = Math.round(h * MAX / w); w = MAX; }
+      if (h > MAX) { w = Math.round(w * MAX / h); h = MAX; }
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      URL.revokeObjectURL(url);
+      resolve(canvas.toDataURL('image/jpeg', 0.75));
+    };
+    img.onerror = reject;
+    img.src = url;
+  });
+}
+
+function openReviewSheet(stopId) {
+  const stop = findStop(stopId);
+  if (!stop) return;
+  document.getElementById('review-sheet-overlay')?.remove();
+
+  const existing = (state.reviews || {})[stopId] || {};
+  const questions = _reviewQuestions(stop);
+
+  const overlay = document.createElement('div');
+  overlay.id = 'review-sheet-overlay';
+  overlay.className = 'stop-sheet-overlay';
+  document.body.appendChild(overlay);
+
+  const sheet = document.createElement('div');
+  sheet.id = 'review-sheet';
+  sheet.className = 'stop-sheet';
+  overlay.appendChild(sheet);
+
+  // Build question rows HTML
+  const questionsHtml = questions.map(q => {
+    const score = existing.questions?.[q] || 0;
+    return `<div class="review-q-row">
+      <span class="review-q-label">${q}</span>
+      <div class="review-q-stars" data-qkey="${q}">${_starsHtml(score, true, 'q__' + q)}</div>
+    </div>`;
+  }).join('');
+
+  const photos = existing.photos || [];
+  const photosHtml = photos.map((src, i) =>
+    `<div class="review-photo-thumb" data-idx="${i}">
+       <img src="${src}">
+       <button class="review-photo-del" data-idx="${i}"><i class="ph ph-x"></i></button>
+     </div>`
+  ).join('');
+
+  const overallScore = _reviewScore(existing);
+
+  sheet.innerHTML = `
+    <div class="stop-sheet-handle"></div>
+    <div class="stop-sheet-header">
+      <div class="stop-sheet-title"><i class="ph ph-star"></i> Review: ${getStopName(stop)}</div>
+      <button class="stop-sheet-close" id="review-close"><i class="ph ph-x"></i></button>
+    </div>
+    <div class="stop-sheet-body review-body">
+
+      <div class="review-photos-wrap">
+        <div class="review-photos-scroll" id="review-photos-scroll">
+          ${photosHtml}
+          <label class="review-add-photo" id="review-add-photo-label" title="Add photo">
+            <i class="ph ph-camera-plus"></i>
+            <input type="file" accept="image/*" multiple id="review-photo-input" style="display:none">
+          </label>
+        </div>
+      </div>
+
+      <div class="review-overall">
+        <div class="review-overall-stars" id="review-overall-stars">${_starsHtml(overallScore, false, '')}</div>
+        <span class="review-overall-label">${overallScore ? overallScore.toFixed(1) + ' / 5' : 'Rate each question below'}</span>
+      </div>
+
+      <div class="review-questions-section">
+        <div class="review-section-label">Your ratings</div>
+        ${questionsHtml}
+      </div>
+
+      <div class="review-field">
+        <div class="review-section-label">Headline</div>
+        <input class="review-input" id="review-heading" type="text" placeholder="Sum it up in a line…" value="${(existing.heading || '').replace(/"/g,'&quot;')}">
+      </div>
+
+      <div class="review-field">
+        <div class="review-section-label">Your review</div>
+        <textarea class="review-textarea" id="review-body" placeholder="What was it like? What should others know?">${existing.body || ''}</textarea>
+      </div>
+
+      <div class="review-field">
+        <div class="review-section-label"><i class="ph ph-thumbs-up" style="color:#4ade80"></i> Pros</div>
+        ${[0,1,2].map(i => `<input class="review-input review-pro" id="review-pro-${i}" type="text" placeholder="${['What worked well?','Another highlight?','Anything else great?'][i]}" value="${((existing.pros||[])[i]||'').replace(/"/g,'&quot;')}">`).join('')}
+      </div>
+
+      <div class="review-field">
+        <div class="review-section-label"><i class="ph ph-thumbs-down" style="color:#f87171"></i> Cons</div>
+        ${[0,1,2].map(i => `<input class="review-input review-con" id="review-con-${i}" type="text" placeholder="${['What could be better?','Another issue?','Anything else?'][i]}" value="${((existing.cons||[])[i]||'').replace(/"/g,'&quot;')}">`).join('')}
+      </div>
+
+      <div class="review-share-row">
+        <button class="review-share-btn" id="review-btn-share"><i class="ph ph-share-network"></i> Share</button>
+        <button class="review-share-btn" id="review-btn-google"><i class="ph ph-map-pin"></i> Google</button>
+      </div>
+
+      <button class="pill-btn primary review-save-btn" id="review-save"><i class="ph ph-floppy-disk"></i> Save review</button>
+    </div>`;
+
+  requestAnimationFrame(() => {
+    overlay.classList.add('open');
+    sheet.classList.add('open');
+  });
+
+  // Working copy of state
+  const _photos = [...photos];
+  const _questions = { ...(existing.questions || {}) };
+
+  function _refreshOverall() {
+    const score = Object.values(_questions).filter(v=>v>0).length
+      ? Object.values(_questions).filter(v=>v>0).reduce((a,b)=>a+b,0) / Object.values(_questions).filter(v=>v>0).length
+      : null;
+    sheet.querySelector('#review-overall-stars').innerHTML = _starsHtml(score, false, '');
+    sheet.querySelector('.review-overall-label').textContent = score ? score.toFixed(1) + ' / 5' : 'Rate each question below';
+  }
+
+  function _refreshPhotos() {
+    const scroll = sheet.querySelector('#review-photos-scroll');
+    scroll.innerHTML = _photos.map((src, i) =>
+      `<div class="review-photo-thumb" data-idx="${i}">
+         <img src="${src}">
+         <button class="review-photo-del" data-idx="${i}"><i class="ph ph-x"></i></button>
+       </div>`
+    ).join('') +
+    (_photos.length < 6 ? `<label class="review-add-photo" id="review-add-photo-label" title="Add photo">
+        <i class="ph ph-camera-plus"></i>
+        <input type="file" accept="image/*" multiple id="review-photo-input" style="display:none">
+      </label>` : '');
+    // Re-wire delete buttons
+    scroll.querySelectorAll('.review-photo-del').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        _photos.splice(parseInt(btn.dataset.idx), 1);
+        _refreshPhotos();
+      });
+    });
+    // Re-wire file input
+    const inp = scroll.querySelector('#review-photo-input');
+    if (inp) inp.addEventListener('change', _handlePhotoInput);
+  }
+
+  async function _handlePhotoInput(e) {
+    const files = [...e.target.files].slice(0, 6 - _photos.length);
+    for (const f of files) {
+      try { _photos.push(await _resizePhotoToBase64(f)); } catch {}
+    }
+    _refreshPhotos();
+  }
+
+  // Wire star clicks (question ratings)
+  sheet.querySelectorAll('.review-q-stars').forEach(starsEl => {
+    const key = starsEl.dataset.qkey;
+    starsEl.addEventListener('click', e => {
+      const star = e.target.closest('.review-star');
+      if (!star) return;
+      const val = parseInt(star.dataset.val);
+      _questions[key] = val;
+      starsEl.innerHTML = _starsHtml(val, true, 'q__' + key);
+      _refreshOverall();
+    });
+  });
+
+  // Wire photo input (initial)
+  const photoInp = sheet.querySelector('#review-photo-input');
+  if (photoInp) photoInp.addEventListener('change', _handlePhotoInput);
+
+  // Wire delete buttons (initial)
+  sheet.querySelectorAll('.review-photo-del').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      _photos.splice(parseInt(btn.dataset.idx), 1);
+      _refreshPhotos();
+    });
+  });
+
+  // Save
+  sheet.querySelector('#review-save').addEventListener('click', () => {
+    const review = {
+      heading: sheet.querySelector('#review-heading').value.trim(),
+      body:    sheet.querySelector('#review-body').value.trim(),
+      pros:    [0,1,2].map(i => sheet.querySelector(`#review-pro-${i}`).value.trim()).filter(Boolean),
+      cons:    [0,1,2].map(i => sheet.querySelector(`#review-con-${i}`).value.trim()).filter(Boolean),
+      photos:  _photos,
+      questions: _questions,
+      createdAt: existing.createdAt || Date.now(),
+      updatedAt: Date.now(),
+    };
+    if (!state.reviews) state.reviews = {};
+    state.reviews[stopId] = review;
+    localSave();
+    // Also sync as personal
+    if (typeof syncSave === 'function') syncSave();
+    _closeReviewSheet();
+    showToast('Review saved');
+    // Refresh card badge if visible
+    const cardEl = document.getElementById('stop-' + stopId);
+    if (cardEl) {
+      const badge = cardEl.querySelector('.review-badge');
+      const score = _reviewScore(review);
+      if (badge && score) badge.innerHTML = `<i class="ph ph-star-fill"></i> ${score.toFixed(1)}`;
+      else if (!badge && score) {
+        const metaRow = cardEl.querySelector('.card-meta-row');
+        if (metaRow) metaRow.insertAdjacentHTML('beforeend',
+          `<span class="review-badge tl-card-badge"><i class="ph ph-star-fill"></i> ${score.toFixed(1)}</span>`);
+      }
+    }
+  });
+
+  // Share (native share sheet)
+  sheet.querySelector('#review-btn-share').addEventListener('click', () => {
+    const review = {
+      heading: sheet.querySelector('#review-heading').value.trim(),
+      body:    sheet.querySelector('#review-body').value.trim(),
+      pros:    [0,1,2].map(i => sheet.querySelector(`#review-pro-${i}`).value.trim()).filter(Boolean),
+      cons:    [0,1,2].map(i => sheet.querySelector(`#review-con-${i}`).value.trim()).filter(Boolean),
+    };
+    const score = Object.values(_questions).filter(v=>v>0);
+    const avg = score.length ? (score.reduce((a,b)=>a+b,0)/score.length).toFixed(1) : null;
+    const stars = avg ? '★'.repeat(Math.round(avg)) + '☆'.repeat(5-Math.round(avg)) : '';
+    const text = [
+      review.heading,
+      avg ? `${stars} ${avg}/5` : '',
+      review.body,
+      review.pros.length ? '+ ' + review.pros.join('\n+ ') : '',
+      review.cons.length ? '- ' + review.cons.join('\n- ') : '',
+    ].filter(Boolean).join('\n\n');
+    if (navigator.share) {
+      const shareData = { title: getStopName(stop), text };
+      // Attach photos if supported
+      if (_photos.length && navigator.canShare) {
+        // Convert base64 back to files for sharing
+        Promise.all(_photos.slice(0,3).map(async (b64, i) => {
+          const res = await fetch(b64);
+          const blob = await res.blob();
+          return new File([blob], `photo-${i+1}.jpg`, { type: 'image/jpeg' });
+        })).then(files => {
+          const data = { ...shareData, files };
+          if (navigator.canShare(data)) navigator.share(data).catch(()=>{});
+          else navigator.share(shareData).catch(()=>{});
+        }).catch(() => navigator.share(shareData).catch(()=>{}));
+      } else {
+        navigator.share(shareData).catch(()=>{});
+      }
+    } else {
+      // Fallback: copy to clipboard
+      navigator.clipboard?.writeText(text).then(() => showToast('Copied to clipboard'));
+    }
+  });
+
+  // Google Maps / Reviews
+  sheet.querySelector('#review-btn-google').addEventListener('click', () => {
+    const lat = getStopLat(stop), lng = getStopLng(stop);
+    const name = encodeURIComponent(getStopName(stop));
+    const url = lat && lng
+      ? `https://www.google.com/maps/search/?api=1&query=${name}&query_place_id=${stop.placeId || ''}&center=${lat},${lng}`
+      : `https://www.google.com/maps/search/?api=1&query=${name}`;
+    window.open(url, '_blank');
+  });
+
+  // Close
+  function _closeReviewSheet() {
+    sheet.classList.remove('open');
+    overlay.classList.remove('open');
+    setTimeout(() => overlay.remove(), 350);
+  }
+  sheet.querySelector('#review-close').addEventListener('click', _closeReviewSheet);
+  overlay.addEventListener('click', e => { if (e.target === overlay) _closeReviewSheet(); });
+}
+window.openReviewSheet = openReviewSheet;
+
+/* ── Scrapbook section for cover page ────────────────────────────────── */
+function _buildScrapbookEl() {
+  const reviewed = Object.entries(state.reviews || {})
+    .map(([stopId, rev]) => {
+      const stop = findStop(stopId);
+      if (!stop) return null;
+      return { stop, rev, score: _reviewScore(rev) };
+    })
+    .filter(Boolean)
+    .sort((a, b) => (b.rev.updatedAt||0) - (a.rev.updatedAt||0));
+
+  if (!reviewed.length) return null;
+
+  const wrap = document.createElement('div');
+  wrap.className = 'scrapbook-grid';
+
+  reviewed.forEach(({ stop, rev, score }) => {
+    const card = document.createElement('div');
+    card.className = 'scrapbook-card';
+    const photo = rev.photos?.[0] || null;
+    const stars = score ? '★'.repeat(Math.round(score)) + '☆'.repeat(5-Math.round(score)) : '';
+    card.innerHTML = `
+      ${photo ? `<img class="scrapbook-photo" src="${photo}" alt="">` : `<div class="scrapbook-no-photo">${stopTypeIcon(stop)}</div>`}
+      <div class="scrapbook-card-body">
+        <div class="scrapbook-stop-name">${getStopName(stop)}</div>
+        ${score ? `<div class="scrapbook-stars">${stars} <span class="scrapbook-score">${score.toFixed(1)}</span></div>` : ''}
+        ${rev.heading ? `<div class="scrapbook-heading">"${rev.heading}"</div>` : ''}
+        ${rev.body ? `<div class="scrapbook-body">${rev.body.slice(0,120)}${rev.body.length>120?'…':''}</div>` : ''}
+        ${rev.pros?.length ? `<div class="scrapbook-pros">${rev.pros.map(p=>`<span>+ ${p}</span>`).join('')}</div>` : ''}
+      </div>`;
+    card.addEventListener('click', () => openReviewSheet(stop.id));
+    wrap.appendChild(card);
+  });
+
+  return wrap;
+}
+
 function openStopSheet(stopId) {
   const stop = findStop(stopId);
   if (!stop) return;
@@ -6690,6 +7077,9 @@ function openStopSheet(stopId) {
         </button>
         <button class="sheet-action-btn sheet-skip-btn${isSkipped ? ' active' : ''}" onclick="toggleSkip('${stopId}');closeStopSheet()">
           <i class="ph ph-x-circle"></i> ${isSkipped ? 'Restore' : 'Skip'}
+        </button>
+        <button class="sheet-action-btn" onclick="openReviewSheet('${stopId}');closeStopSheet()">
+          <i class="ph ph-star"></i> ${(state.reviews||{})[stopId] ? 'Edit review' : 'Write a review'}
         </button>
         <button class="sheet-action-btn sheet-remove-btn" onclick="removeStopFromSheet('${stopId}')">
           <i class="ph ph-trash"></i> Remove
@@ -8195,6 +8585,9 @@ function bootApp() {
   // Show app frame (was hidden until auth)
   const appEl = document.getElementById('app');
   if (appEl) appEl.style.display = '';
+  // Dismiss splash screen
+  const splash = document.getElementById('splash-screen');
+  if (splash) setTimeout(() => splash.classList.add('hidden'), 600);
 
   // One-time reset trigger: open app with ?reset=times to clear all time data
   if (new URLSearchParams(location.search).get('reset') === 'times') {

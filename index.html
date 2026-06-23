@@ -7,15 +7,20 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="Annecy 2026">
-  <meta name="theme-color" content="#0f172a">
-  <title>Annecy 2026</title>
+  <meta name="apple-mobile-web-app-title" content="StopStart">
+  <meta name="theme-color" content="#5fa89e">
+  <title>StopStart — Road Trip Planner</title>
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="icons/icon-180.png">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="anonymous">
   <link rel="stylesheet" href="styles.v113.css">
 </head>
 <body>
+  <!-- Splash screen — shown on launch, fades out once app is ready -->
+  <div id="splash-screen">
+    <img src="splash.png" alt="StopStart" id="splash-img">
+    <div id="splash-wordmark">StopStart</div>
+  </div>
   <!-- Offline banner — shown when navigator.onLine is false -->
   <div id="offline-banner" style="display:none">
     <i class="ph ph-wifi-slash"></i> No internet — showing cached content
@@ -32,7 +37,7 @@
         <div class="header-left">
           <button id="menu-btn" class="icon-btn" aria-label="Menu"><i class="ph ph-list"></i></button>
           <div class="header-titles">
-            <h1 id="header-day-label">Annecy 2026</h1>
+            <h1 id="header-day-label">StopStart</h1>
             <p id="header-day-subtitle"></p>
           </div>
         </div>
@@ -72,13 +77,13 @@
   <!-- Auth overlay — shown before app renders until signed in -->
   <div id="auth-overlay" class="hidden">
     <div class="auth-card glass">
-      <div class="auth-logo"><i class="ph ph-mountains"></i> Annecy 2026</div>
+      <div class="auth-logo"><img src="icons/icon-180.png" class="auth-logo-icon" alt="StopStart"> StopStart</div>
       <div class="auth-tabs">
         <button class="auth-tab active" id="auth-tab-login">Sign in</button>
         <button class="auth-tab" id="auth-tab-register">Register</button>
       </div>
       <div id="auth-invite-notice" class="auth-invite-notice hidden">
-        <i class="ph ph-ticket"></i> You've been invited to Annecy 2026
+        <i class="ph ph-ticket"></i> You've been invited to join this trip
       </div>
       <div id="auth-name-wrap" class="hidden">
         <input id="auth-name" type="text" placeholder="Your name" autocomplete="name">
@@ -93,7 +98,7 @@
   <!-- Access disabled overlay — shown when member.active = false -->
   <div id="access-disabled-overlay" class="hidden">
     <div class="auth-card glass">
-      <div class="auth-logo"><i class="ph ph-mountains"></i> Annecy 2026</div>
+      <div class="auth-logo"><img src="icons/icon-180.png" class="auth-logo-icon" alt="StopStart"> StopStart</div>
       <p style="text-align:center;color:var(--text2);margin:1rem 0">Your access to this trip has been disabled. Contact the trip organiser.</p>
       <button id="access-signout-btn" class="pill-btn full-width">Sign out</button>
     </div>
@@ -103,7 +108,7 @@
   <div id="drawer-overlay" class="hidden"></div>
   <aside id="drawer" class="hidden">
     <div class="drawer-header">
-      <span class="drawer-title"><i class="ph ph-mountains"></i> Annecy 2026</span>
+      <span class="drawer-title"><img src="icons/icon-180.png" class="drawer-logo-icon" alt="StopStart"> StopStart</span>
       <button id="drawer-close" class="icon-btn"><i class="ph ph-x"></i></button>
     </div>
     <nav class="drawer-nav">
@@ -144,7 +149,7 @@
     <div id="version-panel">
       <div class="version-panel-header">
         <div class="version-panel-title-wrap">
-          <div class="version-panel-app">Annecy 2026</div>
+          <div class="version-panel-app">StopStart</div>
           <div class="version-panel-ver">Version <strong id="version-number"></strong></div>
         </div>
         <button id="version-close" class="icon-btn glass-btn"><i class="ph ph-x"></i></button>

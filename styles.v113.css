@@ -3625,3 +3625,226 @@ body.light .cover-stop-chip { background: rgba(0,0,0,0.05); border-color: rgba(0
   color: #4ade80; text-decoration: line-through; opacity: 0.7;
 }
 body.light .cover-stop-chip--visited { color: #16a34a; }
+
+/* ─── Splash screen ─────────────────────────────────────────────────── */
+#splash-screen {
+  position: fixed; inset: 0; z-index: 9999;
+  background: #5fa89e;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: flex-end;
+  transition: opacity .5s ease, visibility .5s ease;
+}
+#splash-screen.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
+#splash-img {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  object-fit: cover; object-position: center top;
+}
+#splash-wordmark {
+  position: relative; z-index: 1;
+  font-size: 28px; font-weight: 900; letter-spacing: -.5px;
+  color: #fff; text-shadow: 0 2px 12px rgba(0,0,0,.35);
+  margin-bottom: env(safe-area-inset-bottom, 40px);
+  padding-bottom: 24px;
+}
+
+/* ─── Auth logo icon ─────────────────────────────────────────────────── */
+.auth-logo-icon, .drawer-logo-icon {
+  width: 28px; height: 28px; border-radius: 7px;
+  object-fit: cover; vertical-align: middle; flex-shrink: 0;
+}
+.drawer-logo-icon { width: 22px; height: 22px; border-radius: 5px; }
+
+/* ─── Review sheet ──────────────────────────────────────────────────── */
+.review-body {
+  padding: 0 16px 32px;
+  display: flex; flex-direction: column; gap: 18px;
+}
+.review-section-label {
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .06em; color: var(--text3); margin-bottom: 4px;
+}
+.review-field {
+  display: flex; flex-direction: column; gap: 6px;
+}
+.review-input, .review-textarea {
+  width: 100%; background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 12px; padding: 10px 14px;
+  font-size: 15px; color: var(--text); font-family: inherit;
+  box-sizing: border-box; resize: none;
+  transition: border-color .15s;
+}
+body.light .review-input, body.light .review-textarea {
+  background: rgba(0,0,0,0.04); border-color: rgba(0,0,0,0.12); color: var(--text);
+}
+.review-input:focus, .review-textarea:focus {
+  outline: none; border-color: var(--accent);
+}
+.review-textarea { min-height: 90px; }
+
+/* Likert / star questions */
+.review-q-row {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px; padding: 6px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+.review-q-row:last-child { border-bottom: none; }
+body.light .review-q-row { border-bottom-color: rgba(0,0,0,0.05); }
+.review-q-label { font-size: 14px; color: var(--text2); flex: 1; }
+.review-stars {
+  display: flex; gap: 2px;
+}
+.review-star {
+  font-size: 22px; cursor: pointer; line-height: 1;
+  color: rgba(255,255,255,0.2); transition: color .1s, transform .1s;
+  -webkit-tap-highlight-color: transparent;
+}
+body.light .review-star { color: rgba(0,0,0,0.15); }
+.review-star--filled { color: #facc15; }
+.review-star:active { transform: scale(.85); }
+
+/* Overall score display */
+.review-overall {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 0 4px;
+}
+.review-overall-stars { display: flex; gap: 3px; }
+.review-overall-star { font-size: 24px; color: rgba(255,255,255,0.2); }
+body.light .review-overall-star { color: rgba(0,0,0,0.15); }
+.review-overall-star--filled { color: #facc15; }
+.review-overall-score {
+  font-size: 22px; font-weight: 800; color: var(--text); line-height: 1;
+}
+.review-overall-label { font-size: 13px; color: var(--text3); }
+
+/* Pros / cons rows */
+.review-proscons {
+  display: flex; flex-direction: column; gap: 8px;
+}
+.review-procon-row {
+  display: flex; align-items: center; gap: 8px;
+}
+.review-procon-prefix {
+  font-size: 16px; font-weight: 800; width: 16px; flex-shrink: 0;
+}
+.review-procon-prefix--pro { color: #4ade80; }
+.review-procon-prefix--con { color: #f87171; }
+.review-procon-input {
+  flex: 1; background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 10px; padding: 8px 12px;
+  font-size: 14px; color: var(--text); font-family: inherit;
+  box-sizing: border-box;
+}
+body.light .review-procon-input {
+  background: rgba(0,0,0,0.04); border-color: rgba(0,0,0,0.1);
+}
+.review-procon-input:focus { outline: none; border-color: var(--accent); }
+
+/* Photos */
+.review-photos-wrap {
+  display: flex; gap: 8px; overflow-x: auto;
+  padding-bottom: 4px; align-items: center;
+  scrollbar-width: none;
+}
+.review-photos-wrap::-webkit-scrollbar { display: none; }
+.review-photo-thumb {
+  width: 72px; height: 72px; flex-shrink: 0;
+  border-radius: 12px; object-fit: cover; cursor: pointer;
+  border: 2px solid transparent;
+  transition: border-color .15s;
+}
+.review-photo-thumb:hover { border-color: var(--accent); }
+.review-add-photo {
+  width: 72px; height: 72px; flex-shrink: 0;
+  border-radius: 12px; border: 2px dashed rgba(255,255,255,0.2);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; color: var(--text3); font-size: 26px;
+  transition: border-color .15s, color .15s; flex-direction: column; gap: 2px;
+}
+body.light .review-add-photo { border-color: rgba(0,0,0,0.15); }
+.review-add-photo:hover { border-color: var(--accent); color: var(--accent); }
+.review-add-photo-label { font-size: 10px; font-weight: 600; letter-spacing: .03em; }
+
+/* Share + save row */
+.review-share-row {
+  display: flex; gap: 8px; flex-wrap: wrap;
+}
+.review-share-btn {
+  flex: 1; min-width: 120px;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 11px 14px; border-radius: 12px; font-size: 14px; font-weight: 600;
+  border: 1px solid rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.07); color: var(--text2); cursor: pointer;
+  transition: background .15s;
+}
+body.light .review-share-btn { background: rgba(0,0,0,0.05); border-color: rgba(0,0,0,0.1); }
+.review-share-btn:hover { background: rgba(255,255,255,0.12); }
+.review-save-btn {
+  width: 100%; padding: 14px; border-radius: 14px; border: none;
+  font-size: 16px; font-weight: 700; cursor: pointer;
+  background: var(--accent); color: #fff;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  transition: opacity .15s;
+}
+.review-save-btn:active { opacity: .8; }
+
+/* Review badge on stop cards */
+.review-badge {
+  display: inline-flex; align-items: center; gap: 3px;
+  font-size: 11px; font-weight: 700; color: #facc15;
+  background: rgba(250,204,21,0.12); border: 1px solid rgba(250,204,21,0.25);
+  border-radius: 20px; padding: 2px 7px;
+}
+.review-badge i { font-size: 10px; }
+
+/* ─── Scrapbook grid (cover page) ────────────────────────────────────── */
+.scrapbook-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px; margin-top: 4px;
+}
+@media (min-width: 500px) { .scrapbook-grid { grid-template-columns: repeat(3, 1fr); } }
+.scrapbook-card {
+  border-radius: 14px; overflow: hidden;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.08);
+  cursor: pointer; transition: transform .15s, box-shadow .15s;
+}
+body.light .scrapbook-card { background: rgba(0,0,0,0.04); border-color: rgba(0,0,0,0.07); }
+.scrapbook-card:active { transform: scale(.97); }
+.scrapbook-photo {
+  width: 100%; aspect-ratio: 4/3; object-fit: cover; display: block;
+}
+.scrapbook-no-photo {
+  width: 100%; aspect-ratio: 4/3;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 32px; background: rgba(255,255,255,0.04);
+  color: var(--text3);
+}
+.scrapbook-card-body {
+  padding: 8px 10px 10px; display: flex; flex-direction: column; gap: 3px;
+}
+.scrapbook-stop-name {
+  font-size: 13px; font-weight: 700; color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.scrapbook-stars {
+  display: flex; align-items: center; gap: 4px;
+  font-size: 13px; color: #facc15;
+}
+.scrapbook-score { font-size: 12px; font-weight: 700; color: #facc15; }
+.scrapbook-heading {
+  font-size: 12px; font-style: italic; color: var(--text2);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.scrapbook-body {
+  font-size: 12px; color: var(--text3); line-height: 1.4;
+}
+.scrapbook-pros {
+  display: flex; flex-direction: column; gap: 1px;
+}
+.scrapbook-pros span {
+  font-size: 11px; color: #4ade80; font-weight: 600;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
