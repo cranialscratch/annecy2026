@@ -1,5 +1,5 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v258';
+const APP_VERSION = 'v259';
 
 const CHANGELOG = [
   { version: 'v244', title: 'Swipe to Skip or Remove, compact skipped cards, Bucket List', items: [
@@ -1683,6 +1683,10 @@ function getPhotos(stop) {
 
   // Stop-level override (e.g. custom local image set in data.js)
   if (stop.photos?.length) return stop.photos;
+
+  // User-supplied photo URL from booking info — takes priority over API lookups
+  const bPhoto = (state.bookingInfo?.[stop.id])?.photoUrl;
+  if (bPhoto) return [bPhoto];
 
   // Google Places photos — venue-specific, quality-scored
   const gp = _placesCache[stop.id]?.photos;
@@ -6458,7 +6462,7 @@ function openStopSheet(stopId) {
         ${(() => {
           const b = (state.bookingInfo||{})[stopId];
           if (!b || (!b.ref && !b.link && !b.notes)) return `<button class="sheet-action-btn" onclick="openBookingSheet('${stopId}')"><i class="ph ph-ticket"></i> Add booking info</button>`;
-          return `<div class="booking-info-card"><div class="booking-info-label"><i class="ph ph-ticket"></i> Booking</div>${b.ref?`<div class="booking-info-ref"><i class="ph ph-hash"></i> ${b.ref}</div>`:''}${b.link?`<a class="booking-info-link" href="${b.link}" target="_blank" rel="noopener"><i class="ph ph-link-simple"></i> View booking</a>`:''}${b.notes?`<div class="booking-info-notes">${b.notes}</div>`:''}<button class="booking-edit-btn" onclick="openBookingSheet('${stopId}')"><i class="ph ph-pencil-simple"></i> Edit</button></div>`;
+          return `<div class="booking-info-card">${b.photoUrl?`<img src="${b.photoUrl}" style="width:100%;border-radius:8px;object-fit:cover;max-height:120px;margin-bottom:8px" onerror="this.style.display='none'">`:''}<div class="booking-info-label"><i class="ph ph-ticket"></i> Booking</div>${b.ref?`<div class="booking-info-ref"><i class="ph ph-hash"></i> ${b.ref}</div>`:''}${b.link?`<a class="booking-info-link" href="${b.link}" target="_blank" rel="noopener"><i class="ph ph-link-simple"></i> View booking</a>`:''}${b.notes?`<div class="booking-info-notes">${b.notes}</div>`:''}<button class="booking-edit-btn" onclick="openBookingSheet('${stopId}')"><i class="ph ph-pencil-simple"></i> Edit</button></div>`;
         })()}
       </div>
       <div class="stop-sheet-actions">
@@ -6528,9 +6532,12 @@ function openBookingSheet(stopId) {
     <div class="stop-sheet-body" style="padding-bottom:40px">
       <input class="note-edit-input" id="bk-ref" type="text" placeholder="Booking reference" value="${b.ref||''}">
       <input class="note-edit-input" id="bk-link" type="url" placeholder="Booking link (https://…)" value="${b.link||''}">
-      <textarea class="note-edit-area" id="bk-notes" placeholder="Notes (time, special requirements…)" rows="4">${b.notes||''}</textarea>
-      <div style="margin-top:12px;display:flex;gap:8px">
-        ${b.ref||b.link||b.notes?`<button class="sheet-action-btn sheet-remove-btn" id="bk-clear"><i class="ph ph-trash"></i> Clear</button>`:''}
+      <textarea class="note-edit-area" id="bk-notes" placeholder="Notes (time, special requirements…)" rows="3">${b.notes||''}</textarea>
+      <label style="font-size:12px;color:var(--text3);display:block;margin-bottom:4px"><i class="ph ph-image"></i> Custom photo URL <span style="opacity:.6">(paste any image link — overrides auto-search)</span></label>
+      <input class="note-edit-input" id="bk-photo" type="url" placeholder="https://…" value="${b.photoUrl||''}">
+      ${b.photoUrl ? `<img src="${b.photoUrl}" style="width:100%;border-radius:10px;object-fit:cover;max-height:140px;margin-bottom:10px" onerror="this.style.display='none'">` : ''}
+      <div style="margin-top:4px;display:flex;gap:8px">
+        ${b.ref||b.link||b.notes||b.photoUrl?`<button class="sheet-action-btn sheet-remove-btn" id="bk-clear"><i class="ph ph-trash"></i> Clear</button>`:''}
         <button class="sheet-action-btn" id="bk-save" style="background:var(--accent);color:#fff;flex:1"><i class="ph ph-floppy-disk"></i> Save</button>
       </div>
     </div>`;
@@ -6545,13 +6552,19 @@ function openBookingSheet(stopId) {
   sheet.querySelector('#bk-close').addEventListener('click', close);
   overlay.addEventListener('click', close);
   sheet.querySelector('#bk-save').addEventListener('click', () => {
-    const ref   = sheet.querySelector('#bk-ref').value.trim();
-    const link  = sheet.querySelector('#bk-link').value.trim();
-    const notes = sheet.querySelector('#bk-notes').value.trim();
+    const ref      = sheet.querySelector('#bk-ref').value.trim();
+    const link     = sheet.querySelector('#bk-link').value.trim();
+    const notes    = sheet.querySelector('#bk-notes').value.trim();
+    const photoUrl = sheet.querySelector('#bk-photo').value.trim();
     if (!state.bookingInfo) state.bookingInfo = {};
-    if (ref||link||notes) state.bookingInfo[stopId] = {ref,link,notes};
+    if (ref||link||notes||photoUrl) state.bookingInfo[stopId] = {ref,link,notes,photoUrl};
     else delete state.bookingInfo[stopId];
+    // Bust the places cache so getPhotos() re-evaluates with the new photoUrl
+    delete _placesCache[stopId];
     save(); close();
+    // Refresh any visible card
+    const cardEl = document.getElementById('stop-' + stopId) || document.getElementById('overnight-' + stopId);
+    if (cardEl) injectStopPhotos(stopId);
   });
   sheet.querySelector('#bk-clear')?.addEventListener('click', () => {
     if (!state.bookingInfo) state.bookingInfo = {};
