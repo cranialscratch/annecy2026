@@ -21,10 +21,13 @@ function log(msg) {
   console.log(`[${new Date().toISOString()}] ${msg}`);
 }
 
+const SCREENSHOT_DIR = process.env.SCREENSHOT_DIR || '/tmp/screenshots';
+require('fs').mkdirSync(SCREENSHOT_DIR, { recursive: true });
+
 async function screenshot(page, name) {
-  const file = `/tmp/${Date.now()}_${name}.png`;
+  const file = `${SCREENSHOT_DIR}/${Date.now()}_${name}.png`;
   await page.screenshot({ path: file, fullPage: true });
-  log(`Screenshot: ${name}`);
+  log(`Screenshot: ${file}`);
 }
 
 function sleep(ms) {
@@ -281,10 +284,15 @@ async function completeBooking(page) {
   log(`Target: ${CONFIG.eventUrl}`);
   log(`Poll interval: ${CONFIG.minPollMs / 1000}–${CONFIG.maxPollMs / 1000}s (random)`);
 
-  // headless:false so Xvfb virtual display is used — bypasses many bot-detection checks
   const browser = await chromium.launch({
-    headless: false,
-    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-blink-features=AutomationControlled'],
+    headless: true,
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-blink-features=AutomationControlled',
+      '--disable-dev-shm-usage',
+      '--disable-gpu',
+    ],
   });
   const context = await browser.newContext({
     userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
