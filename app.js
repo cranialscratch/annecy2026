@@ -1,5 +1,5 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v262';
+const APP_VERSION = 'v263';
 
 const CHANGELOG = [
   { version: 'v244', title: 'Swipe to Skip or Remove, compact skipped cards, Bucket List', items: [
@@ -2177,7 +2177,7 @@ function startLocationWatch() {
     // Refresh Now panel if on today's day view
     if (state.currentView === 'day') {
       const day = TRIP_DATA.days.find(d => d.id === state.currentDayId);
-      if (day) { const tl = document.getElementById('timeline'); if (tl) renderNowPanel(tl, day); }
+      if (day) { /* GPS update — no now panel */ }
     }
     // On first fix: re-fetch countdown POIs (which used fallback coords)
     if (firstFix && _leafletMap) {
@@ -2259,62 +2259,6 @@ function getCurrentStop(day) {
   return passed[passed.length - 1] || stops[0];
 }
 
-function renderNowPanel(container, day) {
-  const existing = document.getElementById('now-panel');
-  if (existing) existing.remove();
-
-  const current = getCurrentStop(day);
-  if (!current) return;
-
-  const stops = getDayStops(day).filter(s => !state.skipped[s.id] && !state.removed[s.id] && getStopType(s) !== 'depart');
-  const curIdx = stops.findIndex(s => s.id === current.id);
-  const next   = stops[curIdx + 1] || null;
-
-  const arrTime   = getStopTime(current);
-  const arrMins   = timeToMinutes(arrTime);
-  const durMins   = getStopDuration(current);
-  const leaveInfo = leaveByInfo(current);
-
-  let nextHtml = '';
-  if (next) {
-    const tKey     = _travelKey(current, next);
-    const travelM  = _travelCache[tKey];
-    const nextTime = getStopTime(next);
-    const nextMins = timeToMinutes(nextTime);
-    const departM  = (travelM != null && nextMins != null) ? nextMins - travelM : null;
-    const travelStr = travelM != null ? `~${travelM} min drive` : '';
-    const departStr = departM != null ? `Depart ${minutesToTime(departM)}` : '';
-    const arrStr   = nextTime && timeToMinutes(nextTime) !== null ? `Arrive ${nextTime}` : '';
-    nextHtml = `
-      <div class="now-next">
-        <div class="now-next-label"><i class="ph ph-arrow-down"></i> Next stop</div>
-        <div class="now-next-name">${stopTypeIcon(next)} ${getStopName(next)}</div>
-        <div class="now-next-timing">${[travelStr, departStr, arrStr].filter(Boolean).join(' · ')}</div>
-      </div>`;
-  }
-
-  const checkedIn = !!state.checked[current.id];
-  const arrivedStr = checkedIn && arrTime && timeToMinutes(arrTime) !== null
-    ? `Arrived ${arrTime}`
-    : (arrTime && timeToMinutes(arrTime) !== null ? `Scheduled ${arrTime}` : '');
-  const leaveStr = leaveInfo ? leaveInfo.label : (arrMins !== null && durMins ? `Leave by ${minutesToTime(arrMins + durMins)}` : '');
-
-  const panel = document.createElement('div');
-  panel.id = 'now-panel';
-  panel.className = 'now-panel glass';
-  panel.innerHTML = `
-    <div class="now-here">
-      <div class="now-here-label"><i class="ph ph-map-pin-simple-area"></i> You are at</div>
-      <div class="now-here-row">
-        <div class="now-here-name">${getStopName(current)}</div>
-        <a class="now-navigate-btn" href="${navUrl(current.location, current.address, current.lat, current.lng)}" target="_blank" rel="noopener"><i class="ph ph-navigation-arrow"></i></a>
-      </div>
-      <div class="now-timing">${[arrivedStr, leaveStr].filter(Boolean).join(' · ')}</div>
-    </div>
-    ${nextHtml}`;
-
-  container.insertBefore(panel, container.firstChild);
-}
 
 async function fetchRoutePOIs(day) {
   // Countdown: search near user's GPS only (no fallback — no point showing random UK articles)
@@ -5237,9 +5181,8 @@ function renderTimeline(container, scrollToNow) {
   const now = nowMinutes();
   let nowLineEl = null;
 
-  // Now panel + FAB — only on today's day view
+  // FAB — only on today's day view
   if (isToday) {
-    renderNowPanel(container, day);
     const fab = document.getElementById('fab-add');
     if (fab) fab.classList.remove('hidden');
   } else {
@@ -5408,11 +5351,14 @@ function buildDepartCard(departStop, firstStop) {
       <div class="tl-line tl-line--faded"></div>
     </div>
     <div class="tl-depart-card">
-      <div class="depart-card-venue">
-        <i class="ph ph-sign-out depart-card-icon"></i>
-        <span>${venueName}</span>
+      ${buildSlider(departStop, 'card')}
+      <div class="depart-card-body">
+        <div class="depart-card-venue">
+          <i class="ph ph-sign-out depart-card-icon"></i>
+          <span>${venueName}</span>
+        </div>
+        ${destName ? `<div class="depart-card-dest"><i class="ph ph-arrow-right"></i> ${destIcon} ${destName}</div>` : ''}
       </div>
-      ${destName ? `<div class="depart-card-dest"><i class="ph ph-arrow-right"></i> ${destIcon} ${destName}</div>` : ''}
     </div>`;
 
   return item;
