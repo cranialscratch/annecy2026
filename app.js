@@ -1,7 +1,56 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v263';
+const APP_VERSION = 'v264';
 
 const CHANGELOG = [
+  { version: 'v263', title: 'Departure card, GPS late alerts, auto arrival', items: [
+    { type: 'feature', text: 'Compact departure card at the top of each day shows the venue you\'re leaving from and leave-by time, with a photo' },
+    { type: 'feature', text: 'GPS monitors schedule every 15 minutes — if you\'ll be 12+ min late for the next stop, a notification fires and an in-app modal appears' },
+    { type: 'feature', text: 'Late modal offers three choices: keep going, skip the late stop (re-evaluates the next one), or adjust the schedule' },
+    { type: 'feature', text: 'Auto check-in: stepping within 200m of an upcoming stop marks it as arrived and updates the shared group position' },
+    { type: 'feature', text: 'Fixed stops (e.g. flights, screenings) shown with a distinct urgent warning — cannot be skipped' },
+    { type: 'fix', text: 'Removed the "You are at" panel from the top of the day view — current location is visible on the map instead' },
+  ]},
+  { version: 'v261', title: 'GPS-aware schedule monitoring', items: [
+    { type: 'feature', text: '15-minute schedule checks using your GPS position and live OSRM routing to the next stop' },
+    { type: 'feature', text: 'Push notification fires even when app is backgrounded if you\'re running late' },
+    { type: 'feature', text: 'App re-evaluates immediately when you bring it to the foreground after a notification' },
+  ]},
+  { version: 'v259', title: 'Multi-user auth, festival screenings, personal state', items: [
+    { type: 'feature', text: 'Firebase email/password login — each person has their own account with independent check-ins and preferences' },
+    { type: 'feature', text: 'Invite link: owner generates a one-time URL to share via WhatsApp/iMessage; guests register on arrival' },
+    { type: 'feature', text: 'Shared state (schedule changes, added/removed stops) syncs to everyone; personal state (check-ins, bucket list, notes) stays private' },
+    { type: 'feature', text: 'Festival screening stops show film title, venue, ticket toggle and an arrive-by time (20 min early if ticketed, 2 hr if queuing)' },
+    { type: 'feature', text: 'Per-user stop pinning prevents the time-ripple cascade from shifting a stop you\'ve manually anchored' },
+    { type: 'feature', text: 'Owner\'s current stop shared with the group — others see where the trip is up to' },
+  ]},
+  { version: 'v258', title: 'Notes tab, Find view, booking info on stops', items: [
+    { type: 'feature', text: 'Notes tab (bottom nav) — create, edit, reorder and search freeform notes with embedded links' },
+    { type: 'feature', text: 'Find view — free-text search plus 20+ category filters across food, activities, transport, services and more' },
+    { type: 'feature', text: 'Find results open a place sheet with Navigate, Save for later, and Add to trip (with day picker)' },
+    { type: 'feature', text: 'Booking info on every stop: reference number, confirmation link, notes and a custom photo URL' },
+    { type: 'design', text: 'Stop ••• sheet groups all actions (reason, tags, navigate, edit, pin, remove) in one place' },
+  ]},
+  { version: 'v257', title: 'Full-screen photo lightbox, larger stop photos', items: [
+    { type: 'feature', text: 'Tap any photo on a stop detail page to open a full-screen lightbox — swipe between photos, tap × to close' },
+    { type: 'design', text: 'Stop detail photo area increased to 55% of viewport height so you actually see the place' },
+  ]},
+  { version: 'v256', title: 'Smarter time editing — three ripple modes', items: [
+    { type: 'feature', text: 'Time modal now offers three options: update this stop only, shift following stops by the same amount, or recalculate all subsequent drive times with OSRM routing' },
+    { type: 'fix', text: 'Recalculate mode uses real road distances between each stop pair, not a fixed delta' },
+  ]},
+  { version: 'v255', title: 'Depart-by pill with reminder bell', items: [
+    { type: 'feature', text: 'Each stop card shows "Depart by HH:MM · ~XX min drive" once travel times have been computed' },
+    { type: 'feature', text: 'Tap the bell icon to set how many minutes before departure you want a reminder (default 30 min)' },
+    { type: 'feature', text: 'Travel times pre-computed for the current day on load and cached for the session' },
+  ]},
+  { version: 'v253', title: 'Sync and photo fixes', items: [
+    { type: 'fix', text: 'Removing a data.js stop now syncs to all users (was only personal before)' },
+    { type: 'fix', text: 'Stop card photos now load on first render without needing to open the detail page first' },
+  ]},
+  { version: 'v252', title: 'Swipe sensitivity and tap precision', items: [
+    { type: 'fix', text: 'Swipe-to-reveal now requires deliberate horizontal travel before snapping open — accidental triggers eliminated' },
+    { type: 'fix', text: 'Taps are properly ignored if any swipe gesture was detected, preventing ghost opens' },
+  ]},
   { version: 'v244', title: 'Swipe to Skip or Remove, compact skipped cards, Bucket List', items: [
     { type: 'feature', text: 'Swipe left on any stop to reveal two options: Skip (or Restore) and Remove' },
     { type: 'feature', text: 'Skipped stops collapse to a compact single-line card; swipe Restore to expand' },
@@ -2016,6 +2065,8 @@ function load() {
     if (nl) state.notifLeadMins = JSON.parse(nl);
     const no = localStorage.getItem('annecy_notes');
     if (no) state.notes = JSON.parse(no);
+    // Seed reference notes on first load (once only — keyed by id so duplicates are harmless)
+    _seedDefaultNotes();
     const bi = localStorage.getItem('annecy_booking_info');
     if (bi) state.bookingInfo = JSON.parse(bi);
   } catch {}
@@ -3130,6 +3181,22 @@ function renderFindView(container) {
   };
 
   runSearch();
+}
+
+const _DEFAULT_NOTES = [
+  { id: 'seed-festival', title: 'Festival website', content: 'Programme, screenings, news and venue maps for the Annecy International Animation Film Festival.', links: [{ label: 'annecy.org/festival', url: 'https://www.annecy.org/festival' }], createdAt: 0 },
+  { id: 'seed-leshuttle', title: 'LeShuttle — Channel Tunnel', content: 'Booking reference and departure details for the Eurotunnel crossing.', links: [{ label: 'le-shuttle.com', url: 'https://www.le-shuttle.com' }], createdAt: 1 },
+];
+
+function _seedDefaultNotes() {
+  if (!state.notes) state.notes = [];
+  const ids = new Set(state.notes.map(n => n.id));
+  let added = false;
+  for (const note of _DEFAULT_NOTES) {
+    if (!ids.has(note.id)) { state.notes.push(note); added = true; }
+  }
+  // Sort seeds to bottom (they have createdAt 0/1; real notes will have timestamps)
+  if (added) state.notes.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 }
 
 function renderNotesView(container) {
@@ -5181,14 +5248,7 @@ function renderTimeline(container, scrollToNow) {
   const now = nowMinutes();
   let nowLineEl = null;
 
-  // FAB — only on today's day view
-  if (isToday) {
-    const fab = document.getElementById('fab-add');
-    if (fab) fab.classList.remove('hidden');
-  } else {
-    const fab = document.getElementById('fab-add');
-    if (fab) fab.classList.add('hidden');
-  }
+
   let nowInserted = false;
 
   // Filter bar — collect types present in this day's stops
@@ -8217,67 +8277,6 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // FAB quick-action sheet
-  document.getElementById('fab-add').addEventListener('click', () => {
-    const existing = document.getElementById('fab-sheet');
-    if (existing) { existing.remove(); return; }
-    const overlay = document.createElement('div');
-    overlay.id = 'fab-sheet';
-    overlay.className = 'stop-sheet-overlay';
-    const currentStop = (() => {
-      const day = TRIP_DATA.days.find(d => d.id === state.currentDay);
-      return day ? getCurrentStop(day) : null;
-    })();
-    overlay.innerHTML = `
-      <div class="stop-sheet" id="fab-sheet-panel">
-        <div class="stop-sheet-handle"></div>
-        <div class="stop-sheet-header">
-          <div class="stop-sheet-title">Quick actions</div>
-          <button class="stop-sheet-close" aria-label="Close"><i class="ph ph-x"></i></button>
-        </div>
-        <div class="stop-sheet-body" style="padding-bottom:24px">
-          <button class="sheet-action-btn" id="fab-food"><i class="ph ph-fork-knife"></i> Find food nearby</button>
-          <button class="sheet-action-btn" id="fab-charge"><i class="ph ph-charging-station"></i> Find charger nearby</button>
-          <button class="sheet-action-btn" id="fab-lost"><i class="ph ph-map-pin"></i> Navigate to current stop</button>
-          <button class="sheet-action-btn" id="fab-addstop"><i class="ph ph-plus-circle"></i> Add a stop</button>
-        </div>
-      </div>`;
-    document.body.appendChild(overlay);
-    requestAnimationFrame(() => {
-      overlay.classList.add('open');
-      const panel = document.getElementById('fab-sheet-panel');
-      if (panel) panel.classList.add('open');
-    });
-    const close = () => { overlay.remove(); };
-    overlay.querySelector('.stop-sheet-close').addEventListener('click', close);
-    overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
-    overlay.querySelector('#fab-food').addEventListener('click', () => {
-      close();
-      state.currentView = 'find';
-      state._findFilter = 'food';
-      renderView();
-      document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.view === 'find'));
-    });
-    overlay.querySelector('#fab-charge').addEventListener('click', () => {
-      close();
-      state.currentView = 'find';
-      state._findFilter = 'charging';
-      renderView();
-      document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.view === 'find'));
-    });
-    overlay.querySelector('#fab-lost').addEventListener('click', () => {
-      close();
-      if (currentStop && currentStop.lat && currentStop.lng) {
-        window.open(`https://maps.apple.com/?daddr=${currentStop.lat},${currentStop.lng}&dirflg=d`, '_blank');
-      } else {
-        showToast('Current stop location not available');
-      }
-    });
-    overlay.querySelector('#fab-addstop').addEventListener('click', () => {
-      close();
-      openEditSheet(null, state.currentDayId);
-    });
-  });
-
   // Auth state observer — fires once on load and again on sign-in/out
   auth.onAuthStateChanged(user => {
     if (user) {
