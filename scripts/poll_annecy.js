@@ -22,209 +22,184 @@ async function screenshot(page, name) {
   log(`Screenshot: ${name}`);
 }
 
-async function dumpPage(page, label) {
-  const text = await page.evaluate(() => document.body.innerText);
-  const inputs = await page.$$eval('input', els => els.map(e => `${e.type}|${e.name}|${e.id}|${e.placeholder}`));
-  const links = await page.$$eval('a, button', els => els.map(e => e.innerText?.trim()).filter(t => t && t.length < 60));
-  log(`[${label}] URL: ${page.url()}`);
-  log(`[${label}] Text: ${text.substring(0, 300).replace(/\n/g, ' ')}`);
-  log(`[${label}] Inputs: ${JSON.stringify(inputs)}`);
-  log(`[${label}] Links/buttons: ${JSON.stringify(links.slice(0, 20))}`);
+function isLoggedIn(url) {
+  // Logged in = redirected back to programme domain, not stuck on auth domain
+  return url.includes('programme.annecyfestival.com') && !url.includes('account.annecyfestival.com');
 }
 
 async function login(page) {
-  // Step 1: go to homepage and explore nav
-  log('Going to homepage...');
+  log('Navigating to homepage...');
   await page.goto('https://programme.annecyfestival.com/en', { waitUntil: 'networkidle', timeout: 30000 });
-  await screenshot(page, '01_homepage');
-  await dumpPage(page, 'homepage');
 
-  // Step 2: look for Account/Login/Sign in link in nav
-  const loginTriggers = [
-    'a:has-text("Account")', 'a:has-text("Login")', 'a:has-text("Sign in")',
-    'a:has-text("Connexion")', 'a:has-text("Mon compte")', 'a:has-text("Se connecter")',
-    'button:has-text("Account")', 'button:has-text("Login")', 'button:has-text("Sign in")',
-    'button:has-text("Connexion")', '[href*="login"]', '[href*="account"]', '[href*="signin"]',
-  ];
+  // Click Account link → triggers OAuth redirect to account.annecyfestival.com
+  const accountLink = await page.$('a:has-text("Account"), a[href*="account"]');
+  if (!accountLink) throw new Error('Account link not found on homepage');
+  const href = await accountLink.getAttribute('href').catch(() => '');
+  log(`Clicking Account link (href=${href})`);
+  await accountLink.click();
 
-  let clicked = false;
-  for (const sel of loginTriggers) {
-    try {
-      const el = await page.$(sel);
-      if (el && await el.isVisible()) {
-        const text = await el.innerText().catch(() => '');
-        const href = await el.getAttribute('href').catch(() => '');
-        log(`Clicking login trigger: "${text}" href="${href}" (${sel})`);
-        await el.click();
-        await page.waitForNavigation({ waitUntil: 'networkidle', timeout: 10000 }).catch(() => {});
-        await screenshot(page, '02_after_account_click');
-        await dumpPage(page, 'after_account_click');
-        clicked = true;
-        break;
-      }
-    } catch {}
-  }
+  // Wait for the OAuth login page on account.annecyfestival.com
+  await page.waitForURL(/account\.annecyfestival\.com/, { timeout: 15000 });
+  log(`OAuth page: ${page.url()}`);
 
-  if (!clicked) {
-    // Try navigating directly to common account URLs
-    for (const path of ['/en/account', '/en/my-account', '/en/user', '/en/profile', '/en/auth']) {
-      log(`Trying direct path: ${path}`);
-      await page.goto(`https://programme.annecyfestival.com${path}`, { waitUntil: 'networkidle', timeout: 15000 });
-      await dumpPage(page, `path_${path}`);
-      const inputs = await page.$$('input');
-      if (inputs.length > 0) { log(`Found inputs at ${path}`); clicked = true; break; }
-    }
-  }
+  // Wait for the form fields (citia_username / citia_password)
+  await page.waitForSelector('input[name="citia_username"], input[id="username"]', { timeout: 10000 });
+  log('Login form ready');
+  await screenshot(page, 'login_form');
 
-  await screenshot(page, '03_pre_form');
+  await page.fill('input[name="citia_username"], input[id="username"]', CONFIG.email);
+  await page.fill('input[name="citia_password"], input[id="password"]', CONFIG.password);
+  log('Credentials filled');
 
-  // Step 3: wait for a login form (email/password inputs)
-  const anyInputSel = 'input[type="email"], input[type="password"], input[name*="email"], input[name*="user"], input[placeholder*="mail" i], input[placeholder*="email" i]';
-  log('Waiting for login form inputs...');
+  await page.click('button[type="submit"]');
+  log('Submitted — waiting for OAuth redirect back to programme.annecyfestival.com...');
+
+  // The OAuth flow redirects back through several URLs — wait up to 45s
   try {
-    await page.waitForSelector(anyInputSel, { timeout: 15000 });
-    log('Login form found');
+    await page.waitForURL(/programme\.annecyfestival\.com/, { timeout: 45000 });
+    log(`Login SUCCESS — URL: ${page.url()}`);
+    await screenshot(page, 'logged_in');
   } catch {
-    await screenshot(page, '03_no_form');
-    await dumpPage(page, 'no_form');
-    throw new Error('Login form not found after clicking Account — see logs for page state');
+    await screenshot(page, 'login_redirect_timeout');
+    const url = page.url();
+    const text = await page.evaluate(() => document.body.innerText).catch(() => '');
+    log(`Login redirect timeout — current URL: ${url}`);
+    log(`Page text: ${text.substring(0, 300)}`);
+    // Check for error messages
+    if (text.toLowerCase().includes('incorrect') || text.toLowerCase().includes('invalide') || text.toLowerCase().includes('error')) {
+      throw new Error('Login failed — invalid credentials or account issue');
+    }
+    throw new Error(`OAuth redirect did not complete within 45s (stuck at ${url})`);
   }
-
-  await screenshot(page, '04_form_visible');
-
-  // Fill email
-  const emailSels = ['input[type="email"]', 'input[name*="email"]', 'input[name*="user"]', 'input[placeholder*="mail" i]', 'input[placeholder*="email" i]', 'input[type="text"]'];
-  let emailFilled = false;
-  for (const sel of emailSels) {
-    try { await page.fill(sel, CONFIG.email, { timeout: 3000 }); emailFilled = true; log(`Email filled (${sel})`); break; } catch {}
-  }
-
-  // Fill password
-  let passFilled = false;
-  for (const sel of ['input[type="password"]', 'input[name*="pass"]']) {
-    try { await page.fill(sel, CONFIG.password, { timeout: 3000 }); passFilled = true; log(`Password filled (${sel})`); break; } catch {}
-  }
-
-  if (!emailFilled || !passFilled) {
-    const inputs = await page.$$eval('input', els => els.map(e => `${e.type}|${e.name}|${e.id}|${e.placeholder}`));
-    log('All inputs: ' + JSON.stringify(inputs));
-    throw new Error(`Fill failed — emailFilled=${emailFilled} passFilled=${passFilled}`);
-  }
-
-  // Submit
-  const submitSels = ['button[type="submit"]', 'input[type="submit"]', 'button:has-text("Login")', 'button:has-text("Sign in")', 'button:has-text("Connexion")', 'button:has-text("Se connecter")', 'button:has-text("Continuer")', 'button:has-text("Continue")'];
-  let submitted = false;
-  for (const sel of submitSels) {
-    try { await page.click(sel, { timeout: 3000 }); submitted = true; log(`Submitted (${sel})`); break; } catch {}
-  }
-  if (!submitted) { await page.keyboard.press('Enter'); log('Submitted via Enter'); }
-
-  await page.waitForNavigation({ waitUntil: 'networkidle', timeout: 20000 }).catch(() => {});
-  await screenshot(page, '05_after_login');
-  log(`Post-login URL: ${page.url()}`);
 }
 
 async function checkAndBook(page) {
-  log('Checking event page...');
+  log('Navigating to event page...');
   await page.goto(CONFIG.eventUrl, { waitUntil: 'networkidle', timeout: 30000 });
   await page.waitForTimeout(2000);
 
+  // Verify still logged in
+  if (!isLoggedIn(page.url())) {
+    log('Session expired — re-login needed');
+    throw new Error('session expired');
+  }
+
   const pageText = await page.evaluate(() => document.body.innerText.toLowerCase());
-  log(`Page preview: ${pageText.substring(0, 300).replace(/\n/g, ' ')}`);
+  log(`Page preview: ${pageText.substring(0, 250).replace(/\n/g, ' ')}`);
 
-  const allButtons = await page.$$eval('button, a', els =>
-    els.map(e => ({ text: e.innerText?.trim().substring(0, 60), disabled: e.disabled, class: e.className.substring(0, 40) }))
-       .filter(e => e.text)
+  // Log all buttons/links with their text for debugging
+  const elements = await page.$$eval('button, a', els =>
+    els.map(e => ({ tag: e.tagName, text: e.innerText?.trim().substring(0, 60), disabled: e.disabled, class: e.className.substring(0, 50) }))
+       .filter(e => e.text && e.text.length > 0)
   );
-  log('Interactive elements: ' + JSON.stringify(allButtons.slice(0, 25)));
+  log('Interactive elements: ' + JSON.stringify(elements.slice(0, 20)));
 
-  const soldOutPhrases = ['sold out', 'complet', 'no availability', 'plus disponible', 'epuise', 'guichet fermé', 'no places'];
+  const soldOutPhrases = ['sold out', 'complet', 'no availability', 'plus disponible', 'epuise', 'guichet fermé', 'no places', 'session complète'];
   for (const phrase of soldOutPhrases) {
     if (pageText.includes(phrase)) { log(`Unavailable — "${phrase}"`); return false; }
   }
 
-  const bookingSels = [
-    'button:has-text("Book")', 'button:has-text("Reserve")',
-    'button:has-text("Réserver")', 'button:has-text("Réservation")',
-    'a:has-text("Book")', 'a:has-text("Réserver")',
-    'button:has-text("Add to cart")', 'button:has-text("Acheter")',
-    'button:has-text("Billets")', 'button:has-text("Ticket")',
-  ];
+  // Only match booking buttons with visible, meaningful text — no empty/class-only matches
+  const bookingTextPatterns = [/book/i, /reserv/i, /réserv/i, /add to cart/i, /acheter/i, /billet/i, /ticket/i, /place/i];
+  const allClickable = await page.$$('button:not([disabled]), a');
 
-  for (const sel of bookingSels) {
+  for (const el of allClickable) {
     try {
-      const el = await page.$(sel);
-      if (!el) continue;
-      if (await el.isVisible() && await el.isEnabled()) {
-        const text = await el.innerText().catch(() => '');
-        log(`BOOKING BUTTON FOUND: "${text}" — clicking!`);
-        await screenshot(page, 'slot_available');
-        await el.click();
-        await page.waitForNavigation({ waitUntil: 'networkidle', timeout: 15000 }).catch(() => {});
-        log(`Post-click URL: ${page.url()}`);
-        return await completeBooking(page);
-      }
+      const text = (await el.innerText().catch(() => '')).trim();
+      if (!text || text.length < 2) continue; // skip empty buttons
+      if (!bookingTextPatterns.some(p => p.test(text))) continue;
+      if (!await el.isVisible()) continue;
+      if (!await el.isEnabled()) continue;
+
+      log(`BOOKING BUTTON FOUND: "${text}" — clicking!`);
+      await screenshot(page, 'slot_available');
+      await el.click();
+      await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
+      log(`Post-click URL: ${page.url()}`);
+      await screenshot(page, 'after_booking_click');
+      return await completeBooking(page);
     } catch {}
   }
 
-  log('No active booking button — not yet available');
+  log('No booking button with meaningful text found — slot not open yet');
   return false;
 }
 
 async function completeBooking(page) {
-  log('Completing booking...');
-  const confirmSels = ['button:has-text("Confirm")', 'button:has-text("Confirmer")', 'button:has-text("Continue")', 'button:has-text("Continuer")', 'button:has-text("Next")', 'button:has-text("Suivant")', 'button[type="submit"]'];
-  for (let step = 1; step <= 6; step++) {
+  log('Attempting to complete booking flow...');
+  const confirmTexts = [/confirm/i, /continue/i, /continuer/i, /suivant/i, /next/i, /proceed/i, /valider/i, /validate/i];
+
+  for (let step = 1; step <= 8; step++) {
+    await page.waitForTimeout(1000);
     let clicked = false;
-    for (const sel of confirmSels) {
+    const buttons = await page.$$('button:not([disabled]), input[type="submit"]');
+    for (const btn of buttons) {
       try {
-        const el = await page.$(sel);
-        if (el && await el.isVisible() && await el.isEnabled()) {
-          const text = await el.innerText().catch(() => '');
-          log(`Step ${step}: "${text}"`);
-          await el.click();
-          await page.waitForNavigation({ waitUntil: 'networkidle', timeout: 10000 }).catch(() => {});
-          await screenshot(page, `booking_step${step}`);
-          clicked = true; break;
-        }
+        const text = (await btn.innerText().catch(() => '')).trim();
+        if (!text) continue;
+        if (!confirmTexts.some(p => p.test(text))) continue;
+        if (!await btn.isVisible() || !await btn.isEnabled()) continue;
+        log(`Step ${step}: clicking "${text}"`);
+        await btn.click();
+        await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
+        await screenshot(page, `booking_step${step}`);
+        clicked = true;
+        break;
       } catch {}
     }
     if (!clicked) break;
   }
+
   const finalText = await page.evaluate(() => document.body.innerText.toLowerCase());
-  const ok = ['confirmation', 'confirmed', 'success', 'réservation confirmée', 'thank you', 'merci'].some(p => finalText.includes(p));
-  log(ok ? 'BOOKING CONFIRMED!' : 'Booking flow done — check screenshots');
-  await screenshot(page, 'final_state');
+  const finalUrl = page.url();
+  log(`Final URL: ${finalUrl}`);
+  log(`Final page text: ${finalText.substring(0, 200).replace(/\n/g, ' ')}`);
+
+  const confirmed = ['confirmation', 'confirmed', 'success', 'réservation confirmée', 'reservation confirmee', 'thank you', 'merci', 'votre réservation'].some(p => finalText.includes(p));
+  if (confirmed) {
+    log('BOOKING CONFIRMED!');
+    return true;
+  }
+
+  log('Booking flow done — confirmation phrase not found in page text');
+  // Return true anyway so we stop polling — booking was attempted, user should verify manually
   return true;
 }
 
 (async () => {
   log('=== Annecy Festival Reservation Poller ===');
+  log(`Target: ${CONFIG.eventUrl}`);
+  log(`Poll interval: ${CONFIG.pollIntervalMs / 1000}s`);
+
   const browser = await chromium.launch({ args: ['--no-sandbox', '--disable-setuid-sandbox'] });
   const context = await browser.newContext({
     userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
   });
   const page = await context.newPage();
 
+  // Initial login
   await login(page);
 
   let booked = false;
   while (!booked) {
     try {
       booked = await checkAndBook(page);
-      if (booked) { log('SUCCESS — done!'); break; }
+      if (booked) {
+        log('Booking attempted — check your email and the festival site to confirm.');
+        break;
+      }
     } catch (e) {
-      log(`Error: ${e.message}`);
-      if (/(login|auth|session|403|401)/i.test(e.message)) {
-        await login(page).catch(le => log(`Re-login failed: ${le.message}`));
+      log(`Error during poll: ${e.message}`);
+      if (/(session|auth|login|connexion|401|403)/i.test(e.message)) {
+        log('Re-logging in...');
+        await login(page).catch(le => log(`Re-login error: ${le.message}`));
       }
     }
-    if (!booked) {
-      log(`Waiting ${CONFIG.pollIntervalMs / 1000}s...`);
-      await new Promise(r => setTimeout(r, CONFIG.pollIntervalMs));
-    }
+
+    log(`Waiting ${CONFIG.pollIntervalMs / 1000}s before next check...`);
+    await new Promise(r => setTimeout(r, CONFIG.pollIntervalMs));
   }
 
   await browser.close();
-  log('=== Done ===');
+  log('=== Poller finished ===');
 })();
