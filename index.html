@@ -180,9 +180,21 @@
           <button class="time-adj" data-delta="15">+15m</button>
           <button class="time-adj" data-delta="60">+1h</button>
         </div>
-        <label class="cascade-label">
-          <input type="checkbox" id="modal-cascade"> Ripple — shift all following stops by the same amount
-        </label>
+        <div class="cascade-options" id="cascade-options">
+          <div class="cascade-option-label">Update following stops:</div>
+          <label class="cascade-radio-row">
+            <input type="radio" name="modal-cascade" id="modal-cascade-none" value="none">
+            <span>This stop only</span>
+          </label>
+          <label class="cascade-radio-row">
+            <input type="radio" name="modal-cascade" id="modal-cascade-shift" value="shift" checked>
+            <span>Shift following stops by the same amount</span>
+          </label>
+          <label class="cascade-radio-row">
+            <input type="radio" name="modal-cascade" id="modal-cascade-recalc" value="recalc">
+            <span>Recalculate with actual drive times <span class="cascade-recalc-note">recommended</span></span>
+          </label>
+        </div>
       </div>
       <div class="modal-footer">
         <button id="modal-reset-day" class="pill-btn secondary" title="Clear all time overrides for this day">Reset day</button>
@@ -504,8 +516,8 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
-  <script src="data.js?v=256"></script>
-  <script src="sync.js?v=256"></script>
-  <script src="app.js?v=256"></script>
+  <script src="data.js?v=257"></script>
+  <script src="sync.js?v=257"></script>
+  <script src="app.js?v=257"></script>
 </body>
 </html>

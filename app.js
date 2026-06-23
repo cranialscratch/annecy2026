@@ -1,5 +1,5 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v256';
+const APP_VERSION = 'v257';
 
 const CHANGELOG = [
   { version: 'v244', title: 'Swipe to Skip or Remove, compact skipped cards, Bucket List', items: [
@@ -5927,7 +5927,7 @@ async function _recalcChain(day, fromIdx, progressCb) {
   for (let i = fromIdx; i < allStops.length - 1; i++) {
     const from = allStops[i];
     const to   = allStops[i + 1];
-    if (isStopFixed(to)) break;
+    if (isStopFixed(to) || isPinned(to.id)) break;
     const fromLat = getStopLat(from), fromLng = getStopLng(from);
     const toLat   = getStopLat(to),   toLng   = getStopLng(to);
     if (!fromLat || !toLat) continue;
@@ -7278,8 +7278,11 @@ function openTimeModal(stop, day) {
   _modalStop = stop; _modalDay = day;
   document.getElementById('modal-location').innerHTML = stopTypeIcon(stop) + ' ' + stop.location;
   document.getElementById('modal-time-input').value = getStopTime(stop);
+  // Default to recalc for depart/transport, shift for everything else
   const stopType = getStopType(stop);
-  document.getElementById('modal-cascade').checked = (stopType === 'depart' || stopType === 'transport');
+  const defaultMode = (stopType === 'depart' || stopType === 'transport') ? 'recalc' : 'shift';
+  const radio = document.querySelector(`input[name="modal-cascade"][value="${defaultMode}"]`);
+  if (radio) radio.checked = true;
   document.getElementById('modal-overlay').classList.remove('hidden');
 }
 function resetDayTimes() {
@@ -7312,45 +7315,51 @@ function getStopHomeDayIdx(stop) {
 
 function saveModal() {
   if (!_modalStop || !_modalDay) return;
-  const newTime = document.getElementById('modal-time-input').value;
-  const cascade = document.getElementById('modal-cascade').checked;
-  const delta = timeToMinutes(newTime) - timeToMinutes(getStopTime(_modalStop));
+  const newTime  = document.getElementById('modal-time-input').value;
+  const cascade  = document.querySelector('input[name="modal-cascade"]:checked')?.value || 'shift';
+  const delta    = timeToMinutes(newTime) - timeToMinutes(getStopTime(_modalStop));
+  saveUndoSnapshot();
   state.overrides[_modalStop.id] = newTime;
 
-  if (cascade && delta !== 0) {
-    const days = TRIP_DATA.days;
+  if (cascade === 'recalc') {
+    // Accurate: use OSRM to recompute arrival times for all following stops
+    save(); closeModal(); renderView(false);
+    const allStops = getDayStops(_modalDay);
+    const fromIdx  = allStops.findIndex(s => s.id === _modalStop.id);
+    if (fromIdx >= 0) {
+      showToast('Recalculating drive times…');
+      _recalcChain(_modalDay, fromIdx, null).then(() => {
+        save(); renderView(false);
+        showUndoToast('Times recalculated with drive times');
+      });
+    }
+    return;
+  }
+
+  if (cascade === 'shift' && delta !== 0) {
+    // Fast: shift all following stops by the same delta (no OSRM)
+    const days   = TRIP_DATA.days;
     const dayIdx = days.findIndex(d => d.id === _modalDay.id);
     if (!state.crossDayMoves) state.crossDayMoves = {};
 
-    // Only cascade stops that ORIGINATE from _modalDay (not stops independently
-    // scheduled on later days). Include stops previously moved out of _modalDay.
     const homeDayStops = [
       ..._modalDay.stops,
       ...(state.addedStops?.[_modalDay.id] || []),
     ];
-    const homeDayIds = new Set(homeDayStops.map(s => s.id));
-
-    // Also include stops previously moved from _modalDay into later days
     const movedFromThisDay = Object.entries(state.crossDayMoves)
-      .filter(([stopId]) => homeDayIds.has(stopId))
-      .map(([stopId]) => homeDayStops.find(s => s.id === stopId))
+      .filter(([id]) => homeDayStops.some(s => s.id === id))
+      .map(([id]) => homeDayStops.find(s => s.id === id))
       .filter(Boolean);
 
-    // Collect stops after the edited stop (by current time order)
-    const allHomeDayStops = [...homeDayStops];
-    allHomeDayStops.sort((a, b) => {
-      const ta = timeToMinutes(getStopTime(a)) ?? Infinity;
-      const tb = timeToMinutes(getStopTime(b)) ?? Infinity;
-      return ta - tb;
-    });
+    const allHomeDayStops = [...homeDayStops].sort((a, b) =>
+      (timeToMinutes(getStopTime(a)) ?? Infinity) - (timeToMinutes(getStopTime(b)) ?? Infinity));
 
     let found = false;
     const toUpdate = [];
     allHomeDayStops.forEach(s => {
       if (!found) { if (s.id === _modalStop.id) found = true; return; }
-      toUpdate.push(s);
+      if (!isStopFixed(s) && !isPinned(s.id)) toUpdate.push(s);
     });
-    // Also bring back any that were moved out (they may not be in sorted order above)
     movedFromThisDay.forEach(s => {
       if (!toUpdate.find(t => t.id === s.id) && s.id !== _modalStop.id) toUpdate.push(s);
     });
@@ -7359,28 +7368,20 @@ function saveModal() {
     toUpdate.forEach(stop => {
       const cur = timeToMinutes(getStopTime(stop));
       if (cur === null) return;
-
-      // Compute current absolute position: home day * 1440 + time on that day
       const currentDayIdx = state.crossDayMoves[stop.id]
-        ? days.findIndex(d => d.id === state.crossDayMoves[stop.id])
-        : dayIdx;
-      const absoluteMins = currentDayIdx * 1440 + cur;
-      const newAbsolute  = absoluteMins + delta;
+        ? days.findIndex(d => d.id === state.crossDayMoves[stop.id]) : dayIdx;
+      const newAbsolute  = currentDayIdx * 1440 + cur + delta;
       const targetDayIdx = Math.min(Math.max(0, Math.floor(newAbsolute / 1440)), days.length - 1);
       const newTimeStr   = minutesToTime(newAbsolute);
-
       state.overrides[stop.id] = newTimeStr;
-
-      if (targetDayIdx !== dayIdx) {
-        state.crossDayMoves[stop.id] = days[targetDayIdx].id;
-      } else {
-        delete state.crossDayMoves[stop.id];
-      }
+      if (targetDayIdx !== dayIdx) state.crossDayMoves[stop.id] = days[targetDayIdx].id;
+      else delete state.crossDayMoves[stop.id];
       changedStops.push({ stop, newTime: newTimeStr, dayDate: days[targetDayIdx]?.date });
     });
 
     if (changedStops.length) postCascadeCheck(changedStops);
   }
+
   save(); closeModal(); renderView(false);
 }
 
