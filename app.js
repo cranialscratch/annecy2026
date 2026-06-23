@@ -1,5 +1,5 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v260';
+const APP_VERSION = 'v261';
 
 const CHANGELOG = [
   { version: 'v244', title: 'Swipe to Skip or Remove, compact skipped cards, Bucket List', items: [
@@ -386,6 +386,227 @@ function startTrafficPolling() {
 function stopTrafficPolling() {
   clearInterval(_trafficPollTimer);
   _trafficPollTimer = null;
+}
+
+/* ── Schedule monitor (GPS-aware, 15-min polling) ───────────────────── */
+const ARRIVAL_RADIUS_M    = 200;   // auto check-in when within 200 m
+const LATE_THRESHOLD_MINS = 12;    // warn when ETA exceeds scheduled by this much
+const SCHEDULE_POLL_MS    = 15 * 60 * 1000;
+
+let _schedulePollTimer = null;
+let _lastLateAlertId   = null;     // prevent repeat alerts for same stop
+let _arrivedStopIds    = new Set();// prevent repeat auto check-ins per session
+
+function getTodayDay() {
+  const today = localDateStr();
+  return TRIP_DATA.days.find(d =>
+    d.date === today || (d.isFestival && today >= d.date && today <= (d.dateEnd || d.date))
+  ) || null;
+}
+
+function startScheduleMonitor() {
+  stopScheduleMonitor();
+  _checkScheduleNow();
+  _schedulePollTimer = setInterval(_checkScheduleNow, SCHEDULE_POLL_MS);
+}
+function stopScheduleMonitor() {
+  clearInterval(_schedulePollTimer);
+  _schedulePollTimer = null;
+}
+
+async function _checkScheduleNow() {
+  const day = getTodayDay();
+  if (!day || day.isCountdown) return;
+
+  const now = nowMinutes();
+  const stops = getDayStops(day).filter(s =>
+    !state.skipped[s.id] && !state.removed[s.id] &&
+    getStopType(s) !== 'depart' && s.lat && s.lng
+  );
+
+  // Next unvisited stop with a scheduled time still in the future
+  const next = stops.find(s => {
+    const t = timeToMinutes(getStopTime(s));
+    return t !== null && t > now && !state.checked[s.id];
+  });
+  if (!next) return;
+
+  // Need GPS for ETA calculation
+  if (_userLat === null || _userLng === null) return;
+
+  let travelMins;
+  try {
+    travelMins = await fetchTravelMins(_userLat, _userLng, next.lat, next.lng);
+  } catch { return; }
+  if (travelMins === null) return;
+
+  const etaMins     = now + travelMins;
+  const scheduled   = timeToMinutes(getStopTime(next));
+  const lateBy      = etaMins - scheduled;
+
+  if (lateBy < LATE_THRESHOLD_MINS) {
+    // On time — clear any stale alert flag for this stop
+    if (_lastLateAlertId === next.id) _lastLateAlertId = null;
+    return;
+  }
+
+  // Already alerted for this stop this session
+  if (_lastLateAlertId === next.id) return;
+  _lastLateAlertId = next.id;
+
+  // Find any fixed stops later today that are also at risk
+  const fixedAtRisk = stops.filter(s => {
+    const t = timeToMinutes(getStopTime(s));
+    return isStopFixed(s) && t !== null && t > now && s.id !== next.id;
+  });
+
+  _fireLateAlert(next, etaMins, lateBy, fixedAtRisk, day);
+}
+
+function _fireLateAlert(stop, etaMins, lateBy, fixedAtRisk, day) {
+  const isFixed  = isStopFixed(stop);
+  const stopName = getStopName(stop);
+  const etaStr   = minutesToTime(etaMins);
+  const sched    = getStopTime(stop);
+
+  const title = isFixed ? '⚠️ Fixed stop at risk' : 'Running behind schedule';
+  const body  = isFixed
+    ? `${stopName} is fixed at ${sched} — you won't make it (ETA ${etaStr}). Open app now.`
+    : `~${lateBy} min late for ${stopName} (ETA ${etaStr}, scheduled ${sched}). Tap to decide.`;
+
+  // Push notification (works even when app is backgrounded)
+  try {
+    if (navigator.serviceWorker?.controller) {
+      navigator.serviceWorker.controller.postMessage({
+        type: 'SHOW_NOTIF', title, body, tag: `late-${stop.id}`,
+      });
+    } else {
+      new Notification(title, { body, icon: './icons/icon-180.png', tag: `late-${stop.id}` });
+    }
+  } catch {}
+
+  // In-app modal if foregrounded
+  if (document.visibilityState === 'visible') {
+    openLateModal(stop, etaMins, lateBy, isFixed, fixedAtRisk, day);
+  }
+}
+
+// Called from watchPosition on every GPS fix — check arrival at next unvisited stop
+function _checkArrival(lat, lng) {
+  const day = getTodayDay();
+  if (!day || day.isCountdown) return;
+  const now = nowMinutes();
+  const stops = getDayStops(day).filter(s =>
+    !state.skipped[s.id] && !state.removed[s.id] &&
+    getStopType(s) !== 'depart' && !state.checked[s.id] && s.lat && s.lng
+  );
+  // Check in arrival order (earliest scheduled first)
+  const sorted = stops.slice().sort((a, b) => {
+    const ta = timeToMinutes(getStopTime(a)) ?? 9999;
+    const tb = timeToMinutes(getStopTime(b)) ?? 9999;
+    return ta - tb;
+  });
+  for (const stop of sorted) {
+    if (_arrivedStopIds.has(stop.id)) continue;
+    const dist = haversineM(lat, lng, stop.lat, stop.lng);
+    if (dist <= ARRIVAL_RADIUS_M) {
+      _arrivedStopIds.add(stop.id);
+      // Auto check-in
+      state.checked[stop.id] = true;
+      if (state.isOwner) state.ownerCurrentStopId = stop.id;
+      localSave(); syncSave();
+      showToast(`Arrived at ${getStopName(stop)}`);
+      if (state.currentView === 'day') {
+        const tl = document.getElementById('timeline');
+        if (tl) renderTimeline(tl, false);
+      }
+      break; // one auto check-in per GPS fix
+    }
+  }
+}
+
+function openLateModal(stop, etaMins, lateBy, isFixed, fixedAtRisk, day) {
+  document.getElementById('late-modal')?.remove();
+
+  const sheet   = document.createElement('div');
+  sheet.id      = 'late-modal';
+  sheet.className = 'bottom-sheet late-modal-sheet';
+
+  const etaStr   = minutesToTime(etaMins);
+  const sched    = getStopTime(stop);
+  const stopName = getStopName(stop);
+
+  // Remaining stops after this one (potential next stop)
+  const allStops = getDayStops(day).filter(s =>
+    !state.skipped[s.id] && !state.removed[s.id] && getStopType(s) !== 'depart'
+  );
+  const stopIdx  = allStops.findIndex(s => s.id === stop.id);
+  const nextStop = allStops[stopIdx + 1] || null;
+
+  const fixedWarn = fixedAtRisk.length
+    ? `<div class="late-fixed-warn"><i class="ph ph-warning-circle"></i> Fixed stop ahead: <strong>${getStopName(fixedAtRisk[0])}</strong> at ${getStopTime(fixedAtRisk[0])}</div>`
+    : '';
+
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <div class="late-modal-header${isFixed ? ' late-modal-header--fixed' : ''}">
+      <i class="ph ${isFixed ? 'ph-lock' : 'ph-clock-countdown'} late-modal-header-icon"></i>
+      <div class="late-modal-title">${isFixed ? 'Fixed stop at risk' : 'Running behind'}</div>
+    </div>
+    <div class="late-modal-stop-name">${stopTypeIcon(stop)} ${stopName}</div>
+    <div class="late-modal-times">
+      <span class="late-sched"><i class="ph ph-calendar-check"></i> ${sched}</span>
+      <span class="late-arrow">→</span>
+      <span class="late-eta late-eta--late"><i class="ph ph-clock"></i> ETA ${etaStr}</span>
+      <span class="late-delta">+${lateBy} min</span>
+    </div>
+    ${fixedWarn}
+    <div class="late-modal-desc">
+      ${isFixed
+        ? `This stop has a fixed time and cannot be moved. You need to leave now to make it.`
+        : `You won't arrive at ${stopName} on time. What would you like to do?`}
+    </div>
+    <div class="late-modal-actions">
+      <button class="late-btn late-btn--primary" id="late-btn-keep">
+        <i class="ph ph-navigation-arrow"></i> Keep going
+      </button>
+      ${!isFixed ? `<button class="late-btn late-btn--skip" id="late-btn-skip">
+        <i class="ph ph-skip-forward"></i> Skip ${stopName}${nextStop ? ` → ${getStopName(nextStop)}` : ''}
+      </button>` : ''}
+      <button class="late-btn late-btn--adjust" id="late-btn-adjust">
+        <i class="ph ph-sliders"></i> Adjust schedule
+      </button>
+    </div>`;
+
+  document.body.appendChild(sheet);
+  requestAnimationFrame(() => sheet.classList.add('sheet-open'));
+
+  const close = () => {
+    sheet.classList.remove('sheet-open');
+    setTimeout(() => sheet.remove(), 300);
+  };
+
+  sheet.querySelector('#late-btn-keep').addEventListener('click', close);
+
+  sheet.querySelector('#late-btn-adjust')?.addEventListener('click', () => {
+    close();
+    openTimeModal(stop);
+  });
+
+  sheet.querySelector('#late-btn-skip')?.addEventListener('click', () => {
+    close();
+    state.skipped[stop.id] = true;
+    localSave(); syncSave();
+    // Reset late-alert so we re-evaluate the new next stop
+    _lastLateAlertId = null;
+    showToast(`Skipped — heading to ${nextStop ? getStopName(nextStop) : 'next stop'}`);
+    if (state.currentView === 'day') {
+      const tl = document.getElementById('timeline');
+      if (tl) renderTimeline(tl, false);
+    }
+    // Trigger a fresh schedule check for the new next stop
+    setTimeout(_checkScheduleNow, 1500);
+  });
 }
 
 function fmtDist(km) {
@@ -855,6 +1076,7 @@ async function enableNotifs() {
     subscribePush();
     scheduleNotifs();
     startTrafficPolling();
+    startScheduleMonitor();
     showToast('🔔 Departure alerts on');
   } else {
     state.notifsEnabled = false;
@@ -1946,6 +2168,7 @@ function startLocationWatch() {
     updateLocMarker(pos.coords.accuracy);
     refreshMapCarouselOrder();
     renderNearestStopChip();
+    _checkArrival(_userLat, _userLng);
     // On first fix: refresh vegan/charger/find view if open (renders before GPS is ready)
     if (firstFix && (state.currentView === 'vegan' || state.currentView === 'charging' || state.currentView === 'find')) {
       const tl = document.getElementById('timeline');
@@ -8050,7 +8273,7 @@ function bootApp() {
   updateHeaderHeight();
   new ResizeObserver(updateHeaderHeight).observe(document.getElementById('app-header'));
   scheduleNotifs();
-  if (state.notifsEnabled && notifGranted()) startTrafficPolling();
+  if (state.notifsEnabled && notifGranted()) { startTrafficPolling(); startScheduleMonitor(); }
   // Kick off travel time computation for the initial day so depart-by
   // pills appear and notifications use real routing times
   const initDay = TRIP_DATA.days.find(d => d.id === state.currentDayId);
@@ -8597,7 +8820,19 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     renderView(true);
     scheduleNotifs();
+    // Re-evaluate schedule on resume in case we're now late
+    if (state.notifsEnabled && notifGranted()) {
+      _lastLateAlertId = null; // allow re-alert after long absence
+      setTimeout(_checkScheduleNow, 2000);
+    }
   }
+
+  // Also re-check on any foreground transition (short or long)
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && state.notifsEnabled && notifGranted()) {
+      setTimeout(_checkScheduleNow, 2000);
+    }
+  });
 
   // visibilitychange covers most cases; pageshow catches iOS PWA cold-resume
   document.addEventListener('visibilitychange', handleResume);
