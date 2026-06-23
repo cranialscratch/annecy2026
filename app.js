@@ -1,5 +1,5 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v253';
+const APP_VERSION = 'v254';
 
 const CHANGELOG = [
   { version: 'v244', title: 'Swipe to Skip or Remove, compact skipped cards, Bucket List', items: [
@@ -2694,7 +2694,12 @@ async function _doFindSearch(lat, lng, radiusM, tagDef, subOpts, resultsEl) {
           <div class="vcard-bottom-row">${ratingHtml}${p.formattedAddress ? `<span class="vegan-place-hours-mini">${p.formattedAddress}</span>` : ''}</div>
         </div>
         <div class="vegan-place-right">${distStr ? `<div class="vegan-place-dist">${distStr}</div>` : ''}<div class="vegan-place-chevron"><i class="ph ph-caret-right"></i></div></div>`;
-      if (plat && plng) card.addEventListener('click', () => window.open(`https://maps.apple.com/?daddr=${plat},${plng}&dirflg=d`, '_blank'));
+      if (plat && plng) card.addEventListener('click', () => openPlaceSheet({
+        id: p.id, name: p.displayName?.text || '', address: p.formattedAddress || '',
+        lat: plat, lng: plng, type: p.primaryType || '',
+        rating: p.rating, ratingCount: p.userRatingCount,
+        openNow: p.currentOpeningHours?.openNow,
+      }));
       resultsEl.appendChild(card);
     });
   } catch {
@@ -2882,7 +2887,12 @@ function renderFindView(container) {
         const card = document.createElement('div');
         card.className = 'vegan-place-card';
         card.innerHTML = `<div class="vegan-place-main"><div class="vegan-place-name">${p.displayName?.text||''}</div><div class="vegan-place-meta"><span class="vegan-place-type">${typeLabel}</span>${openHtml}</div><div class="vcard-bottom-row">${rHtml}${p.formattedAddress?`<span class="vegan-place-hours-mini">${p.formattedAddress}</span>`:''}</div></div><div class="vegan-place-right">${distStr?`<div class="vegan-place-dist">${distStr}</div>`:''}<div class="vegan-place-chevron"><i class="ph ph-caret-right"></i></div></div>`;
-        if (plat&&plng) card.addEventListener('click', () => window.open(`https://maps.apple.com/?daddr=${plat},${plng}&dirflg=d`,'_blank'));
+        if (plat&&plng) card.addEventListener('click', () => openPlaceSheet({
+          id: p.id, name: p.displayName?.text||'', address: p.formattedAddress||'',
+          lat: plat, lng: plng, type: p.primaryType||'',
+          rating: p.rating, ratingCount: p.userRatingCount,
+          openNow: p.currentOpeningHours?.openNow,
+        }));
         resultsEl.appendChild(card);
       });
     } catch { resultsEl.innerHTML=`<div class="vegan-empty"><i class="ph ph-wifi-slash"></i><div>Search failed.</div></div>`; }
@@ -6531,6 +6541,197 @@ function openBookingSheet(stopId) {
     if (!state.bookingInfo) state.bookingInfo = {};
     delete state.bookingInfo[stopId];
     save(); close();
+  });
+}
+
+function openPlaceSheet(place) {
+  /* place = { name, address, lat, lng, type, rating, ratingCount, openNow } */
+  document.getElementById('place-sheet')?.remove();
+  document.getElementById('place-sheet-overlay')?.remove();
+
+  const typeLabel = (place.type||'').replace(/_/g,' ').replace(/\b\w/g, c => c.toUpperCase());
+  const mapsNavUrl = `https://maps.apple.com/?daddr=${place.lat},${place.lng}&dirflg=d`;
+
+  /* Is it already on the itinerary? */
+  const alreadyAdded = Object.values(state.addedStops||{}).some(arr => arr.some(s => s._placeId === place.id));
+  const alreadyBucketed = (state.bucketList||[]).some(e => e.stop._placeId === place.id);
+
+  const overlay = document.createElement('div');
+  overlay.id = 'place-sheet-overlay';
+  overlay.className = 'stop-sheet-overlay';
+  const sheet = document.createElement('div');
+  sheet.id = 'place-sheet';
+  sheet.className = 'stop-sheet';
+
+  const openBadge = place.openNow === true  ? '<span class="vp-open-badge open">Open</span>'
+                  : place.openNow === false ? '<span class="vp-open-badge closed">Closed</span>' : '';
+  const ratingHtml = place.rating
+    ? `<span style="display:inline-flex;align-items:center;gap:4px;font-size:13px;color:var(--text3)"><i class="ph ph-star-fill" style="color:#f59e0b"></i> ${place.rating.toFixed(1)}${place.ratingCount ? ` (${place.ratingCount.toLocaleString()})` : ''}</span>`
+    : '';
+
+  sheet.innerHTML = `
+    <div class="stop-sheet-handle"></div>
+    <div class="stop-sheet-header">
+      <div class="stop-sheet-title"><i class="ph ph-map-pin"></i> ${place.name}</div>
+      <button class="stop-sheet-close" id="ps-close"><i class="ph ph-x"></i></button>
+    </div>
+    <div class="stop-sheet-body">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+        ${typeLabel ? `<span class="type-badge">${typeLabel}</span>` : ''}
+        ${openBadge}
+        ${ratingHtml}
+      </div>
+      ${place.address ? `<p style="font-size:13px;color:var(--text3);margin:0 0 12px">${place.address}</p>` : ''}
+      <div class="stop-sheet-actions">
+        <a class="sheet-action-btn" href="${mapsNavUrl}" target="_blank" rel="noopener">
+          <i class="ph ph-navigation-arrow"></i> Navigate
+        </a>
+        <button class="sheet-action-btn${alreadyBucketed ? ' active' : ''}" id="ps-bucket-btn" ${alreadyBucketed ? 'disabled' : ''}>
+          <i class="ph ph-bookmark-simple"></i> ${alreadyBucketed ? 'Saved' : 'Save for later'}
+        </button>
+        <button class="sheet-action-btn${alreadyAdded ? ' active' : ''}" id="ps-add-btn" ${alreadyAdded ? 'disabled' : ''}>
+          <i class="ph ph-calendar-plus"></i> ${alreadyAdded ? 'On itinerary' : 'Add to trip'}
+        </button>
+      </div>
+    </div>`;
+
+  document.body.appendChild(overlay);
+  document.body.appendChild(sheet);
+  requestAnimationFrame(() => { sheet.classList.add('open'); overlay.classList.add('open'); });
+
+  const close = () => {
+    sheet.classList.remove('open'); overlay.classList.remove('open');
+    sheet.addEventListener('transitionend', () => sheet.remove(), {once:true});
+    overlay.addEventListener('transitionend', () => overlay.remove(), {once:true});
+  };
+  sheet.querySelector('#ps-close').addEventListener('click', close);
+  overlay.addEventListener('click', close);
+
+  /* ── Save for later (bucket list) ── */
+  sheet.querySelector('#ps-bucket-btn').addEventListener('click', () => {
+    if (alreadyBucketed) return;
+    const stop = _placeToStop(place);
+    const day = TRIP_DATA.days.find(d => d.id === state.currentDayId) || TRIP_DATA.days[0];
+    state.bucketList.unshift({ stop, dayLabel: 'Find search', originalDayId: day.id, removedAt: Date.now() });
+    save();
+    const btn = sheet.querySelector('#ps-bucket-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="ph ph-bookmark-simple"></i> Saved';
+    showToast('Saved to Bucket List');
+  });
+
+  /* ── Add to trip — opens day picker ── */
+  sheet.querySelector('#ps-add-btn').addEventListener('click', () => {
+    if (alreadyAdded) return;
+    close();
+    _openPlaceDayPicker(place);
+  });
+}
+
+function _placeToStop(place) {
+  return {
+    id:       'find_' + Date.now() + '_' + Math.random().toString(36).slice(2,6),
+    _placeId: place.id,
+    location: place.name,
+    address:  place.address || '',
+    type:     _placeTypeToStopType(place.type),
+    lat:      place.lat,
+    lng:      place.lng,
+    mapsUrl:  `https://maps.google.com/?q=${place.lat},${place.lng}`,
+    duration: 60,
+    order:    999,
+  };
+}
+
+function _placeTypeToStopType(t) {
+  if (!t) return 'attraction';
+  if (/restaurant|meal|bakery|food|fast_food/.test(t)) return 'food';
+  if (/coffee|cafe/.test(t)) return 'food';
+  if (/bar|pub|wine/.test(t)) return 'food';
+  if (/hotel|lodging/.test(t)) return 'hotel';
+  if (/charging/.test(t)) return 'charging';
+  if (/hospital/.test(t)) return 'emergency';
+  return 'attraction';
+}
+
+function _openPlaceDayPicker(place) {
+  document.getElementById('place-day-sheet')?.remove();
+  document.getElementById('place-day-sheet-overlay')?.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'place-day-sheet-overlay';
+  overlay.className = 'stop-sheet-overlay';
+  const sheet = document.createElement('div');
+  sheet.id = 'place-day-sheet';
+  sheet.className = 'stop-sheet';
+
+  let selectedDayId = state.currentDayId || TRIP_DATA.days.find(d => !d.isCountdown)?.id;
+
+  let daysHtml = '';
+  TRIP_DATA.days.filter(d => !d.isCountdown).forEach(d => {
+    const isSel = d.id === selectedDayId;
+    daysHtml += `<button class="vd-day-btn${isSel?' selected':''}" data-day-id="${d.id}">
+      <span class="vd-day-btn-name">${getDayLabel(d)}</span>
+      <span class="vd-day-btn-date">${formatDate(d.date)}</span>
+    </button>`;
+  });
+
+  sheet.innerHTML = `
+    <div class="stop-sheet-handle"></div>
+    <div class="stop-sheet-header">
+      <div class="stop-sheet-title"><i class="ph ph-calendar-plus"></i> Add to trip</div>
+      <button class="stop-sheet-close" id="pds-close"><i class="ph ph-x"></i></button>
+    </div>
+    <div class="stop-sheet-body" style="padding-bottom:40px">
+      <p style="font-size:14px;color:var(--text3);margin:0 0 10px">Adding <strong style="color:var(--text1)">${place.name}</strong> — choose a day:</p>
+      <div id="pds-days" class="vd-add-days">${daysHtml}</div>
+      <div style="margin-top:14px;display:flex;align-items:center;gap:8px">
+        <label style="font-size:13px;color:var(--text3)">Time</label>
+        <input type="time" id="pds-time" value="12:00" style="background:rgba(255,255,255,.06);border:1.5px solid var(--card-border);border-radius:8px;padding:6px 10px;color:var(--text1);font-size:14px">
+      </div>
+      <div style="margin-top:14px;display:flex;gap:8px">
+        <button class="sheet-action-btn" id="pds-cancel" style="flex:1"><i class="ph ph-x"></i> Cancel</button>
+        <button class="sheet-action-btn" id="pds-confirm" style="flex:2;background:var(--accent);color:#fff"><i class="ph ph-check"></i> Add</button>
+      </div>
+    </div>`;
+
+  document.body.appendChild(overlay);
+  document.body.appendChild(sheet);
+  requestAnimationFrame(() => { sheet.classList.add('open'); overlay.classList.add('open'); });
+
+  const close = () => {
+    sheet.classList.remove('open'); overlay.classList.remove('open');
+    sheet.addEventListener('transitionend', () => sheet.remove(), {once:true});
+    overlay.addEventListener('transitionend', () => overlay.remove(), {once:true});
+  };
+  sheet.querySelector('#pds-close').addEventListener('click', close);
+  sheet.querySelector('#pds-cancel').addEventListener('click', close);
+  overlay.addEventListener('click', close);
+
+  sheet.querySelector('#pds-days').addEventListener('click', e => {
+    const btn = e.target.closest('.vd-day-btn');
+    if (!btn) return;
+    sheet.querySelectorAll('.vd-day-btn').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    selectedDayId = btn.dataset.dayId;
+  });
+
+  setTimeout(() => sheet.querySelector('.vd-day-btn.selected')?.scrollIntoView({ block:'nearest', behavior:'smooth' }), 60);
+
+  sheet.querySelector('#pds-confirm').addEventListener('click', () => {
+    const day = TRIP_DATA.days.find(d => d.id === selectedDayId);
+    if (!day) return;
+    saveUndoSnapshot();
+    const stop = _placeToStop(place);
+    stop.time = sheet.querySelector('#pds-time').value || '12:00';
+    if (!state.addedStops[day.id]) state.addedStops[day.id] = [];
+    state.addedStops[day.id].push(stop);
+    save();
+    close();
+    state.currentDayId = day.id;
+    state.currentView = 'day';
+    renderView(false);
+    showToast(`${place.name} added to ${getDayLabel(day)}`);
   });
 }
 
