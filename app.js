@@ -1,5 +1,5 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v259';
+const APP_VERSION = 'v260';
 
 const CHANGELOG = [
   { version: 'v244', title: 'Swipe to Skip or Remove, compact skipped cards, Bucket List', items: [
@@ -5060,7 +5060,12 @@ function renderTimeline(container, scrollToNow) {
     return null;
   })();
 
-  if (_overnight) {
+  // Show departure card (solid, from depart stop) when available; fall back to overnight card.
+  const _firstDepart = _allDayStops.find(s => getStopType(s) === 'depart');
+  if (_firstDepart) {
+    const dCard = buildDepartCard(_firstDepart, _tlStops[0] || null);
+    (compactCard || container).appendChild(dCard);
+  } else if (_overnight) {
     const oCard = buildOvernightCard(_overnight.stop, _overnight.checkoutTime, day);
     (compactCard || container).appendChild(oCard);
   }
@@ -5181,6 +5186,38 @@ function buildCompactItem(stop, isLast, day) {
 }
 
 /* ── Overnight lead card ───────────────────────────────────────────── */
+function buildDepartCard(departStop, firstStop) {
+  const leaveTime = getStopTime(departStop);
+  const venueName = getStopName(departStop);
+  const destName  = firstStop ? getStopName(firstStop) : null;
+  const destIcon  = firstStop ? stopTypeIcon(firstStop) : '';
+
+  const item = document.createElement('div');
+  item.className = 'tl-item tl-item--depart-card';
+  item.id = `depart-card-${departStop.id}`;
+
+  item.innerHTML = `
+    <div class="tl-left">
+      <div class="tl-time-depart-card">
+        <span class="depart-card-label">Leave by</span>
+        <span class="depart-card-time">${leaveTime || '—'}</span>
+      </div>
+    </div>
+    <div class="tl-line-wrap">
+      <div class="tl-dot tl-dot--depart-card"></div>
+      <div class="tl-line tl-line--faded"></div>
+    </div>
+    <div class="tl-depart-card">
+      <div class="depart-card-venue">
+        <i class="ph ph-sign-out depart-card-icon"></i>
+        <span>${venueName}</span>
+      </div>
+      ${destName ? `<div class="depart-card-dest"><i class="ph ph-arrow-right"></i> ${destIcon} ${destName}</div>` : ''}
+    </div>`;
+
+  return item;
+}
+
 function buildOvernightCard(stop, checkoutTime, day) {
   const item = document.createElement('div');
   item.className = 'tl-item';
