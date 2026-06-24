@@ -196,22 +196,32 @@ body.light #app-header {
 .day-chip-date  { display: none; }
 .day-dot { display: none; }
 
-/* Cover chip — sticky at left so days scroll behind it */
+/* Cover chip — sticky at left, transparent, days fade behind it */
 .day-chip--cover {
   position: sticky;
   left: 0;
   z-index: 4;
-  padding-left: 16px;
-  padding-right: 18px;
-  /* Solid background matching the header glass so scrolled chips disappear behind it */
-  background: var(--header-bg, rgba(15,23,42,0.92));
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-  border-right: 1px solid rgba(255,255,255,0.08);
+  padding-left: 12px;
+  padding-right: 16px;
+  background: transparent;
+  border: none;
 }
-body.light .day-chip--cover {
-  background: rgba(248,250,252,0.92);
-  border-right-color: rgba(0,0,0,0.07);
+/* Fade overlay right of the cover chip so scrolled chips dissolve into view */
+#day-strip-wrap::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 72px;
+  background: linear-gradient(to right,
+    var(--header-bg, rgba(15,23,42,1)) 40%,
+    transparent 100%);
+  z-index: 3;
+  pointer-events: none;
+}
+body.light #day-strip-wrap::before {
+  background: linear-gradient(to right,
+    rgba(248,250,252,1) 40%,
+    transparent 100%);
 }
 
 /* ─── Main scroll — mirrors .app-scroll pattern ─────────────────────

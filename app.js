@@ -1,5 +1,5 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v266';
+const APP_VERSION = 'v267';
 
 const CHANGELOG = [
   { version: 'v266', title: 'StopStart rebrand, stop reviews & trip scrapbook', items: [
@@ -5291,6 +5291,7 @@ function renderTimeline(container, scrollToNow) {
   if (_firstDepart) {
     const dCard = buildDepartCard(_firstDepart, _tlStops[0] || null);
     (compactCard || container).appendChild(dCard);
+    initSlider(dCard.querySelector('.card-slider'), _firstDepart, 'card');
   }
 
   _tlStops.forEach((stop, idx) => {
