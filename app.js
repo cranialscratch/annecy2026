@@ -1,5 +1,5 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v270';
+const APP_VERSION = 'v271';
 
 const CHANGELOG = [
   { version: 'v266', title: 'StopStart rebrand, stop reviews & trip scrapbook', items: [
@@ -8834,8 +8834,17 @@ document.addEventListener('DOMContentLoaded', () => {
   /* Nav buttons */
   document.querySelectorAll('.nav-btn').forEach(btn =>
     btn.addEventListener('click', () => {
-      state.currentView = btn.dataset.view;
-      renderView(false);
+      const view = btn.dataset.view;
+      if (view === 'day') {
+        // Always jump to today's day and scroll to current time
+        const todayId = findTodayDayId();
+        state.currentView = 'day';
+        if (todayId) selectDay(todayId);
+        renderView(true);
+      } else {
+        state.currentView = view;
+        renderView(false);
+      }
     }));
 
   /* Compact toggle */
