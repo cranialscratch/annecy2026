@@ -1,7 +1,13 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v273';
+const APP_VERSION = 'v274';
 
 const CHANGELOG = [
+  { version: 'v274', title: 'Cover icon alignment, timezone fallback, strip polish', items: [
+    { type: 'fix', text: 'Cover icon width and left padding precisely matches the menu button above it — same size, same horizontal position' },
+    { type: 'fix', text: 'Day chips now fade completely to nothing before the cover icon — no text visible at all in that zone' },
+    { type: 'fix', text: 'Timezone label now falls back to the day\'s timezone if not set on the individual stop — all French stops show FR' },
+    { type: 'fix', text: 'Blue accent border removed from the left of the departure strip' },
+  ]},
   { version: 'v273', title: 'Cover icon + day strip refinements', items: [
     { type: 'fix', text: 'Cover (△) icon lifted out of the scroll track — now sits above it, fully aligned with the menu icon above' },
     { type: 'fix', text: 'Day chips now fade completely away before reaching the cover icon using a CSS mask — no colour overlay, no text visible behind the icon' },
@@ -5503,6 +5509,8 @@ function buildTimelineItem(stop, isLast, day, nextStop, prevStop) {
 
   const time = getStopTime(stop);
   const isEditable = timeToMinutes(time) !== null;
+  // Derive timezone: use stop's own tz, fall back to first stop on the day that has one
+  const _dayTz = stop.tz || (day?.stops?.find(s => s.tz)?.tz) || null;
   const isVisited  = !!state.checked[stop.id];
   const isSkipped  = !!state.skipped[stop.id];
 
@@ -5523,7 +5531,7 @@ function buildTimelineItem(stop, isLast, day, nextStop, prevStop) {
     item.innerHTML = `
       <div class="tl-left">
         <button class="tl-time-btn" data-stop-id="${stop.id}">
-          <span>${time}</span>${stop.tz ? `<div class="tl-tz">${stop.tz}</div>` : ''}
+          <span>${time}</span>${_dayTz ? `<div class="tl-tz">${_dayTz}</div>` : ''}
         </button>
       </div>
       <div class="tl-line-wrap">
@@ -5557,7 +5565,7 @@ function buildTimelineItem(stop, isLast, day, nextStop, prevStop) {
   item.innerHTML = `
     <div class="tl-left">
       <button class="tl-time-btn" data-stop-id="${stop.id}">
-        <span>${time}</span>${stop.tz ? `<div class="tl-tz">${stop.tz}</div>` : ''}
+        <span>${time}</span>${_dayTz ? `<div class="tl-tz">${_dayTz}</div>` : ''}
       </button>
     </div>
     <div class="tl-line-wrap">
