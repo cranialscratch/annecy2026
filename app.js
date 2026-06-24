@@ -1,5 +1,5 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v268';
+const APP_VERSION = 'v269';
 
 const CHANGELOG = [
   { version: 'v266', title: 'StopStart rebrand, stop reviews & trip scrapbook', items: [
@@ -1753,10 +1753,7 @@ function lazyLoadWikiImages(stops) {
   stops.forEach(stop => {
     const type = getStopType(stop);
     if (type === 'charging') return;
-    // For stops with static photos in data.js, no Places fetch needed
-    if (stop.photos?.length) {
-      // Already rendered with correct src — nothing to inject
-    } else if (_placesCache[stop.id]?.photos?.length) {
+    if (_placesCache[stop.id]?.photos?.length) {
       requestAnimationFrame(() => injectStopPhotos(stop.id));
     } else if (type !== 'depart') {
       fetchPlacesPhotos(stop).then(() => injectStopPhotos(stop.id));
