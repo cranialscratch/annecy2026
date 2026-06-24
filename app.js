@@ -1,5 +1,5 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v271';
+const APP_VERSION = 'v272';
 
 const CHANGELOG = [
   { version: 'v266', title: 'StopStart rebrand, stop reviews & trip scrapbook', items: [
@@ -5420,15 +5420,14 @@ function buildDepartCard(departStop, firstStop) {
   item.innerHTML = `
     <div class="tl-left">
       <button class="tl-time-btn" disabled>
-        <span class="depart-strip-label">Leave by</span>
-        <span class="depart-strip-time">${leaveTime || '—'}</span>
+        <span>${leaveTime || '—'}</span>${departStop.tz ? `<div class="tl-tz">${departStop.tz}</div>` : ''}
       </button>
     </div>
     <div class="tl-line-wrap">
       <div class="tl-dot tl-dot--depart-card"></div>
       <div class="tl-line tl-line--faded"></div>
     </div>
-    <div class="tl-depart-strip" onclick="openStopSheet('${departStop.id}')">
+    <div class="tl-depart-strip">
       <i class="ph ph-sign-out depart-strip-icon"></i>
       <span class="depart-strip-venue">${venueName}</span>
       <span class="depart-strip-countdown" id="${countdownId}"></span>
@@ -5449,6 +5448,8 @@ function buildDepartCard(departStop, firstStop) {
     };
     tick();
   }
+
+  item.querySelector('.tl-depart-strip').addEventListener('click', () => openDetail(departStop));
 
   return item;
 }

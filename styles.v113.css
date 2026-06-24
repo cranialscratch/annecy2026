@@ -196,39 +196,26 @@ body.light #app-header {
 .day-chip-date  { display: none; }
 .day-dot { display: none; }
 
-/* Cover chip — invisible pill, just the △ icon, days scroll behind */
+/* Cover chip — no background, aligns left with menu icon above */
 .day-chip--cover {
   position: sticky;
   left: 0;
   z-index: 5;
-  background: transparent;
-  border: none;
-  box-shadow: none;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
   color: var(--text2);
-  padding: 6px 10px 6px 4px;
+  padding: 6px 12px 6px 16px;
   font-size: 16px;
-  opacity: 1;
 }
 .day-chip--cover.active {
-  background: transparent;
+  background: transparent !important;
   color: var(--text);
 }
-/* Fade strip: dissolves day chips as they approach the cover icon */
-#day-strip-wrap::before {
-  content: '';
-  position: absolute;
-  left: 0; top: 0; bottom: 10px;
-  width: 72px;
-  background: linear-gradient(to right,
-    var(--glass-bg-strong) 0%,
-    transparent 100%);
-  z-index: 4;
-  pointer-events: none;
-  /* Inherit the same blur as the header so it's seamless */
-  backdrop-filter: saturate(200%) brightness(1.4) blur(40px);
-  -webkit-backdrop-filter: saturate(200%) brightness(1.4) blur(40px);
-  mask-image: linear-gradient(to right, black 30%, transparent 100%);
-  -webkit-mask-image: linear-gradient(to right, black 30%, transparent 100%);
+/* Fade: chips dissolve before reaching the icon using a mask — no colour added */
+#day-strip {
+  -webkit-mask-image: linear-gradient(to right, transparent 0px, black 64px);
+  mask-image: linear-gradient(to right, transparent 0px, black 64px);
 }
 
 /* ─── Main scroll — mirrors .app-scroll pattern ─────────────────────
