@@ -1,7 +1,12 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v276';;
+const APP_VERSION = 'v277';;
 
 const CHANGELOG = [
+  { version: 'v277', title: 'Cover icon truly fixed — never scrolls, bold weight', items: [
+    { type: 'fix', text: 'Cover icon slot is now a sibling of the scroll container, not inside it — position:absolute inside overflow:auto scrolls; this is fixed' },
+    { type: 'fix', text: 'Icon uses ph-bold variant to match the line weight of the menu and header buttons' },
+    { type: 'fix', text: 'Orphaned CSS mask rule removed; mask now fades chips cleanly before the icon zone' },
+  ]},
   { version: 'v276', title: 'Cover icon vertical alignment, solid white, day fade polished', items: [
     { type: 'fix', text: 'Cover icon slot placed inside day-strip wrapper so it aligns exactly with the day chip row baseline' },
     { type: 'fix', text: 'Cover icon colour set to solid white — no transparency or pale tint' },
@@ -354,7 +359,7 @@ function formatDate(dateStr) {
   return d.toLocaleDateString('en-GB', { day:'numeric', month:'short' });
 }
 function getDayLabel(day) {
-  if (day.isCountdown) return '<i class="ph ph-mountains"></i>';
+  if (day.isCountdown) return '<i class="ph ph-bold ph-mountains"></i>';
   if (day.isFestival && day.dateEnd) return 'Fest';
   const names = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
   return names[new Date(day.date + 'T00:00:00').getDay()];

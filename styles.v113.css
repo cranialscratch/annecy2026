@@ -166,10 +166,12 @@ body.light #app-header {
 .header-titles p  { display: none; }
 
 /* ─── Day strip — plain text tabs, no pills ─────────────────────────── */
+#day-row {
+  position: relative;   /* positioning context for the fixed cover slot */
+}
 #day-strip-wrap {
   overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none;
   padding: 0 0 10px;
-  position: relative;
 }
 #day-strip-wrap::-webkit-scrollbar { display: none; }
 #day-strip { display: flex; gap: 0; width: max-content; padding-right: 16px; }
@@ -196,39 +198,36 @@ body.light #app-header {
 .day-chip-date  { display: none; }
 .day-dot { display: none; }
 
-/* Cover chip slot — inside the strip wrap so it aligns exactly with the chip row */
+/* Cover chip slot — sibling of the scroll container, never scrolls */
 #day-cover-chip-slot {
   position: absolute;
-  inset: 0;                  /* fills the strip wrap exactly */
+  top: 0; left: 0; bottom: 0;
+  width: 62px;
   z-index: 20;
   display: flex; align-items: center;
   pointer-events: none;
 }
-/* Cover chip — same size/weight as .icon-btn, solid white */
+/* Cover chip — bold icon, same visual weight as .icon-btn in header */
 .day-chip--cover {
   pointer-events: all;
   width: 38px; height: 38px;
   display: flex; align-items: center; justify-content: center;
-  margin-left: 16px;
+  margin-left: 12px;
   background: transparent !important;
   border: none !important;
   box-shadow: none !important;
-  color: #fff;               /* solid white, always */
-  font-size: 22px;
+  color: #fff;
+  font-size: 24px;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
   flex-shrink: 0;
 }
 .day-chip--cover:active { opacity: .6; }
-/* Day strip: left padding clears the chip; fade completes before title text starts */
+/* Day strip: left padding clears the slot; mask fades chips fully before icon zone */
 #day-strip {
   padding-left: 62px;
-  -webkit-mask-image: linear-gradient(to right, transparent 0px, transparent 52px, black 62px);
-  mask-image: linear-gradient(to right, transparent 0px, transparent 52px, black 62px);
-}
-  /* Chips fade completely before reaching the chip right edge (~62px) */
-  -webkit-mask-image: linear-gradient(to right, transparent 0px, transparent 52px, black 80px);
-  mask-image: linear-gradient(to right, transparent 0px, transparent 52px, black 80px);
+  -webkit-mask-image: linear-gradient(to right, transparent 0px, transparent 46px, black 62px);
+  mask-image: linear-gradient(to right, transparent 0px, transparent 46px, black 62px);
 }
 
 /* ─── Main scroll — mirrors .app-scroll pattern ─────────────────────
