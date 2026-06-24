@@ -1,7 +1,12 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v275';
+const APP_VERSION = 'v276';;
 
 const CHANGELOG = [
+  { version: 'v276', title: 'Cover icon vertical alignment, solid white, day fade polished', items: [
+    { type: 'fix', text: 'Cover icon slot placed inside day-strip wrapper so it aligns exactly with the day chip row baseline' },
+    { type: 'fix', text: 'Cover icon colour set to solid white — no transparency or pale tint' },
+    { type: 'fix', text: 'Day chips fully fade before reaching the icon zone (mask completes at 62 px)' },
+  ]},
   { version: 'v275', title: 'Cover icon fixed in place, never scrolls', items: [
     { type: 'fix', text: 'Cover icon moved completely outside the scroll container — it is now truly fixed, identical in size and weight to the menu button above it' },
     { type: 'fix', text: 'Day chips fade out before reaching the icon position' },

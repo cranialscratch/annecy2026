@@ -196,17 +196,15 @@ body.light #app-header {
 .day-chip-date  { display: none; }
 .day-dot { display: none; }
 
-/* Cover chip slot — fixed layer over the day strip, never scrolls */
+/* Cover chip slot — inside the strip wrap so it aligns exactly with the chip row */
 #day-cover-chip-slot {
   position: absolute;
-  /* Sits over the day-strip-wrap row; bottom matches strip padding */
-  bottom: 0; left: 0;
-  height: calc(100% - var(--header-inner-h, 52px)); /* strip row height */
+  inset: 0;                  /* fills the strip wrap exactly */
   z-index: 20;
   display: flex; align-items: center;
-  pointer-events: none; /* let touches pass through to strip beneath */
+  pointer-events: none;
 }
-/* Cover chip — matches .icon-btn exactly */
+/* Cover chip — same size/weight as .icon-btn, solid white */
 .day-chip--cover {
   pointer-events: all;
   width: 38px; height: 38px;
@@ -215,17 +213,19 @@ body.light #app-header {
   background: transparent !important;
   border: none !important;
   box-shadow: none !important;
-  color: var(--text2);
+  color: #fff;               /* solid white, always */
   font-size: 22px;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
   flex-shrink: 0;
 }
-.day-chip--cover.active { color: var(--text); }
 .day-chip--cover:active { opacity: .6; }
-/* Day strip: left padding reserves space for chip (16px margin + 38px + 8px gap) */
+/* Day strip: left padding clears the chip; fade completes before title text starts */
 #day-strip {
   padding-left: 62px;
+  -webkit-mask-image: linear-gradient(to right, transparent 0px, transparent 52px, black 62px);
+  mask-image: linear-gradient(to right, transparent 0px, transparent 52px, black 62px);
+}
   /* Chips fade completely before reaching the chip right edge (~62px) */
   -webkit-mask-image: linear-gradient(to right, transparent 0px, transparent 52px, black 80px);
   mask-image: linear-gradient(to right, transparent 0px, transparent 52px, black 80px);
