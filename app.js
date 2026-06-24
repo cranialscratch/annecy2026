@@ -1,5 +1,5 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v269';
+const APP_VERSION = 'v270';
 
 const CHANGELOG = [
   { version: 'v266', title: 'StopStart rebrand, stop reviews & trip scrapbook', items: [
@@ -5289,7 +5289,6 @@ function renderTimeline(container, scrollToNow) {
   if (_firstDepart) {
     const dCard = buildDepartCard(_firstDepart, _tlStops[0] || null);
     (compactCard || container).appendChild(dCard);
-    initSlider(dCard.querySelector('.card-slider'), _firstDepart, 'card');
   }
 
   _tlStops.forEach((stop, idx) => {
@@ -5411,34 +5410,45 @@ function buildCompactItem(stop, isLast, day) {
 function buildDepartCard(departStop, firstStop) {
   const leaveTime = getStopTime(departStop);
   const venueName = getStopName(departStop);
-  const destName  = firstStop ? getStopName(firstStop) : null;
-  const destIcon  = firstStop ? stopTypeIcon(firstStop) : '';
+  const leaveMins = timeToMinutes(leaveTime);
 
   const item = document.createElement('div');
-  item.className = 'tl-item tl-item--depart-card';
+  item.className = 'tl-item tl-item--depart-strip';
   item.id = `depart-card-${departStop.id}`;
 
+  const countdownId = `depart-countdown-${departStop.id}`;
   item.innerHTML = `
     <div class="tl-left">
-      <div class="tl-time-depart-card">
-        <span class="depart-card-label">Leave by</span>
-        <span class="depart-card-time">${leaveTime || '—'}</span>
-      </div>
+      <button class="tl-time-btn" disabled>
+        <span class="depart-strip-label">Leave by</span>
+        <span class="depart-strip-time">${leaveTime || '—'}</span>
+      </button>
     </div>
     <div class="tl-line-wrap">
       <div class="tl-dot tl-dot--depart-card"></div>
       <div class="tl-line tl-line--faded"></div>
     </div>
-    <div class="tl-depart-card">
-      ${buildSlider(departStop, 'card')}
-      <div class="depart-card-body">
-        <div class="depart-card-venue">
-          <i class="ph ph-sign-out depart-card-icon"></i>
-          <span>${venueName}</span>
-        </div>
-        ${destName ? `<div class="depart-card-dest"><i class="ph ph-arrow-right"></i> ${destIcon} ${destName}</div>` : ''}
-      </div>
+    <div class="tl-depart-strip" onclick="openStopSheet('${departStop.id}')">
+      <i class="ph ph-sign-out depart-strip-icon"></i>
+      <span class="depart-strip-venue">${venueName}</span>
+      <span class="depart-strip-countdown" id="${countdownId}"></span>
+      <i class="ph ph-caret-right depart-strip-caret"></i>
     </div>`;
+
+  // Live countdown ticker
+  if (leaveMins !== null) {
+    const tick = () => {
+      const el = document.getElementById(countdownId);
+      if (!el) return;
+      const diff = leaveMins - nowMinutes();
+      if (diff <= 0) { el.textContent = 'Now'; el.className = 'depart-strip-countdown urgent'; return; }
+      const h = Math.floor(diff / 60), m = diff % 60;
+      el.textContent = h > 0 ? `${h}h ${m}m` : `${m}m`;
+      el.className = `depart-strip-countdown${diff <= 30 ? ' urgent' : ''}`;
+      setTimeout(tick, 30000);
+    };
+    tick();
+  }
 
   return item;
 }
@@ -5574,6 +5584,8 @@ function buildTimelineItem(stop, isLast, day, nextStop, prevStop) {
   const TAP_SLOP      = 8;    // px — moves beyond this suppress the click
   let _sx = 0, _sy = 0, _sActive = false, _sOpen = false, _sMoved = false, _sDist = 0;
   swipeWrap.addEventListener('touchstart', e => {
+    // Don't intercept touches that begin on the photo slider
+    if (e.target.closest('.card-slider')) { _sActive = false; return; }
     _sx = e.touches[0].clientX; _sy = e.touches[0].clientY;
     _sActive = true; _sMoved = false; _sDist = 0;
   }, { passive: true });
