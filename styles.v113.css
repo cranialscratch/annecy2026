@@ -196,26 +196,27 @@ body.light #app-header {
 .day-chip-date  { display: none; }
 .day-dot { display: none; }
 
-/* Cover chip — no background, aligns left with menu icon above */
+/* Cover chip — absolute over wrap, not in scroll flow */
 .day-chip--cover {
-  position: sticky;
-  left: 0;
-  z-index: 5;
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  z-index: 10;
+  display: flex; align-items: center;
   background: transparent !important;
   border: none !important;
   box-shadow: none !important;
   color: var(--text2);
-  padding: 6px 12px 6px 16px;
-  font-size: 16px;
+  /* left padding aligns icon centre with menu-btn centre (16px header + ~11px to centre) */
+  padding: 0 10px 0 14px;
+  font-size: 22px; /* bigger icon */
 }
-.day-chip--cover.active {
-  background: transparent !important;
-  color: var(--text);
-}
-/* Fade: chips dissolve before reaching the icon using a mask — no colour added */
+.day-chip--cover.active { color: var(--text); }
+/* Day strip: left padding reserves space for the cover chip */
+#day-strip { padding-left: 52px; }
+/* Fade: mask the strip left edge so chips dissolve before the icon — no colour involved */
 #day-strip {
-  -webkit-mask-image: linear-gradient(to right, transparent 0px, black 64px);
-  mask-image: linear-gradient(to right, transparent 0px, black 64px);
+  -webkit-mask-image: linear-gradient(to right, transparent 0px, transparent 48px, black 80px);
+  mask-image: linear-gradient(to right, transparent 0px, transparent 48px, black 80px);
 }
 
 /* ─── Main scroll — mirrors .app-scroll pattern ─────────────────────

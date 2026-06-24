@@ -1,7 +1,32 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v272';
+const APP_VERSION = 'v273';
 
 const CHANGELOG = [
+  { version: 'v273', title: 'Cover icon + day strip refinements', items: [
+    { type: 'fix', text: 'Cover (△) icon lifted out of the scroll track — now sits above it, fully aligned with the menu icon above' },
+    { type: 'fix', text: 'Day chips now fade completely away before reaching the cover icon using a CSS mask — no colour overlay, no text visible behind the icon' },
+  ]},
+  { version: 'v272', title: 'Departure strip polish', items: [
+    { type: 'fix', text: 'Departure time now matches all other times in the left column — plain format with FR timezone label beneath' },
+    { type: 'fix', text: 'Tapping the departure strip opens the stop detail page instead of the action sheet' },
+    { type: 'fix', text: 'Cover icon padding aligned with the menu button above it' },
+  ]},
+  { version: 'v271', title: 'Today button always returns to now', items: [
+    { type: 'feature', text: 'Tapping Today in the bottom bar always jumps to today\'s day and scrolls to the current time, even if you were on a different day' },
+  ]},
+  { version: 'v270', title: 'Departure strip, swipe fix, cover chip', items: [
+    { type: 'fix', text: 'Departure card replaced with a slim single-line strip — venue name, live countdown, no photo' },
+    { type: 'fix', text: 'Swiping left to skip/remove a stop no longer conflicts with swiping photos in the slider' },
+    { type: 'fix', text: 'Cover chip background removed; days now fade behind it' },
+  ]},
+  { version: 'v269', title: 'Photo loading fix', items: [
+    { type: 'fix', text: 'Removed broken Wikimedia URLs from chalet stops — images now use Google Street View which loads reliably' },
+    { type: 'fix', text: 'First photo in every card now loads eagerly (not lazily) so top-of-screen cards show images immediately' },
+  ]},
+  { version: 'v267', title: 'Departure card + cover chip fixes', items: [
+    { type: 'fix', text: 'Departure card photo shimmer now clears correctly when the image loads' },
+    { type: 'fix', text: 'Cover chip made transparent with fade gradient so days dissolve behind it' },
+  ]},
   { version: 'v266', title: 'StopStart rebrand, stop reviews & trip scrapbook', items: [
     { type: 'feature', text: 'App renamed to StopStart — Ultimate Road Trip Planner with new icon and launch screen' },
     { type: 'feature', text: 'Custom domain: stopst.art' },
@@ -2099,9 +2124,15 @@ function load() {
 
 /* ── Day strip ─────────────────────────────────────────────────────── */
 function buildDayStrip() {
+  const wrap  = document.getElementById('day-strip-wrap');
   const strip = document.getElementById('day-strip');
   strip.innerHTML = '';
+  // Remove any previously injected cover chip overlay
+  wrap.querySelectorAll('.day-chip--cover-overlay').forEach(el => el.remove());
+
   const today = localDateStr();
+  let coverChip = null;
+
   TRIP_DATA.days.forEach(day => {
     const chip = document.createElement('button');
     chip.className = 'day-chip';
@@ -2112,14 +2143,22 @@ function buildDayStrip() {
         ? (today >= day.date && today <= day.dateEnd)
         : today === day.date;
     const isPast = !day.isCountdown && !(day.isFestival && day.dateEnd) && day.date < today;
-    if (day.isCountdown) chip.classList.add('day-chip--cover');
-    if (isTodayChip)     chip.classList.add('today');
-    if (isPast)          chip.classList.add('past');
+    if (isTodayChip) chip.classList.add('today');
+    if (isPast)      chip.classList.add('past');
     const dateStr = day.isCountdown ? '' : (day.isFestival && day.dateEnd) ? '21–27' : formatDate(day.date);
     chip.innerHTML = `<span class="day-chip-label">${getDayLabel(day)}</span>${dateStr ? `<span class="day-chip-date">${dateStr}</span>` : ''}<span class="day-dot"></span>`;
     chip.addEventListener('click', () => selectDay(day.id));
-    strip.appendChild(chip);
+
+    if (day.isCountdown) {
+      // Cover chip: positioned absolutely over the strip, not in the scroll flow
+      chip.classList.add('day-chip--cover', 'day-chip--cover-overlay');
+      wrap.appendChild(chip);
+      coverChip = chip;
+    } else {
+      strip.appendChild(chip);
+    }
   });
+
   updateDayStrip();
   if (typeof updateHeaderHeight === 'function') updateHeaderHeight();
 }
