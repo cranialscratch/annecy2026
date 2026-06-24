@@ -201,8 +201,8 @@ body.light #app-header {
 /* Cover chip slot — sibling of the scroll container, never scrolls */
 #day-cover-chip-slot {
   position: absolute;
-  top: 0; left: 0; bottom: 0;
-  width: 62px;
+  top: 0; left: 0; bottom: 10px; /* exclude strip-wrap's 10px bottom padding so centering aligns with chip text */
+  width: 70px;
   z-index: 20;
   display: flex; align-items: center;
   pointer-events: none;
@@ -216,18 +216,21 @@ body.light #app-header {
   background: transparent !important;
   border: none !important;
   box-shadow: none !important;
-  color: #fff;
-  font-size: 24px;
+  color: #fff !important;
+  font-size: 26px;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
   flex-shrink: 0;
 }
+/* The icon sits inside .day-chip-label i which has font-size:18px — override it */
+.day-chip--cover .day-chip-label { font-size: 26px; }
+.day-chip--cover .day-chip-label i { font-size: 26px !important; color: #fff !important; vertical-align: 0; }
 .day-chip--cover:active { opacity: .6; }
 /* Day strip: left padding clears the slot; mask fades chips fully before icon zone */
 #day-strip {
-  padding-left: 62px;
-  -webkit-mask-image: linear-gradient(to right, transparent 0px, transparent 46px, black 62px);
-  mask-image: linear-gradient(to right, transparent 0px, transparent 46px, black 62px);
+  padding-left: 70px;
+  -webkit-mask-image: linear-gradient(to right, transparent 0px, transparent 54px, black 70px);
+  mask-image: linear-gradient(to right, transparent 0px, transparent 54px, black 70px);
 }
 
 /* ─── Main scroll — mirrors .app-scroll pattern ─────────────────────

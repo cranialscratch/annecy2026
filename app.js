@@ -1,7 +1,13 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v277';;
+const APP_VERSION = 'v278';;
 
 const CHANGELOG = [
+  { version: 'v278', title: 'Cover icon: white, correct size, aligned to day text', items: [
+    { type: 'fix', text: 'Icon now solid white — .day-chip-label i was overriding colour at 18px; targeted with !important' },
+    { type: 'fix', text: 'Icon size 26px, matching header button line weight' },
+    { type: 'fix', text: 'Slot bottom excludes the 10px strip padding so align-items:center puts icon at day text level' },
+    { type: 'fix', text: 'Mask extended to 70px so no chip text bleeds into the icon zone' },
+  ]},
   { version: 'v277', title: 'Cover icon truly fixed — never scrolls, bold weight', items: [
     { type: 'fix', text: 'Cover icon slot is now a sibling of the scroll container, not inside it — position:absolute inside overflow:auto scrolls; this is fixed' },
     { type: 'fix', text: 'Icon uses ph-bold variant to match the line weight of the menu and header buttons' },
