@@ -1,7 +1,11 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v274';
+const APP_VERSION = 'v275';
 
 const CHANGELOG = [
+  { version: 'v275', title: 'Cover icon fixed in place, never scrolls', items: [
+    { type: 'fix', text: 'Cover icon moved completely outside the scroll container — it is now truly fixed, identical in size and weight to the menu button above it' },
+    { type: 'fix', text: 'Day chips fade out before reaching the icon position' },
+  ]},
   { version: 'v274', title: 'Cover icon alignment, timezone fallback, strip polish', items: [
     { type: 'fix', text: 'Cover icon width and left padding precisely matches the menu button above it — same size, same horizontal position' },
     { type: 'fix', text: 'Day chips now fade completely to nothing before the cover icon — no text visible at all in that zone' },
@@ -2132,12 +2136,11 @@ function load() {
 function buildDayStrip() {
   const wrap  = document.getElementById('day-strip-wrap');
   const strip = document.getElementById('day-strip');
+  const slot  = document.getElementById('day-cover-chip-slot');
   strip.innerHTML = '';
-  // Remove any previously injected cover chip overlay
-  wrap.querySelectorAll('.day-chip--cover-overlay').forEach(el => el.remove());
+  slot.innerHTML  = '';
 
   const today = localDateStr();
-  let coverChip = null;
 
   TRIP_DATA.days.forEach(day => {
     const chip = document.createElement('button');
@@ -2156,10 +2159,9 @@ function buildDayStrip() {
     chip.addEventListener('click', () => selectDay(day.id));
 
     if (day.isCountdown) {
-      // Cover chip: positioned absolutely over the strip, not in the scroll flow
-      chip.classList.add('day-chip--cover', 'day-chip--cover-overlay');
-      wrap.appendChild(chip);
-      coverChip = chip;
+      // Cover chip: lives in the fixed slot outside the scroll container
+      chip.classList.add('day-chip--cover');
+      slot.appendChild(chip);
     } else {
       strip.appendChild(chip);
     }
