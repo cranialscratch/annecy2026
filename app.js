@@ -1,5 +1,5 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v267';
+const APP_VERSION = 'v268';
 
 const CHANGELOG = [
   { version: 'v266', title: 'StopStart rebrand, stop reviews & trip scrapbook', items: [
@@ -1752,15 +1752,16 @@ function openLeadTimePicker(stopId, anchorEl, e) {
 function lazyLoadWikiImages(stops) {
   stops.forEach(stop => {
     const type = getStopType(stop);
-    if (type === 'depart' || type === 'charging') return;
-    // Kick off Places fetch; inject photos when it resolves
-    if (_placesCache[stop.id]?.photos?.length) {
+    if (type === 'charging') return;
+    // For stops with static photos in data.js, no Places fetch needed
+    if (stop.photos?.length) {
+      // Already rendered with correct src — nothing to inject
+    } else if (_placesCache[stop.id]?.photos?.length) {
       requestAnimationFrame(() => injectStopPhotos(stop.id));
-    } else {
+    } else if (type !== 'depart') {
       fetchPlacesPhotos(stop).then(() => injectStopPhotos(stop.id));
     }
-    // Also fetch wiki in parallel (for extract text)
-    if (_wikiCache[stop.id] === undefined) fetchWikiData(stop);
+    if (type !== 'depart' && _wikiCache[stop.id] === undefined) fetchWikiData(stop);
   });
 }
 
@@ -5332,7 +5333,7 @@ function renderTimeline(container, scrollToNow) {
   }
 
   // Fetch Wikipedia extracts for detail page descriptions
-  lazyLoadWikiImages(day.stops);
+  lazyLoadWikiImages(_allDayStops);
 
   setTimeout(() => {
     TRIP_DATA.days.forEach(d => {
@@ -5697,14 +5698,14 @@ function buildTimelineItem(stop, isLast, day, nextStop, prevStop) {
 function buildSlider(stop, prefix) {
   const photos = getPhotos(stop);
   const [c1, c2] = TYPE_GRAD[getStopType(stop)] || ['#334155','#0f172a'];
-  const slides = photos.map((url) => {
+  const slides = photos.map((url, idx) => {
     if (url === '__placeholder__') {
       return `<div class="${prefix}-slide ${prefix}-slide-placeholder" style="background:linear-gradient(145deg,${c1}55,${c2})">
         <div class="ph-icon">${stopTypeIcon(stop)}</div>
         <div class="ph-name">${stop.location}</div>
       </div>`;
     }
-    return `<img class="${prefix}-slide" src="${url}" loading="lazy" alt="${stop.location}">`;
+    return `<img class="${prefix}-slide" src="${url}" ${idx === 0 ? '' : 'loading="lazy"'} alt="${stop.location}">`;
   }).join('');
   const dots = photos.length > 1
     ? `<div class="${prefix}-dots">${photos.map((_,i) => `<span class="${prefix}-dot${i===0?' active':''}"></span>`).join('')}</div>`
