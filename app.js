@@ -1,5 +1,5 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v291';;
+const APP_VERSION = 'v292';;
 
 const CHANGELOG = [
   { version: 'v279', title: 'Post-trip magazine scrapbook', items: [
@@ -5022,7 +5022,45 @@ function _renderPreTripCover(container) {
   container.appendChild(_buildTripSummaryEl());
 }
 
+function _buildNowPanel() {
+  const todayStr = localDateStr();
+  const today = TRIP_DATA.days.find(d => {
+    if (d.isCountdown) return false;
+    if (d.isFestival) return todayStr >= d.date && todayStr <= (d.dateEnd || d.date);
+    return d.date === todayStr;
+  });
+  if (!today) return null;
+  const cur = getCurrentStop(today);
+  if (!cur) return null;
+  const stops = getDayStops(today).filter(s => !state.skipped[s.id] && !state.removed[s.id]);
+  const curIdx = stops.findIndex(s => s.id === cur.id);
+  const next = curIdx >= 0 ? stops[curIdx + 1] : null;
+
+  const panel = document.createElement('div');
+  panel.className = 'now-panel';
+
+  const navHref = navUrl(cur.location, cur.address, cur.lat, cur.lng);
+  panel.innerHTML = `
+    <div class="now-panel-row">
+      <div class="now-panel-label">You are at</div>
+      <a class="now-panel-nav" href="${navHref}" target="_blank" rel="noopener"><i class="ph ph-navigation-arrow"></i> Navigate</a>
+    </div>
+    <div class="now-panel-stop">${getStopName(cur)}</div>
+    ${next ? `
+    <div class="now-panel-next-row">
+      <i class="ph ph-arrow-down"></i>
+      <span class="now-panel-next-label">Next: <strong>${getStopName(next)}</strong></span>
+      <button class="now-panel-nav-btn" onclick="selectDay(TRIP_DATA.days.find(d=>getDayStops(d).some(s=>s.id==='${next.id}')));renderView(true)">
+        <i class="ph ph-calendar-blank"></i> View
+      </button>
+    </div>` : ''}`;
+  return panel;
+}
+
 function _renderDuringTripCover(container) {
+  const nowPanel = _buildNowPanel();
+  if (nowPanel) container.appendChild(nowPanel);
+
   const today       = localDateStr();
   const tripDayNums = TRIP_DATA.days.filter(d => !d.isCountdown && !d.isFestival);
   const elapsed     = Math.max(1, Math.round((new Date(today) - new Date('2026-06-17')) / 86400000) + 1);
