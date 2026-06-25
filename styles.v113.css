@@ -3194,6 +3194,21 @@ body.light .cl-text { color: #475569; }
 .stop-sheet-body {
   padding: 0 16px 16px;
 }
+/* ── Stop comments ── */
+.comments-section { margin-top: 16px; border-top: 1px solid var(--glass-border); padding-top: 14px; }
+.comments-label { font-size: 13px; font-weight: 700; color: var(--text2); display:flex; align-items:center; gap:6px; margin-bottom:10px; }
+.comments-list { max-height: 220px; overflow-y: auto; display:flex; flex-direction:column; gap:6px; margin-bottom:10px; }
+.comments-loading, .comments-empty { font-size:13px; color:var(--text2); text-align:center; padding:8px 0; }
+.comment-item { display:flex; flex-direction:column; align-items:flex-start; max-width:85%; }
+.comment-item--mine { align-self:flex-end; align-items:flex-end; }
+.comment-author { font-size:11px; font-weight:700; color:var(--accent); margin-bottom:2px; padding-left:4px; }
+.comment-bubble { background:var(--glass-bg-strong); border:1px solid var(--glass-border); border-radius:14px; padding:7px 12px; font-size:14px; color:var(--text1); line-height:1.4; }
+.comment-item--mine .comment-bubble { background:var(--accent); border-color:var(--accent); color:#fff; }
+.comment-time { font-size:10px; color:var(--text2); margin-top:2px; padding:0 4px; }
+.comment-input-row { display:flex; gap:8px; align-items:center; }
+.comment-input { flex:1; background:var(--glass-bg); border:1px solid var(--glass-border); border-radius:20px; padding:9px 14px; font-size:14px; color:var(--text1); outline:none; }
+.comment-send-btn { background:var(--accent); border:none; border-radius:50%; width:36px; height:36px; display:flex; align-items:center; justify-content:center; color:#fff; font-size:18px; cursor:pointer; flex-shrink:0; -webkit-tap-highlight-color:transparent; }
+
 .stop-sheet-reason {
   font-size: 14px; color: var(--text2, #94a3b8); line-height: 1.5;
   margin: 0 0 12px;

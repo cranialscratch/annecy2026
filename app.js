@@ -1,5 +1,5 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v290';;
+const APP_VERSION = 'v291';;
 
 const CHANGELOG = [
   { version: 'v279', title: 'Post-trip magazine scrapbook', items: [
@@ -7412,6 +7412,34 @@ function openStopSheet(stopId) {
     </div>`;
   sheet.querySelector('.stop-sheet-close').addEventListener('click', closeStopSheet);
 
+  // Comments section
+  const commentsSection = document.createElement('div');
+  commentsSection.className = 'comments-section';
+  commentsSection.innerHTML = `
+    <div class="comments-label"><i class="ph ph-chat-centered-text"></i> Conversation</div>
+    <div class="comments-list" id="comments-list-${stopId}"><div class="comments-loading">Loading…</div></div>
+    <div class="comment-input-row">
+      <input class="comment-input" id="comment-input-${stopId}" type="text" placeholder="Add a comment…" autocomplete="off">
+      <button class="comment-send-btn" id="comment-send-${stopId}"><i class="ph ph-paper-plane-tilt"></i></button>
+    </div>`;
+  sheet.querySelector('.stop-sheet-body').appendChild(commentsSection);
+
+  let _unlistenComments = () => {};
+  if (typeof listenComments === 'function') {
+    _unlistenComments = listenComments(stopId, comments => _renderCommentsList(stopId, comments));
+  }
+
+  const sendBtn = sheet.querySelector('#comment-send-' + stopId);
+  const inputEl = sheet.querySelector('#comment-input-' + stopId);
+  const doSend = () => {
+    const text = inputEl.value.trim();
+    if (!text) return;
+    inputEl.value = '';
+    if (typeof postComment === 'function') postComment(stopId, text).catch(() => {});
+  };
+  sendBtn.addEventListener('click', doSend);
+  inputEl.addEventListener('keydown', e => { if (e.key === 'Enter') doSend(); });
+
   const overlay = document.createElement('div');
   overlay.id = 'stop-sheet-overlay';
   overlay.className = 'stop-sheet-overlay';
@@ -7419,11 +7447,31 @@ function openStopSheet(stopId) {
   document.body.appendChild(overlay);
   document.body.appendChild(sheet);
   requestAnimationFrame(() => { sheet.classList.add('open'); overlay.classList.add('open'); });
+
+  sheet._unlistenComments = _unlistenComments;
+}
+
+function _renderCommentsList(stopId, comments) {
+  const list = document.getElementById('comments-list-' + stopId);
+  if (!list) return;
+  const entries = Object.values(comments).sort((a, b) => a.createdAt - b.createdAt);
+  if (!entries.length) { list.innerHTML = '<div class="comments-empty">No messages yet</div>'; return; }
+  list.innerHTML = entries.map(c => {
+    const mine = c.uid === state.userId;
+    const time = new Date(c.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return `<div class="comment-item${mine ? ' comment-item--mine' : ''}">
+      ${!mine ? `<div class="comment-author">${c.name}</div>` : ''}
+      <div class="comment-bubble">${c.text}</div>
+      <div class="comment-time">${time}</div>
+    </div>`;
+  }).join('');
+  list.scrollTop = list.scrollHeight;
 }
 
 function closeStopSheet() {
   const sheet   = document.getElementById('stop-sheet');
   const overlay = document.getElementById('stop-sheet-overlay');
+  if (sheet?._unlistenComments) sheet._unlistenComments();
   if (sheet)   { sheet.classList.remove('open'); sheet.addEventListener('transitionend', () => sheet.remove(), { once: true }); }
   if (overlay) { overlay.classList.remove('open'); overlay.addEventListener('transitionend', () => overlay.remove(), { once: true }); }
 }

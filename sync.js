@@ -105,6 +105,26 @@ async function getMembers() {
   return snap.exists() ? snap.val() : {};
 }
 
+async function postComment(stopId, text) {
+  if (!_db || !_uid) return;
+  const user = firebase.auth().currentUser;
+  const ref = _db.ref('trips/' + TRIP_ID + '/comments/' + stopId);
+  const key = ref.push().key;
+  await _db.ref('trips/' + TRIP_ID + '/comments/' + stopId + '/' + key).set({
+    uid: _uid,
+    name: user?.displayName || user?.email || 'Traveller',
+    text,
+    createdAt: Date.now(),
+  });
+}
+
+function listenComments(stopId, cb) {
+  if (!_db) return () => {};
+  const ref = _db.ref('trips/' + TRIP_ID + '/comments/' + stopId);
+  ref.on('value', snap => cb(snap.exists() ? snap.val() : {}));
+  return () => ref.off('value');
+}
+
 async function setMemberActive(uid, active) {
   if (!_db) return;
   await _db.ref(MEMBER_PATH(uid)).update({ active });
