@@ -1,5 +1,5 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v298';;
+const APP_VERSION = 'v299';;
 
 const CHANGELOG = [
   { version: 'v279', title: 'Post-trip magazine scrapbook', items: [
@@ -9134,7 +9134,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // FAB quick-action sheet
   // Auth state observer — fires once on load and again on sign-in/out
+  let _authStateFired = false;
+  function _hideSplash() {
+    const s = document.getElementById('splash-screen');
+    if (s) s.classList.add('hidden');
+  }
+  // Hard fallback: if Firebase never calls onAuthStateChanged (no network, SDK blocked)
+  // show the auth overlay after 6s so the user isn't stuck on the splash forever.
+  const _authFallbackTimer = setTimeout(() => {
+    if (!_authStateFired) {
+      _hideSplash();
+      document.getElementById('auth-overlay').classList.remove('hidden');
+    }
+  }, 6000);
+
   auth.onAuthStateChanged(user => {
+    _authStateFired = true;
+    clearTimeout(_authFallbackTimer);
+    _hideSplash();  // dismiss splash as soon as auth state is known
     if (user) {
       onAuthSuccess(user);
     } else {
