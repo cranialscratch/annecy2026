@@ -1,5 +1,5 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v295';;
+const APP_VERSION = 'v296';;
 
 const CHANGELOG = [
   { version: 'v279', title: 'Post-trip magazine scrapbook', items: [
@@ -5098,8 +5098,8 @@ function _buildNowPanel() {
     <div class="now-panel-next-row">
       <i class="ph ph-arrow-down"></i>
       <span class="now-panel-next-label">Next: <strong>${getStopName(next)}</strong></span>
-      <button class="now-panel-nav-btn" onclick="selectDay(TRIP_DATA.days.find(d=>getDayStops(d).some(s=>s.id==='${next.id}')));renderView(true)">
-        <i class="ph ph-calendar-blank"></i> View
+      <button class="now-panel-nav-btn" onclick="(function(){const d=TRIP_DATA.days.find(d=>getDayStops(d).some(s=>s.id==='${next.id}'));if(d){selectDay(d);state.currentView='day';renderView(true);setTimeout(()=>{const el=document.getElementById('stop-${next.id}');if(el)el.scrollIntoView({behavior:'smooth',block:'center'});},400);}})()">
+        <i class="ph ph-arrow-right"></i> Go to stop
       </button>
     </div>` : ''}`;
   return panel;
@@ -5659,6 +5659,21 @@ function renderTimeline(container, scrollToNow) {
 
   const today = localDateStr();
   const isToday = day.date === today || (day.isFestival && today >= day.date && today <= (day.dateEnd || day.date));
+
+  // Compact trip-progress bar on today's view
+  if (isToday) {
+    const visited  = _allTripStops().filter(({ s }) => state.checked[s.id]).length;
+    const total    = _allTripStops().length;
+    const km       = _kmDriven();
+    const distStr  = state.useMetric !== false ? `${Math.round(km)} km` : `${Math.round(km * 0.621371)} mi`;
+    const bar = document.createElement('div');
+    bar.className = 'trip-progress-bar';
+    bar.innerHTML = `
+      <div class="trip-progress-stat"><span class="trip-progress-num">${distStr}</span><span class="trip-progress-lbl">driven</span></div>
+      <div class="trip-progress-divider"></div>
+      <div class="trip-progress-stat"><span class="trip-progress-num">${visited}/${total}</span><span class="trip-progress-lbl">stops visited</span></div>`;
+    container.appendChild(bar);
+  }
   const now = nowMinutes();
   let nowLineEl = null;
 
