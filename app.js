@@ -1,10 +1,10 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v280';
+const APP_VERSION = 'v281';
 
 const CHANGELOG = [
   { version: 'v280', title: 'Now panel, combined scrapbook, comments, packing list', items: [
     { type: 'feat', text: 'Now panel on cover page — shows current stop and next stop with travel time during the trip' },
-    { type: 'feat', text: 'Combined scrapbook — Mine / Everyone's toggle fetches all active members\' reviews and merges them into the magazine view with bylines' },
+    { type: 'feat', text: 'Combined scrapbook — Mine / Everyone\'s toggle fetches all active members\' reviews and merges them into the magazine view with bylines' },
     { type: 'feat', text: 'Stop comments — conversation thread on every stop sheet, real-time Firebase listener, send with Enter or tap' },
     { type: 'feat', text: 'Packing list in Notes — grouped by bag, check off items, add via sheet with bag selector' },
     { type: 'refactor', text: 'Magazine card building extracted to _buildMagazineCard() shared by during-trip and post-trip views' },
@@ -5120,10 +5120,6 @@ function _renderDuringTripCover(container) {
   const nowPanel = _buildNowPanel();
   if (nowPanel) container.appendChild(nowPanel);
 
-  // Now panel
-  const nowPanel = _buildNowPanel();
-  if (nowPanel) container.appendChild(nowPanel);
-
   const stats = document.createElement('div');
   stats.className = 'cover-stats';
   stats.innerHTML = `
@@ -7700,46 +7696,6 @@ function openStopSheet(stopId) {
   document.body.appendChild(sheet);
   requestAnimationFrame(() => { sheet.classList.add('open'); overlay.classList.add('open'); });
 
-  // Comments section
-  const sheetBody = sheet.querySelector('.stop-sheet-body');
-  const commentsSection = document.createElement('div');
-  commentsSection.className = 'comments-section';
-  commentsSection.innerHTML = `
-    <div class="comments-label"><i class="ph ph-chat-circle"></i> Comments</div>
-    <div class="comments-list" id="comments-list-${stopId}"><div class="comments-empty">Loading…</div></div>
-    <div class="comment-input-row">
-      <input class="comment-input" id="comment-input-${stopId}" type="text" placeholder="Add a comment…" autocomplete="off">
-      <button class="comment-send-btn" id="comment-send-${stopId}"><i class="ph ph-paper-plane-right"></i></button>
-    </div>`;
-  sheetBody.appendChild(commentsSection);
-
-  let _unlistenComments = null;
-  if (typeof listenComments === 'function') {
-    _unlistenComments = listenComments(stopId, (comments) => {
-      renderCommentsList(stopId, comments);
-    });
-  }
-
-  const sendComment = async () => {
-    const input = document.getElementById(`comment-input-${stopId}`);
-    const text = input?.value?.trim();
-    if (!text) return;
-    input.value = '';
-    if (typeof postComment === 'function') await postComment(stopId, text);
-  };
-
-  document.getElementById(`comment-send-${stopId}`)?.addEventListener('click', sendComment);
-  document.getElementById(`comment-input-${stopId}`)?.addEventListener('keydown', e => {
-    if (e.key === 'Enter') { e.preventDefault(); sendComment(); }
-  });
-
-  // Unlisten on sheet close
-  const origClose = sheet.querySelector('.stop-sheet-close');
-  const cleanupComments = () => { if (_unlistenComments) { _unlistenComments(); _unlistenComments = null; } };
-  origClose.addEventListener('click', cleanupComments);
-  overlay.addEventListener('click', cleanupComments);
-}
-
 function renderCommentsList(stopId, comments) {
   const list = document.getElementById(`comments-list-${stopId}`);
   if (!list) return;
@@ -9827,4 +9783,5 @@ document.addEventListener('DOMContentLoaded', () => {
     }, msUntilMidnight);
   }
   scheduleMidnightTick();
-});
+}); // end DOMContentLoaded
+}
