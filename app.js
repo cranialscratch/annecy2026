@@ -1,5 +1,5 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v292';;
+const APP_VERSION = 'v293';;
 
 const CHANGELOG = [
   { version: 'v279', title: 'Post-trip magazine scrapbook', items: [
@@ -4892,26 +4892,98 @@ function _renderPostTripCover(container) {
     </div>`;
   container.appendChild(header);
 
-  if (!allReviewed.length) {
-    const empty = document.createElement('div');
-    empty.className = 'mag-empty';
-    empty.innerHTML = `<i class="ph ph-camera-slash"></i><p>No reviews yet — tap <i class="ph ph-star"></i> on any stop card to add yours.</p>`;
-    container.appendChild(empty);
-  } else {
-    const lbl = document.createElement('div');
-    lbl.className = 'cover-section-label';
-    lbl.textContent = 'Your journey, reviewed';
-    container.appendChild(lbl);
+  // Toggle row: Mine / Everyone's
+  const toggleRow = document.createElement('div');
+  toggleRow.className = 'scrapbook-toggle-row';
+  toggleRow.innerHTML = `
+    <button class="scrapbook-toggle-btn scrapbook-toggle-btn--active" id="scrap-mine">Mine</button>
+    <button class="scrapbook-toggle-btn" id="scrap-all">Everyone's</button>`;
+  container.appendChild(toggleRow);
 
-    allReviewed.forEach(({ stop, rev, score, dayIdx }) => {
-      const day = TRIP_DATA.days[dayIdx];
-      const photos = rev.photos || [];
-      const dateStr = day ? formatDate(day.date) : '';
-      const dayName = day ? getDayLabel(day).replace(/<[^>]+>/g, '') : '';
-      const eyebrow = [dayName, dateStr].filter(Boolean).join(' · ');
+  const cardsArea = document.createElement('div');
+  cardsArea.id = 'scrap-cards-area';
+  container.appendChild(cardsArea);
 
-      const card = document.createElement('div');
-      card.className = 'mag-card';
+  function renderMyCards() {
+    cardsArea.innerHTML = '';
+    if (!allReviewed.length) {
+      cardsArea.innerHTML = `<div class="mag-empty"><i class="ph ph-camera-slash"></i><p>No reviews yet — tap <i class="ph ph-star"></i> on any stop card to add yours.</p></div>`;
+      return;
+    }
+    allReviewed.forEach(({ stop, rev, score, dayIdx }) => _appendMagCard(cardsArea, stop, rev, score, dayIdx, state.userName || '', true));
+  }
+
+  async function renderEveryonesCards() {
+    cardsArea.innerHTML = '<div class="scrapbook-loading">Loading…</div>';
+    let memberData = [];
+    if (typeof fetchMemberReviews === 'function') {
+      try { memberData = await fetchMemberReviews(); } catch {}
+    }
+    cardsArea.innerHTML = '';
+    // My cards first
+    allReviewed.forEach(({ stop, rev, score, dayIdx }) => _appendMagCard(cardsArea, stop, rev, score, dayIdx, state.userName || '', true));
+    // Members' cards
+    memberData.forEach(({ name, reviews }) => {
+      Object.entries(reviews).forEach(([stopId, rev]) => {
+        const stop = findStop(stopId);
+        if (!stop) return;
+        let dayIdx = -1, stopIdx = -1;
+        TRIP_DATA.days.forEach((day, di) => { getDayStops(day).forEach((s, si) => { if (s.id === stopId) { dayIdx = di; stopIdx = si; } }); });
+        const score = _reviewScore(rev);
+        _appendMagCard(cardsArea, stop, rev, score, dayIdx, name, false);
+      });
+    });
+    if (!cardsArea.children.length) {
+      cardsArea.innerHTML = '<div class="mag-empty"><i class="ph ph-users"></i><p>No reviews from other travellers yet.</p></div>';
+    }
+  }
+
+  renderMyCards();
+
+  toggleRow.querySelector('#scrap-mine').addEventListener('click', () => {
+    toggleRow.querySelector('#scrap-mine').classList.add('scrapbook-toggle-btn--active');
+    toggleRow.querySelector('#scrap-all').classList.remove('scrapbook-toggle-btn--active');
+    renderMyCards();
+  });
+  toggleRow.querySelector('#scrap-all').addEventListener('click', () => {
+    toggleRow.querySelector('#scrap-all').classList.add('scrapbook-toggle-btn--active');
+    toggleRow.querySelector('#scrap-mine').classList.remove('scrapbook-toggle-btn--active');
+    renderEveryonesCards();
+  });
+
+  // Prompt for unreviewed (inline, always shown)
+  const unreviewed2 = _allTripStops()
+    .filter(({ s }) => state.checked[s.id] && !(state.reviews || {})[s.id])
+    .map(({ s }) => s)
+    .filter(s => getStopType(s) !== 'depart' && getStopType(s) !== 'transport');
+  if (unreviewed2.length) {
+    const sl = document.createElement('div');
+    sl.className = 'cover-section-label';
+    sl.textContent = `${unreviewed2.length} visited place${unreviewed2.length > 1 ? 's' : ''} without a review`;
+    container.appendChild(sl);
+    const chips = document.createElement('div');
+    chips.className = 'mag-unreviewed-chips';
+    unreviewed2.slice(0, 10).forEach(s => {
+      const chip = document.createElement('button');
+      chip.className = 'mag-unreviewed-chip';
+      chip.innerHTML = `${stopTypeIcon(s).replace('card-type-icon','')}<span>${getStopName(s)}</span>`;
+      chip.addEventListener('click', () => openReviewSheet(s.id));
+      chips.appendChild(chip);
+    });
+    container.appendChild(chips);
+  }
+}
+
+function _appendMagCard(container, stop, rev, score, dayIdx, authorName, tappable) {
+  {
+    const day = TRIP_DATA.days[dayIdx];
+    const photos = rev.photos || [];
+    const dateStr = day ? formatDate(day.date) : '';
+    const dayName = day ? getDayLabel(day).replace(/<[^>]+>/g, '') : '';
+    const eyebrow = [dayName, dateStr].filter(Boolean).join(' · ');
+
+    const card = document.createElement('div');
+    card.className = 'mag-card';
 
       const photosHtml = photos.length
         ? `<div class="mag-photo-strip">${photos.map((src, i) =>
@@ -4930,7 +5002,6 @@ function _renderPostTripCover(container) {
 
       const revDate = rev.updatedAt
         ? new Date(rev.updatedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '';
-      const author = state.userName || '';
 
       card.innerHTML = `
         ${photosHtml}
@@ -4941,38 +5012,15 @@ function _renderPostTripCover(container) {
           ${rev.heading ? `<blockquote class="mag-quote">"${rev.heading}"</blockquote>` : ''}
           ${rev.body ? `<p class="mag-body">${rev.body}</p>` : ''}
           ${(prosHtml || consHtml) ? `<div class="mag-proscons">${prosHtml}${consHtml}</div>` : ''}
-          ${(author || revDate) ? `
+          ${(authorName || revDate) ? `
             <div class="mag-byline">
-              ${author ? `<span class="mag-author-chip">${author[0].toUpperCase()}</span><span class="mag-author-name">${author}</span>` : ''}
+              ${authorName ? `<span class="mag-author-chip">${authorName[0].toUpperCase()}</span><span class="mag-author-name">${authorName}</span>` : ''}
               ${revDate ? `<span class="mag-byline-date">${revDate}</span>` : ''}
             </div>` : ''}
         </div>`;
 
-      card.addEventListener('click', () => openReviewSheet(stop.id));
+      if (tappable) card.addEventListener('click', () => openReviewSheet(stop.id));
       container.appendChild(card);
-    });
-  }
-
-  // Prompt for unreviewed visited stops
-  const unreviewed = _allTripStops()
-    .filter(({ s }) => state.checked[s.id] && !(state.reviews || {})[s.id])
-    .map(({ s }) => s)
-    .filter(s => getStopType(s) !== 'depart' && getStopType(s) !== 'transport');
-  if (unreviewed.length) {
-    const sl = document.createElement('div');
-    sl.className = 'cover-section-label';
-    sl.textContent = `${unreviewed.length} visited place${unreviewed.length > 1 ? 's' : ''} without a review`;
-    container.appendChild(sl);
-    const chips = document.createElement('div');
-    chips.className = 'mag-unreviewed-chips';
-    unreviewed.slice(0, 10).forEach(s => {
-      const chip = document.createElement('button');
-      chip.className = 'mag-unreviewed-chip';
-      chip.innerHTML = `${stopTypeIcon(s).replace('card-type-icon','')}<span>${getStopName(s)}</span>`;
-      chip.addEventListener('click', () => openReviewSheet(s.id));
-      chips.appendChild(chip);
-    });
-    container.appendChild(chips);
   }
 }
 

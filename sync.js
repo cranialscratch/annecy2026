@@ -105,6 +105,23 @@ async function getMembers() {
   return snap.exists() ? snap.val() : {};
 }
 
+async function fetchMemberReviews() {
+  if (!_db) return [];
+  const members = await getMembers();
+  const results = [];
+  await Promise.all(Object.entries(members).map(async ([uid, m]) => {
+    if (!m.active || uid === _uid) return;
+    try {
+      const snap = await _db.ref(USER_PATH(uid)).get();
+      const personal = snap.exists() ? snap.val() : {};
+      if (personal.reviews && Object.keys(personal.reviews).length) {
+        results.push({ uid, name: m.name || m.email || 'Traveller', reviews: personal.reviews });
+      }
+    } catch {}
+  }));
+  return results;
+}
+
 async function postComment(stopId, text) {
   if (!_db || !_uid) return;
   const user = firebase.auth().currentUser;
