@@ -3498,6 +3498,102 @@ function renderNotesView(container) {
   renderList();
   document.getElementById('notes-search')?.addEventListener('input', e => renderList(e.target.value));
   document.getElementById('notes-add-btn')?.addEventListener('click', () => openNoteSheet(null, () => renderNotesView(container)));
+
+  // Packing list section
+  const packingSection = document.createElement('div');
+  packingSection.className = 'packing-section';
+
+  const packingList = state.packingList || [];
+  const packed = packingList.filter(i => i.packed).length;
+  const packingCollapsed = localStorage.getItem('annecy_packing_collapsed') === '1';
+
+  const packingHeader = document.createElement('div');
+  packingHeader.className = 'packing-header';
+  packingHeader.innerHTML = `
+    <button class="packing-collapse-btn" id="packing-collapse-btn">
+      <i class="ph ph-${packingCollapsed ? 'caret-right' : 'caret-down'}"></i>
+      <i class="ph ph-bag-simple"></i> Packing list
+      <span class="packing-progress">${packed}/${packingList.length}</span>
+    </button>
+    <button class="packing-add-btn" id="packing-add-btn" title="Add item"><i class="ph ph-plus"></i></button>`;
+  packingSection.appendChild(packingHeader);
+
+  const packingBody = document.createElement('div');
+  packingBody.id = 'packing-body';
+  packingBody.style.display = packingCollapsed ? 'none' : '';
+  packingSection.appendChild(packingBody);
+  wrap.insertBefore(packingSection, wrap.firstChild);
+
+  const renderPackingList = () => {
+    packingBody.innerHTML = '';
+    const items = state.packingList || [];
+    if (!items.length) {
+      packingBody.innerHTML = '<div style="font-size:13px;color:var(--text3);padding:4px 2px">No items yet — tap + to add.</div>';
+      return;
+    }
+    // Group by bag
+    const bags = {};
+    items.forEach(item => { const b = item.bag || 'General'; if (!bags[b]) bags[b] = []; bags[b].push(item); });
+    Object.entries(bags).forEach(([bag, bagItems]) => {
+      const group = document.createElement('div');
+      group.className = 'packing-bag-group';
+      group.innerHTML = `<div class="packing-bag-label">${bag}</div>`;
+      bagItems.forEach(item => {
+        const row = document.createElement('div');
+        row.className = 'packing-item' + (item.packed ? ' packing-item--packed' : '');
+        row.innerHTML = `
+          <button class="packing-check${item.packed ? ' packing-check--packed' : ''}" data-id="${item.id}">
+            ${item.packed ? '<i class="ph ph-check-bold"></i>' : ''}
+          </button>
+          <span class="packing-item-name">${item.name}</span>
+          <button class="packing-item-del" data-id="${item.id}"><i class="ph ph-trash"></i></button>`;
+        group.appendChild(row);
+      });
+      packingBody.appendChild(group);
+    });
+
+    packingBody.querySelectorAll('.packing-check').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.dataset.id;
+        const idx = (state.packingList||[]).findIndex(i => i.id === id);
+        if (idx < 0) return;
+        state.packingList[idx].packed = !state.packingList[idx].packed;
+        save(); renderPackingList();
+        document.querySelector('.packing-progress').textContent =
+          `${(state.packingList||[]).filter(i=>i.packed).length}/${(state.packingList||[]).length}`;
+      });
+    });
+    packingBody.querySelectorAll('.packing-item-del').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.dataset.id;
+        state.packingList = (state.packingList||[]).filter(i => i.id !== id);
+        save(); renderPackingList();
+        document.querySelector('.packing-progress').textContent =
+          `${(state.packingList||[]).filter(i=>i.packed).length}/${(state.packingList||[]).length}`;
+      });
+    });
+  };
+
+  renderPackingList();
+
+  document.getElementById('packing-collapse-btn')?.addEventListener('click', () => {
+    const isCollapsed = packingBody.style.display === 'none';
+    packingBody.style.display = isCollapsed ? '' : 'none';
+    localStorage.setItem('annecy_packing_collapsed', isCollapsed ? '0' : '1');
+    const icon = packingHeader.querySelector('.ph-caret-right, .ph-caret-down');
+    if (icon) { icon.className = isCollapsed ? 'ph ph-caret-down' : 'ph ph-caret-right'; }
+  });
+
+  document.getElementById('packing-add-btn')?.addEventListener('click', () => {
+    const name = prompt('Item name:');
+    if (!name?.trim()) return;
+    const bag = prompt('Bag/category (e.g. Clothes, Tech, Toiletries):', 'General') || 'General';
+    if (!state.packingList) state.packingList = [];
+    state.packingList.push({ id: Date.now().toString(36), name: name.trim(), bag: bag.trim(), packed: false });
+    save(); renderPackingList();
+    document.querySelector('.packing-progress').textContent =
+      `${(state.packingList||[]).filter(i=>i.packed).length}/${(state.packingList||[]).length}`;
+  });
 }
 
 function openNoteSheet(noteId, onDone) {
@@ -4990,6 +5086,27 @@ function _renderPreTripCover(container) {
   container.appendChild(_buildTripSummaryEl());
 }
 
+function _buildNowPanel() {
+  const ts = getTripState();
+  if (!ts) return null;
+  const panel = document.createElement('div');
+  panel.className = 'now-panel';
+  const labelMap = { at_stop: '📍 Now at', travelling: '🚗 Heading to', done: '✅ Today done' };
+  const label = labelMap[ts.state] || 'Now';
+  const stopName = getStopName(ts.stop);
+  const nextHtml = ts.nextStop
+    ? `<div class="now-panel-next">Next: <strong>${getStopName(ts.nextStop)}</strong></div>`
+    : '';
+  panel.innerHTML = `
+    <div class="now-panel-label">${label}</div>
+    <div class="now-panel-current">
+      <span class="now-panel-stop-name">${stopName}</span>
+      <button class="now-panel-nav-btn" onclick="openStopSheet('${ts.stop.id}')"><i class="ph ph-info"></i> Details</button>
+    </div>
+    ${nextHtml}`;
+  return panel;
+}
+
 function _renderDuringTripCover(container) {
   const today       = localDateStr();
   const elapsed     = Math.max(1, Math.round((new Date(today) - new Date('2026-06-17')) / 86400000) + 1);
@@ -4998,6 +5115,10 @@ function _renderDuringTripCover(container) {
   const totalStops  = _allTripStops().length;
   const km          = _kmDriven();
   const distStr     = state.useMetric !== false ? `${Math.round(km)} km` : `${Math.round(km * 0.621371)} mi`;
+
+  // Now panel
+  const nowPanel = _buildNowPanel();
+  if (nowPanel) container.appendChild(nowPanel);
 
   // Now panel
   const nowPanel = _buildNowPanel();
@@ -7419,6 +7540,33 @@ function openReviewSheet(stopId) {
 }
 window.openReviewSheet = openReviewSheet;
 
+/* ── Magazine card renderer ──────────────────────────────────────────── */
+function _renderMagazineCards(container, items) {
+  // items: [{stop, rev, score, authorName?}]
+  const wrap = document.createElement('div');
+  wrap.className = 'scrapbook-grid';
+  items.forEach(({ stop, rev, score, authorName }) => {
+    const card = document.createElement('div');
+    card.className = 'scrapbook-card';
+    const photo = rev.photos?.[0] || null;
+    const stars = score ? '★'.repeat(Math.round(score)) + '☆'.repeat(5-Math.round(score)) : '';
+    const nameHtml = authorName ? `<div class="scrapbook-author">${authorName}</div>` : '';
+    card.innerHTML = `
+      ${photo ? `<img class="scrapbook-photo" src="${photo}" alt="">` : `<div class="scrapbook-no-photo">${stopTypeIcon(stop)}</div>`}
+      <div class="scrapbook-card-body">
+        <div class="scrapbook-stop-name">${getStopName(stop)}</div>
+        ${score ? `<div class="scrapbook-stars">${stars} <span class="scrapbook-score">${score.toFixed(1)}</span></div>` : ''}
+        ${rev.heading ? `<div class="scrapbook-heading">"${rev.heading}"</div>` : ''}
+        ${rev.body ? `<div class="scrapbook-body">${rev.body.slice(0,120)}${rev.body.length>120?'…':''}</div>` : ''}
+        ${rev.pros?.length ? `<div class="scrapbook-pros">${rev.pros.map(p=>`<span>+ ${p}</span>`).join('')}</div>` : ''}
+        ${nameHtml}
+      </div>`;
+    card.addEventListener('click', () => openReviewSheet(stop.id));
+    wrap.appendChild(card);
+  });
+  container.appendChild(wrap);
+}
+
 /* ── Scrapbook section for cover page ────────────────────────────────── */
 function _buildScrapbookEl() {
   const reviewed = Object.entries(state.reviews || {})
@@ -7551,6 +7699,70 @@ function openStopSheet(stopId) {
   document.body.appendChild(overlay);
   document.body.appendChild(sheet);
   requestAnimationFrame(() => { sheet.classList.add('open'); overlay.classList.add('open'); });
+
+  // Comments section
+  const sheetBody = sheet.querySelector('.stop-sheet-body');
+  const commentsSection = document.createElement('div');
+  commentsSection.className = 'comments-section';
+  commentsSection.innerHTML = `
+    <div class="comments-label"><i class="ph ph-chat-circle"></i> Comments</div>
+    <div class="comments-list" id="comments-list-${stopId}"><div class="comments-empty">Loading…</div></div>
+    <div class="comment-input-row">
+      <input class="comment-input" id="comment-input-${stopId}" type="text" placeholder="Add a comment…" autocomplete="off">
+      <button class="comment-send-btn" id="comment-send-${stopId}"><i class="ph ph-paper-plane-right"></i></button>
+    </div>`;
+  sheetBody.appendChild(commentsSection);
+
+  let _unlistenComments = null;
+  if (typeof listenComments === 'function') {
+    _unlistenComments = listenComments(stopId, (comments) => {
+      renderCommentsList(stopId, comments);
+    });
+  }
+
+  const sendComment = async () => {
+    const input = document.getElementById(`comment-input-${stopId}`);
+    const text = input?.value?.trim();
+    if (!text) return;
+    input.value = '';
+    if (typeof postComment === 'function') await postComment(stopId, text);
+  };
+
+  document.getElementById(`comment-send-${stopId}`)?.addEventListener('click', sendComment);
+  document.getElementById(`comment-input-${stopId}`)?.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); sendComment(); }
+  });
+
+  // Unlisten on sheet close
+  const origClose = sheet.querySelector('.stop-sheet-close');
+  const cleanupComments = () => { if (_unlistenComments) { _unlistenComments(); _unlistenComments = null; } };
+  origClose.addEventListener('click', cleanupComments);
+  overlay.addEventListener('click', cleanupComments);
+}
+
+function renderCommentsList(stopId, comments) {
+  const list = document.getElementById(`comments-list-${stopId}`);
+  if (!list) return;
+  const entries = Object.values(comments || {}).sort((a, b) => (a.createdAt||0) - (b.createdAt||0));
+  if (!entries.length) {
+    list.innerHTML = '<div class="comments-empty">No comments yet.</div>';
+    return;
+  }
+  list.innerHTML = '';
+  entries.forEach(c => {
+    const isMe = c.uid === (typeof state !== 'undefined' ? state.userId : null);
+    const item = document.createElement('div');
+    item.className = 'comment-item' + (isMe ? ' comment-item--mine' : '');
+    const initial = (c.name || '?')[0].toUpperCase();
+    item.innerHTML = `
+      <div class="comment-author-chip">${initial}</div>
+      <div class="comment-bubble">
+        <div class="comment-author">${c.name || 'Traveller'}</div>
+        <div class="comment-text">${c.text}</div>
+      </div>`;
+    list.appendChild(item);
+  });
+  list.scrollTop = list.scrollHeight;
 }
 
 function _renderCommentsList(stopId, comments) {

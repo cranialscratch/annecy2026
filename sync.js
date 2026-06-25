@@ -245,6 +245,50 @@ function syncSave() {
     .catch(() => {});
 }
 
+/* ── Member reviews ───────────────────────────────────────────────────── */
+async function fetchMemberReviews() {
+  if (!_db) return [];
+  const members = await getMembers();
+  const results = [];
+  await Promise.all(Object.entries(members).map(async ([uid, m]) => {
+    if (!m.active || uid === _uid) return;
+    try {
+      const snap = await _db.ref('users/' + uid + '/personal').get();
+      const personal = snap.exists() ? snap.val() : {};
+      if (personal.reviews && Object.keys(personal.reviews).length) {
+        results.push({ uid, name: m.name || m.email || 'Traveller', reviews: personal.reviews });
+      }
+    } catch {}
+  }));
+  return results;
+}
+
+/* ── Stop comments ────────────────────────────────────────────────────── */
+async function postComment(stopId, text) {
+  if (!_db || !_uid) return;
+  const user = firebase.auth().currentUser;
+  const key = _db.ref('trips/' + TRIP_ID + '/comments/' + stopId).push().key;
+  await _db.ref('trips/' + TRIP_ID + '/comments/' + stopId + '/' + key).set({
+    uid: _uid,
+    name: user?.displayName || user?.email || 'Traveller',
+    text,
+    createdAt: Date.now(),
+  });
+}
+
+async function fetchComments(stopId) {
+  if (!_db) return {};
+  const snap = await _db.ref('trips/' + TRIP_ID + '/comments/' + stopId).get();
+  return snap.exists() ? snap.val() : {};
+}
+
+function listenComments(stopId, cb) {
+  if (!_db) return () => {};
+  const ref = _db.ref('trips/' + TRIP_ID + '/comments/' + stopId);
+  ref.on('value', snap => cb(snap.exists() ? snap.val() : {}));
+  return () => ref.off('value');
+}
+
 /* ── Sync status dot ──────────────────────────────────────────────────── */
 function setSyncStatus(status) {
   const dot = document.getElementById('sync-dot');
