@@ -1,5 +1,5 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v301';;
+const APP_VERSION = 'v302';;
 
 const CHANGELOG = [
   { version: 'v279', title: 'Post-trip magazine scrapbook', items: [
@@ -2388,10 +2388,12 @@ function getCurrentStop(day) {
     const s = stops.find(s => s.id === state.ownerCurrentStopId);
     if (s) return s;
   }
-  // 3. Time-based: last stop whose scheduled time has passed
+  // 3. Time-based: last stop whose scheduled time has passed.
+  // Return null if nothing has passed yet (early morning / before the day starts)
+  // so we don't bleed into the next day's first stop after midnight.
   const now = nowMinutes();
   const passed = stops.filter(s => (timeToMinutes(getStopTime(s)) ?? Infinity) <= now);
-  return passed[passed.length - 1] || stops[0];
+  return passed.length ? passed[passed.length - 1] : null;
 }
 
 
@@ -7280,11 +7282,20 @@ function openReviewSheet(stopId) {
   sheet.querySelectorAll('.review-q-stars').forEach(starsEl => {
     const key = starsEl.dataset.qkey;
     starsEl.addEventListener('click', e => {
-      const star = e.target.closest('.review-star');
+      // Use [data-val] so SVG children injected by Phosphor don't break targeting
+      const star = e.target.closest('[data-val]');
       if (!star) return;
       const val = parseInt(star.dataset.val);
+      if (!val) return;
       _questions[key] = val;
-      starsEl.innerHTML = _starsHtml(val, true, 'q__' + key);
+      // Toggle classes in-place — avoids innerHTML replacement issues on iOS
+      starsEl.querySelectorAll('.review-star').forEach((s, idx) => {
+        const filled = (idx + 1) <= val;
+        s.classList.toggle('ph-star-fill', filled);
+        s.classList.toggle('ph-star', !filled);
+        s.classList.toggle('review-star--filled', filled);
+        s.classList.toggle('review-star--empty', !filled);
+      });
       _refreshOverall();
     });
   });
