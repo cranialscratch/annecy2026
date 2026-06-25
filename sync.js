@@ -28,7 +28,7 @@ const SHARED_KEYS = ['overrides','crossDayMoves','locOverrides','durOverrides',
 /* Keys that belong to personal state (per-user only) */
 const PERSONAL_KEYS = ['checked','skipped','bucketList',
                        'personalStops','personalTickets','personalPinned','notifLeadMins',
-                       'notes','bookingInfo','reviews','packingList'];
+                       'notes','bookingInfo','reviews'];
 
 let _db  = null;
 let _auth = null;
@@ -103,43 +103,6 @@ async function getMembers() {
   if (!_db) return {};
   const snap = await _db.ref('trips/' + TRIP_ID + '/members').get();
   return snap.exists() ? snap.val() : {};
-}
-
-async function fetchMemberReviews() {
-  if (!_db) return [];
-  const members = await getMembers();
-  const results = [];
-  await Promise.all(Object.entries(members).map(async ([uid, m]) => {
-    if (!m.active || uid === _uid) return;
-    try {
-      const snap = await _db.ref(USER_PATH(uid)).get();
-      const personal = snap.exists() ? snap.val() : {};
-      if (personal.reviews && Object.keys(personal.reviews).length) {
-        results.push({ uid, name: m.name || m.email || 'Traveller', reviews: personal.reviews });
-      }
-    } catch {}
-  }));
-  return results;
-}
-
-async function postComment(stopId, text) {
-  if (!_db || !_uid) return;
-  const user = firebase.auth().currentUser;
-  const ref = _db.ref('trips/' + TRIP_ID + '/comments/' + stopId);
-  const key = ref.push().key;
-  await _db.ref('trips/' + TRIP_ID + '/comments/' + stopId + '/' + key).set({
-    uid: _uid,
-    name: user?.displayName || user?.email || 'Traveller',
-    text,
-    createdAt: Date.now(),
-  });
-}
-
-function listenComments(stopId, cb) {
-  if (!_db) return () => {};
-  const ref = _db.ref('trips/' + TRIP_ID + '/comments/' + stopId);
-  ref.on('value', snap => cb(snap.exists() ? snap.val() : {}));
-  return () => ref.off('value');
 }
 
 async function setMemberActive(uid, active) {
@@ -239,54 +202,9 @@ function syncSave() {
     notes:           state.notes           || [],
     bookingInfo:     state.bookingInfo     || {},
     reviews:         state.reviews         || {},
-    packingList:     state.packingList     || [],
   };
   _db.ref(USER_PATH(_uid)).set(personalPayload)
     .catch(() => {});
-}
-
-/* ── Member reviews ───────────────────────────────────────────────────── */
-async function fetchMemberReviews() {
-  if (!_db) return [];
-  const members = await getMembers();
-  const results = [];
-  await Promise.all(Object.entries(members).map(async ([uid, m]) => {
-    if (!m.active || uid === _uid) return;
-    try {
-      const snap = await _db.ref('users/' + uid + '/personal').get();
-      const personal = snap.exists() ? snap.val() : {};
-      if (personal.reviews && Object.keys(personal.reviews).length) {
-        results.push({ uid, name: m.name || m.email || 'Traveller', reviews: personal.reviews });
-      }
-    } catch {}
-  }));
-  return results;
-}
-
-/* ── Stop comments ────────────────────────────────────────────────────── */
-async function postComment(stopId, text) {
-  if (!_db || !_uid) return;
-  const user = firebase.auth().currentUser;
-  const key = _db.ref('trips/' + TRIP_ID + '/comments/' + stopId).push().key;
-  await _db.ref('trips/' + TRIP_ID + '/comments/' + stopId + '/' + key).set({
-    uid: _uid,
-    name: user?.displayName || user?.email || 'Traveller',
-    text,
-    createdAt: Date.now(),
-  });
-}
-
-async function fetchComments(stopId) {
-  if (!_db) return {};
-  const snap = await _db.ref('trips/' + TRIP_ID + '/comments/' + stopId).get();
-  return snap.exists() ? snap.val() : {};
-}
-
-function listenComments(stopId, cb) {
-  if (!_db) return () => {};
-  const ref = _db.ref('trips/' + TRIP_ID + '/comments/' + stopId);
-  ref.on('value', snap => cb(snap.exists() ? snap.val() : {}));
-  return () => ref.off('value');
 }
 
 /* ── Sync status dot ──────────────────────────────────────────────────── */

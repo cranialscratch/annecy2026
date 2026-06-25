@@ -73,38 +73,28 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* ── Offline banner ── */
-#offline-banner {
+/* ── Offline & update banners ── */
+#offline-banner, #sw-update-banner {
   position: fixed; top: 0; left: 0; right: 0; z-index: 9999;
   display: flex; align-items: center; justify-content: center; gap: 8px;
   padding: 10px 16px;
   font-size: 14px; font-weight: 600;
+}
+#offline-banner {
   background: rgba(255,159,10,0.92);
   color: #000;
   backdrop-filter: blur(12px);
 }
-
-/* ── Bottom-nav version chip ── */
-.nav-version-chip {
-  background: none; border: none; cursor: pointer;
-  padding: 4px 10px;
-  border-radius: 100px;
-  font-size: 11px; font-weight: 700; letter-spacing: .3px;
-  color: rgba(255,255,255,0.35);
-  -webkit-tap-highlight-color: transparent;
-  transition: color .15s, background .15s;
-  align-self: center;
-  white-space: nowrap;
+#sw-update-banner {
+  background: rgba(10,132,255,0.92);
+  color: #fff;
+  backdrop-filter: blur(12px);
+  justify-content: space-between;
 }
-body.light .nav-version-chip { color: rgba(0,0,0,0.3); }
-.nav-version-chip--update {
-  color: #fff !important;
-  background: rgba(10,132,255,0.85) !important;
-  animation: pulse-update 1.8s ease-in-out infinite;
-}
-@keyframes pulse-update {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(10,132,255,0.5); }
-  50%       { box-shadow: 0 0 0 6px rgba(10,132,255,0); }
+#sw-update-banner button {
+  padding: 5px 14px; border-radius: 20px;
+  background: rgba(255,255,255,0.25); border: 1px solid rgba(255,255,255,0.4);
+  color: #fff; font-size: 13px; font-weight: 700; cursor: pointer;
 }
 
 /* Ambient gradient background */
@@ -4008,120 +3998,3 @@ body.light .mag-byline { border-top-color: rgba(0,0,0,0.06); }
   cursor: pointer; -webkit-tap-highlight-color: transparent;
 }
 body.light .mag-unreviewed-chip { background: rgba(202,138,4,0.08); border-color: rgba(202,138,4,0.2); color: #b45309; }
-
-/* ─── Now panel (cover page) ─────────────────────────────────────────── */
-.now-panel {
-  background: rgba(var(--accent-rgb,59,130,246),0.1);
-  border: 1px solid rgba(var(--accent-rgb,59,130,246),0.22);
-  border-radius: 16px; padding: 14px 16px;
-  display: flex; flex-direction: column; gap: 6px; margin-bottom: 6px;
-}
-.now-panel-label {
-  font-size: 11px; font-weight: 700; text-transform: uppercase;
-  letter-spacing: .06em; color: var(--accent);
-}
-.now-panel-current { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.now-panel-stop-name { font-size: 18px; font-weight: 800; color: var(--text); letter-spacing: -.3px; }
-.now-panel-nav-btn {
-  padding: 5px 12px; border-radius: 20px; background: var(--accent);
-  border: none; color: #fff; font-size: 13px; font-weight: 600;
-  cursor: pointer; display: flex; align-items: center; gap: 4px; flex-shrink: 0;
-}
-.now-panel-next { font-size: 14px; color: var(--text2); display: flex; align-items: center; gap: 6px; }
-.now-panel-next strong { color: var(--text); }
-
-/* ─── Scrapbook combined toggle ──────────────────────────────────────── */
-.scrapbook-section-hdr {
-  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px;
-}
-.scrapbook-toggle-row { display: flex; gap: 4px; }
-.scrapbook-toggle-btn {
-  padding: 4px 12px; border-radius: 20px;
-  border: 1px solid rgba(255,255,255,0.15);
-  background: rgba(255,255,255,0.06); color: var(--text2);
-  font-size: 12px; font-weight: 600; cursor: pointer; transition: all .15s;
-}
-body.light .scrapbook-toggle-btn { border-color: rgba(0,0,0,0.12); background: rgba(0,0,0,0.04); }
-.scrapbook-toggle-btn--active { background: var(--accent) !important; color: #fff !important; border-color: var(--accent) !important; }
-.scrapbook-loading { padding: 24px; text-align: center; color: var(--text3); font-size: 20px; }
-
-/* ─── Stop comments ──────────────────────────────────────────────────── */
-.comments-section { padding: 16px 0 4px; display: flex; flex-direction: column; gap: 10px; border-top: 1px solid rgba(255,255,255,0.07); margin-top: 8px; }
-body.light .comments-section { border-top-color: rgba(0,0,0,0.07); }
-.comments-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--text3); display: flex; align-items: center; gap: 5px; }
-.comments-list { display: flex; flex-direction: column; gap: 8px; max-height: 240px; overflow-y: auto; }
-.comments-empty, .comments-loading { font-size: 13px; color: var(--text3); text-align: center; padding: 12px 0; }
-.comment-item { display: flex; gap: 8px; align-items: flex-start; }
-.comment-item--mine { flex-direction: row-reverse; }
-.comment-author-chip {
-  width: 28px; height: 28px; border-radius: 50%; background: var(--accent);
-  color: #fff; display: flex; align-items: center; justify-content: center;
-  font-size: 12px; font-weight: 700; flex-shrink: 0;
-}
-.comment-item--mine .comment-author-chip { background: #64748b; }
-.comment-bubble {
-  background: rgba(255,255,255,0.07); border-radius: 12px;
-  padding: 8px 12px; max-width: calc(100% - 40px);
-}
-body.light .comment-bubble { background: rgba(0,0,0,0.05); }
-.comment-item--mine .comment-bubble { background: rgba(var(--accent-rgb,59,130,246),0.15); }
-.comment-author { font-size: 11px; font-weight: 700; color: var(--text3); margin-bottom: 2px; }
-.comment-item--mine .comment-author { text-align: right; }
-.comment-text { font-size: 14px; color: var(--text); line-height: 1.4; }
-.comment-input-row { display: flex; gap: 8px; }
-.comment-input {
-  flex: 1; background: rgba(255,255,255,0.07);
-  border: 1px solid rgba(255,255,255,0.12); border-radius: 12px;
-  padding: 10px 14px; font-size: 14px; color: var(--text); font-family: inherit;
-}
-body.light .comment-input { background: rgba(0,0,0,0.04); border-color: rgba(0,0,0,0.12); }
-.comment-input:focus { outline: none; border-color: var(--accent); }
-.comment-send-btn {
-  width: 42px; height: 42px; border-radius: 12px; background: var(--accent);
-  border: none; color: #fff; font-size: 18px; cursor: pointer;
-  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
-}
-
-/* ─── Packing list ───────────────────────────────────────────────────── */
-.packing-section { margin-bottom: 16px; }
-.packing-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
-.packing-collapse-btn {
-  background: none; border: none; font-size: 15px; font-weight: 700;
-  color: var(--text); cursor: pointer; display: flex; align-items: center; gap: 6px; padding: 0;
-}
-.packing-progress {
-  font-size: 12px; font-weight: 600; color: var(--text3);
-  background: rgba(255,255,255,0.08); border-radius: 10px; padding: 2px 7px;
-}
-body.light .packing-progress { background: rgba(0,0,0,0.06); }
-.packing-add-btn {
-  width: 32px; height: 32px; border-radius: 50%; background: var(--accent);
-  border: none; color: #fff; font-size: 18px; cursor: pointer;
-  display: flex; align-items: center; justify-content: center;
-}
-.packing-body.hidden { display: none; }
-.packing-bag-group { margin-bottom: 10px; }
-.packing-bag-label {
-  font-size: 11px; font-weight: 700; text-transform: uppercase;
-  letter-spacing: .05em; color: var(--text3); margin-bottom: 4px; padding: 0 2px;
-}
-.packing-item {
-  display: flex; align-items: center; gap: 10px;
-  padding: 8px 10px; border-radius: 12px;
-  background: rgba(255,255,255,0.04); margin-bottom: 3px;
-  transition: opacity .15s;
-}
-body.light .packing-item { background: rgba(0,0,0,0.03); }
-.packing-item--packed { opacity: .5; }
-.packing-item--packed .packing-item-name { text-decoration: line-through; }
-.packing-check {
-  width: 22px; height: 22px; border-radius: 6px;
-  border: 2px solid rgba(255,255,255,0.25); background: none;
-  cursor: pointer; display: flex; align-items: center; justify-content: center;
-  color: transparent; transition: all .15s; flex-shrink: 0; font-size: 13px;
-}
-body.light .packing-check { border-color: rgba(0,0,0,0.2); }
-.packing-check--packed { background: var(--accent); border-color: var(--accent); color: #fff; }
-.packing-item-name { flex: 1; font-size: 15px; color: var(--text); }
-.packing-item-del { background: none; border: none; color: var(--text3); font-size: 16px; cursor: pointer; padding: 4px; }
-.packing-empty { font-size: 13px; color: var(--text3); padding: 12px 4px; }

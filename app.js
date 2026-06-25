@@ -1,14 +1,7 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v287';
+const APP_VERSION = 'v288';;
 
 const CHANGELOG = [
-  { version: 'v280', title: 'Now panel, combined scrapbook, comments, packing list', items: [
-    { type: 'feat', text: 'Now panel on cover page — shows current stop and next stop with travel time during the trip' },
-    { type: 'feat', text: 'Combined scrapbook — Mine / Everyone\'s toggle fetches all active members\' reviews and merges them into the magazine view with bylines' },
-    { type: 'feat', text: 'Stop comments — conversation thread on every stop sheet, real-time Firebase listener, send with Enter or tap' },
-    { type: 'feat', text: 'Packing list in Notes — grouped by bag, check off items, add via sheet with bag selector' },
-    { type: 'refactor', text: 'Magazine card building extracted to _buildMagazineCard() shared by during-trip and post-trip views' },
-  ]},
   { version: 'v279', title: 'Post-trip magazine scrapbook', items: [
     { type: 'feat', text: 'After the trip ends, the cover page becomes a magazine-style scrapbook — full-bleed hero photo, stop name, star rating, pull-quote headline, full review text, pros/cons, reviewer byline' },
     { type: 'feat', text: 'Trip header: hero photo from best-rated stop, title, dates, stats row (distance, places, avg rating, reviewed count)' },
@@ -317,7 +310,6 @@ const state = {
   notes:              [],   // personal notes [{id,title,content,links,createdAt}]
   bookingInfo:        {},   // stopId → {ref,link,notes}
   reviews:            {},   // stopId → {heading,body,pros[],cons[],photos[],questions:{},createdAt}
-  packingList:        [],   // [{id,name,bag,packed}]
 };
 
 /* ── Helpers ───────────────────────────────────────────────────────── */
@@ -2090,7 +2082,6 @@ function localSave() {
     localStorage.setItem('annecy_notes',             JSON.stringify(state.notes           || []));
     localStorage.setItem('annecy_booking_info',      JSON.stringify(state.bookingInfo      || {}));
     localStorage.setItem('annecy_reviews',            JSON.stringify(state.reviews          || {}));
-    localStorage.setItem('annecy_packing',            JSON.stringify(state.packingList      || []));
   } catch {}
 }
 function save() {
@@ -2144,8 +2135,6 @@ function load() {
     if (bi) state.bookingInfo = JSON.parse(bi);
     const rv = localStorage.getItem('annecy_reviews');
     if (rv) state.reviews = JSON.parse(rv);
-    const pk = localStorage.getItem('annecy_packing');
-    if (pk) state.packingList = JSON.parse(pk);
   } catch {}
   try {
     if (localStorage.getItem('annecy_theme') === 'light') document.body.classList.add('light');
@@ -3290,151 +3279,10 @@ function _seedDefaultNotes() {
   if (added) state.notes.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 }
 
-function _buildPackingSection(onUpdate) {
-  const section = document.createElement('div');
-  section.className = 'packing-section';
-
-  const list = state.packingList || [];
-  const packed = list.filter(i => i.packed).length;
-  const bags = [...new Set(list.map(i => i.bag || 'General'))];
-
-  const open = localStorage.getItem('annecy_packing_open') !== '0';
-
-  section.innerHTML = `
-    <div class="packing-header">
-      <button class="packing-collapse-btn" id="packing-collapse">
-        <i class="ph ph-backpack"></i> Packing
-        <span class="packing-progress">${packed}/${list.length}</span>
-      </button>
-      <button class="packing-add-btn" id="packing-add" title="Add item"><i class="ph ph-plus"></i></button>
-    </div>
-    <div class="packing-body${open ? '' : ' hidden'}" id="packing-body"></div>`;
-
-  const body = section.querySelector('#packing-body');
-
-  const renderBody = () => {
-    body.innerHTML = '';
-    const currentList = state.packingList || [];
-    if (!currentList.length) {
-      body.innerHTML = '<div class="packing-empty">No items yet — tap + to add your first</div>';
-      return;
-    }
-    const bagGroups = [...new Set(currentList.map(i => i.bag || 'General'))];
-    bagGroups.forEach(bag => {
-      const items = currentList.filter(i => (i.bag || 'General') === bag);
-      const grp = document.createElement('div');
-      grp.className = 'packing-bag-group';
-      grp.innerHTML = `<div class="packing-bag-label">${bag}</div>`;
-      items.forEach(item => {
-        const row = document.createElement('div');
-        row.className = `packing-item${item.packed ? ' packing-item--packed' : ''}`;
-        row.innerHTML = `
-          <button class="packing-check${item.packed ? ' packing-check--packed' : ''}" data-id="${item.id}">
-            ${item.packed ? '<i class="ph ph-check"></i>' : ''}
-          </button>
-          <span class="packing-item-name">${item.name}</span>
-          <button class="packing-item-del" data-id="${item.id}"><i class="ph ph-x"></i></button>`;
-        row.querySelector('.packing-check').addEventListener('click', () => {
-          const idx = state.packingList.findIndex(x => x.id === item.id);
-          if (idx >= 0) { state.packingList[idx].packed = !state.packingList[idx].packed; save(); renderBody(); }
-        });
-        row.querySelector('.packing-item-del').addEventListener('click', () => {
-          state.packingList = state.packingList.filter(x => x.id !== item.id);
-          save(); renderBody();
-          section.querySelector('.packing-progress').textContent =
-            `${state.packingList.filter(i=>i.packed).length}/${state.packingList.length}`;
-        });
-        grp.appendChild(row);
-      });
-      body.appendChild(grp);
-    });
-  };
-
-  renderBody();
-
-  section.querySelector('#packing-collapse').addEventListener('click', () => {
-    const isOpen = !body.classList.contains('hidden');
-    body.classList.toggle('hidden', isOpen);
-    localStorage.setItem('annecy_packing_open', isOpen ? '0' : '1');
-  });
-
-  section.querySelector('#packing-add').addEventListener('click', () => _openPackingAddSheet(onUpdate));
-
-  return section;
-}
-
-function _openPackingAddSheet(onUpdate) {
-  document.getElementById('packing-add-sheet')?.remove();
-  document.getElementById('packing-add-overlay')?.remove();
-  const bags = [...new Set((state.packingList || []).map(i => i.bag || 'General'))];
-  const bagOpts = bags.map(b => `<option value="${b}">${b}</option>`).join('');
-
-  const overlay = document.createElement('div');
-  overlay.id = 'packing-add-overlay';
-  overlay.className = 'stop-sheet-overlay';
-
-  const sheet = document.createElement('div');
-  sheet.id = 'packing-add-sheet';
-  sheet.className = 'stop-sheet';
-  sheet.innerHTML = `
-    <div class="stop-sheet-handle"></div>
-    <div class="stop-sheet-header">
-      <div class="stop-sheet-title"><i class="ph ph-backpack"></i> Add packing item</div>
-      <button class="stop-sheet-close" id="packing-add-close"><i class="ph ph-x"></i></button>
-    </div>
-    <div class="stop-sheet-body" style="padding-bottom:40px;display:flex;flex-direction:column;gap:12px">
-      <input class="note-edit-input" id="packing-item-name" type="text" placeholder="Item name…" autofocus>
-      <div style="display:flex;gap:8px;align-items:center">
-        <select class="note-edit-input" id="packing-item-bag" style="flex:1">
-          ${bagOpts}
-          <option value="__new__">+ New bag…</option>
-        </select>
-        <input class="note-edit-input hidden" id="packing-item-newbag" type="text" placeholder="Bag name…" style="flex:1">
-      </div>
-      <button class="pill-btn primary" id="packing-item-save"><i class="ph ph-plus"></i> Add item</button>
-    </div>`;
-
-  document.body.appendChild(overlay);
-  document.body.appendChild(sheet);
-  requestAnimationFrame(() => { sheet.classList.add('open'); overlay.classList.add('open'); });
-
-  const close = () => {
-    sheet.classList.remove('open'); overlay.classList.remove('open');
-    sheet.addEventListener('transitionend', () => sheet.remove(), { once: true });
-    overlay.addEventListener('transitionend', () => overlay.remove(), { once: true });
-  };
-
-  sheet.querySelector('#packing-add-close').addEventListener('click', close);
-  overlay.addEventListener('click', close);
-
-  sheet.querySelector('#packing-item-bag').addEventListener('change', e => {
-    sheet.querySelector('#packing-item-newbag').classList.toggle('hidden', e.target.value !== '__new__');
-  });
-
-  sheet.querySelector('#packing-item-save').addEventListener('click', () => {
-    const name = sheet.querySelector('#packing-item-name').value.trim();
-    if (!name) return;
-    const bagSel = sheet.querySelector('#packing-item-bag').value;
-    const bag = bagSel === '__new__'
-      ? (sheet.querySelector('#packing-item-newbag').value.trim() || 'General')
-      : bagSel || 'General';
-    if (!state.packingList) state.packingList = [];
-    state.packingList.push({ id: 'pk_' + Date.now(), name, bag, packed: false });
-    save();
-    close();
-    if (onUpdate) onUpdate();
-  });
-
-  sheet.querySelector('#packing-item-name').focus();
-}
-
 function renderNotesView(container) {
   container.innerHTML = '';
   const wrap = document.createElement('div');
   wrap.className = 'notes-view';
-
-  // Packing list
-  wrap.appendChild(_buildPackingSection(() => renderNotesView(container)));
 
   const header = document.createElement('div');
   header.className = 'notes-header';
@@ -3498,102 +3346,6 @@ function renderNotesView(container) {
   renderList();
   document.getElementById('notes-search')?.addEventListener('input', e => renderList(e.target.value));
   document.getElementById('notes-add-btn')?.addEventListener('click', () => openNoteSheet(null, () => renderNotesView(container)));
-
-  // Packing list section
-  const packingSection = document.createElement('div');
-  packingSection.className = 'packing-section';
-
-  const packingList = state.packingList || [];
-  const packed = packingList.filter(i => i.packed).length;
-  const packingCollapsed = localStorage.getItem('annecy_packing_collapsed') === '1';
-
-  const packingHeader = document.createElement('div');
-  packingHeader.className = 'packing-header';
-  packingHeader.innerHTML = `
-    <button class="packing-collapse-btn" id="packing-collapse-btn">
-      <i class="ph ph-${packingCollapsed ? 'caret-right' : 'caret-down'}"></i>
-      <i class="ph ph-bag-simple"></i> Packing list
-      <span class="packing-progress">${packed}/${packingList.length}</span>
-    </button>
-    <button class="packing-add-btn" id="packing-add-btn" title="Add item"><i class="ph ph-plus"></i></button>`;
-  packingSection.appendChild(packingHeader);
-
-  const packingBody = document.createElement('div');
-  packingBody.id = 'packing-body';
-  packingBody.style.display = packingCollapsed ? 'none' : '';
-  packingSection.appendChild(packingBody);
-  wrap.insertBefore(packingSection, wrap.firstChild);
-
-  const renderPackingList = () => {
-    packingBody.innerHTML = '';
-    const items = state.packingList || [];
-    if (!items.length) {
-      packingBody.innerHTML = '<div style="font-size:13px;color:var(--text3);padding:4px 2px">No items yet — tap + to add.</div>';
-      return;
-    }
-    // Group by bag
-    const bags = {};
-    items.forEach(item => { const b = item.bag || 'General'; if (!bags[b]) bags[b] = []; bags[b].push(item); });
-    Object.entries(bags).forEach(([bag, bagItems]) => {
-      const group = document.createElement('div');
-      group.className = 'packing-bag-group';
-      group.innerHTML = `<div class="packing-bag-label">${bag}</div>`;
-      bagItems.forEach(item => {
-        const row = document.createElement('div');
-        row.className = 'packing-item' + (item.packed ? ' packing-item--packed' : '');
-        row.innerHTML = `
-          <button class="packing-check${item.packed ? ' packing-check--packed' : ''}" data-id="${item.id}">
-            ${item.packed ? '<i class="ph ph-check-bold"></i>' : ''}
-          </button>
-          <span class="packing-item-name">${item.name}</span>
-          <button class="packing-item-del" data-id="${item.id}"><i class="ph ph-trash"></i></button>`;
-        group.appendChild(row);
-      });
-      packingBody.appendChild(group);
-    });
-
-    packingBody.querySelectorAll('.packing-check').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const id = btn.dataset.id;
-        const idx = (state.packingList||[]).findIndex(i => i.id === id);
-        if (idx < 0) return;
-        state.packingList[idx].packed = !state.packingList[idx].packed;
-        save(); renderPackingList();
-        document.querySelector('.packing-progress').textContent =
-          `${(state.packingList||[]).filter(i=>i.packed).length}/${(state.packingList||[]).length}`;
-      });
-    });
-    packingBody.querySelectorAll('.packing-item-del').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const id = btn.dataset.id;
-        state.packingList = (state.packingList||[]).filter(i => i.id !== id);
-        save(); renderPackingList();
-        document.querySelector('.packing-progress').textContent =
-          `${(state.packingList||[]).filter(i=>i.packed).length}/${(state.packingList||[]).length}`;
-      });
-    });
-  };
-
-  renderPackingList();
-
-  document.getElementById('packing-collapse-btn')?.addEventListener('click', () => {
-    const isCollapsed = packingBody.style.display === 'none';
-    packingBody.style.display = isCollapsed ? '' : 'none';
-    localStorage.setItem('annecy_packing_collapsed', isCollapsed ? '0' : '1');
-    const icon = packingHeader.querySelector('.ph-caret-right, .ph-caret-down');
-    if (icon) { icon.className = isCollapsed ? 'ph ph-caret-down' : 'ph ph-caret-right'; }
-  });
-
-  document.getElementById('packing-add-btn')?.addEventListener('click', () => {
-    const name = prompt('Item name:');
-    if (!name?.trim()) return;
-    const bag = prompt('Bag/category (e.g. Clothes, Tech, Toiletries):', 'General') || 'General';
-    if (!state.packingList) state.packingList = [];
-    state.packingList.push({ id: Date.now().toString(36), name: name.trim(), bag: bag.trim(), packed: false });
-    save(); renderPackingList();
-    document.querySelector('.packing-progress').textContent =
-      `${(state.packingList||[]).filter(i=>i.packed).length}/${(state.packingList||[]).length}`;
-  });
 }
 
 function openNoteSheet(noteId, onDone) {
@@ -4987,7 +4739,22 @@ function renderCoverPage(container) {
 }
 
 function _renderPostTripCover(container) {
-  const allReviewed = _collectMyReviewedStops();
+  // Collect reviewed stops, ordered by day then stop position
+  const allReviewed = Object.entries(state.reviews || {})
+    .map(([stopId, rev]) => {
+      const stop = findStop(stopId);
+      if (!stop) return null;
+      let dayIdx = -1, stopIdx = -1;
+      TRIP_DATA.days.forEach((day, di) => {
+        if (day.isCountdown) return;
+        getDayStops(day).forEach((s, si) => { if (s.id === stopId) { dayIdx = di; stopIdx = si; } });
+      });
+      return { stop, rev, score: _reviewScore(rev), dayIdx, stopIdx };
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.dayIdx - b.dayIdx || a.stopIdx - b.stopIdx);
+
+  // Stats
   const km = _kmDriven();
   const distStr = state.useMetric !== false ? `${Math.round(km)} km` : `${Math.round(km * 0.621371)} mi`;
   const visited = _allTripStops().filter(({ s }) => state.checked[s.id]).length;
@@ -4998,6 +4765,7 @@ function _renderPostTripCover(container) {
   const heroBg = allReviewed.filter(r => r.score).sort((a, b) => b.score - a.score)[0]?.rev?.photos?.[0]
     || allReviewed.find(r => r.rev.photos?.[0])?.rev.photos?.[0] || null;
 
+  // Hero header
   const header = document.createElement('div');
   header.className = 'mag-header';
   header.innerHTML = `
@@ -5016,10 +4784,70 @@ function _renderPostTripCover(container) {
     </div>`;
   container.appendChild(header);
 
-  _appendReviewsSection(container);
+  if (!allReviewed.length) {
+    const empty = document.createElement('div');
+    empty.className = 'mag-empty';
+    empty.innerHTML = `<i class="ph ph-camera-slash"></i><p>No reviews yet — tap <i class="ph ph-star"></i> on any stop card to add yours.</p>`;
+    container.appendChild(empty);
+  } else {
+    const lbl = document.createElement('div');
+    lbl.className = 'cover-section-label';
+    lbl.textContent = 'Your journey, reviewed';
+    container.appendChild(lbl);
 
+    allReviewed.forEach(({ stop, rev, score, dayIdx }) => {
+      const day = TRIP_DATA.days[dayIdx];
+      const photos = rev.photos || [];
+      const dateStr = day ? formatDate(day.date) : '';
+      const dayName = day ? getDayLabel(day).replace(/<[^>]+>/g, '') : '';
+      const eyebrow = [dayName, dateStr].filter(Boolean).join(' · ');
+
+      const card = document.createElement('div');
+      card.className = 'mag-card';
+
+      const photosHtml = photos.length
+        ? `<div class="mag-photo-strip">${photos.map((src, i) =>
+            `<img class="mag-photo${i === 0 ? ' mag-photo--hero' : ''}" src="${src}" alt="">`
+          ).join('')}</div>`
+        : `<div class="mag-no-photo">${stopTypeIcon(stop)}</div>`;
+
+      const starsHtml = score ? [1,2,3,4,5].map(i =>
+        `<i class="ph ${i <= Math.round(score) ? 'ph-star-fill mag-star--filled' : 'ph-star mag-star--empty'} mag-star"></i>`
+      ).join('') : '';
+
+      const prosHtml = (rev.pros || []).filter(Boolean).map(p =>
+        `<div class="mag-pro"><i class="ph ph-plus-circle"></i>${p}</div>`).join('');
+      const consHtml = (rev.cons || []).filter(Boolean).map(c =>
+        `<div class="mag-con"><i class="ph ph-minus-circle"></i>${c}</div>`).join('');
+
+      const revDate = rev.updatedAt
+        ? new Date(rev.updatedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '';
+      const author = state.userName || '';
+
+      card.innerHTML = `
+        ${photosHtml}
+        <div class="mag-card-body">
+          ${eyebrow ? `<div class="mag-eyebrow">${eyebrow}</div>` : ''}
+          <h2 class="mag-stop-name">${getStopName(stop)}</h2>
+          ${score ? `<div class="mag-rating">${starsHtml}<span class="mag-score">${score.toFixed(1)}</span></div>` : ''}
+          ${rev.heading ? `<blockquote class="mag-quote">"${rev.heading}"</blockquote>` : ''}
+          ${rev.body ? `<p class="mag-body">${rev.body}</p>` : ''}
+          ${(prosHtml || consHtml) ? `<div class="mag-proscons">${prosHtml}${consHtml}</div>` : ''}
+          ${(author || revDate) ? `
+            <div class="mag-byline">
+              ${author ? `<span class="mag-author-chip">${author[0].toUpperCase()}</span><span class="mag-author-name">${author}</span>` : ''}
+              ${revDate ? `<span class="mag-byline-date">${revDate}</span>` : ''}
+            </div>` : ''}
+        </div>`;
+
+      card.addEventListener('click', () => openReviewSheet(stop.id));
+      container.appendChild(card);
+    });
+  }
+
+  // Prompt for unreviewed visited stops
   const unreviewed = _allTripStops()
-    .filter(({ s }) => state.checked[s.id] && !(state.reviews||{})[s.id])
+    .filter(({ s }) => state.checked[s.id] && !(state.reviews || {})[s.id])
     .map(({ s }) => s)
     .filter(s => getStopType(s) !== 'depart' && getStopType(s) !== 'transport');
   if (unreviewed.length) {
@@ -5086,210 +4914,48 @@ function _renderPreTripCover(container) {
   container.appendChild(_buildTripSummaryEl());
 }
 
-function _buildNowPanel() {
-  const ts = getTripState();
-  if (!ts) return null;
-  const panel = document.createElement('div');
-  panel.className = 'now-panel';
-  const labelMap = { at_stop: '📍 Now at', travelling: '🚗 Heading to', done: '✅ Today done' };
-  const label = labelMap[ts.state] || 'Now';
-  const stopName = getStopName(ts.stop);
-  const nextHtml = ts.nextStop
-    ? `<div class="now-panel-next">Next: <strong>${getStopName(ts.nextStop)}</strong></div>`
-    : '';
-  panel.innerHTML = `
-    <div class="now-panel-label">${label}</div>
-    <div class="now-panel-current">
-      <span class="now-panel-stop-name">${stopName}</span>
-      <button class="now-panel-nav-btn" onclick="openStopSheet('${ts.stop.id}')"><i class="ph ph-info"></i> Details</button>
-    </div>
-    ${nextHtml}`;
-  return panel;
-}
-
 function _renderDuringTripCover(container) {
   const today       = localDateStr();
+  const tripDayNums = TRIP_DATA.days.filter(d => !d.isCountdown && !d.isFestival);
   const elapsed     = Math.max(1, Math.round((new Date(today) - new Date('2026-06-17')) / 86400000) + 1);
   const totalDays   = Math.round((new Date(TRIP_RETURN) - new Date('2026-06-17')) / 86400000) + 1;
   const visited     = _allTripStops().filter(({ s }) => state.checked[s.id]).length;
   const totalStops  = _allTripStops().length;
   const km          = _kmDriven();
-  const distStr     = state.useMetric !== false ? `${Math.round(km)} km` : `${Math.round(km * 0.621371)} mi`;
-
-  // Now panel
-  const nowPanel = _buildNowPanel();
-  if (nowPanel) container.appendChild(nowPanel);
+  const distStr     = state.useMetric ? `${Math.round(km)} km` : `${Math.round(km * 0.621371)} mi`;
 
   const stats = document.createElement('div');
   stats.className = 'cover-stats';
   stats.innerHTML = `
-    <div class="cover-stat"><span class="cover-stat-num">${distStr}</span><span class="cover-stat-label">Driven</span></div>
-    <div class="cover-stat"><span class="cover-stat-num">${visited}/${totalStops}</span><span class="cover-stat-label">Places</span></div>
-    <div class="cover-stat"><span class="cover-stat-num">Day ${elapsed}/${totalDays}</span><span class="cover-stat-label">Progress</span></div>`;
+    <div class="cover-stat">
+      <span class="cover-stat-num">${distStr}</span>
+      <span class="cover-stat-label">Driven</span>
+    </div>
+    <div class="cover-stat">
+      <span class="cover-stat-num">${visited}/${totalStops}</span>
+      <span class="cover-stat-label">Places visited</span>
+    </div>
+    <div class="cover-stat">
+      <span class="cover-stat-num">Day ${elapsed}/${totalDays}</span>
+      <span class="cover-stat-label">Of the trip</span>
+    </div>`;
   container.appendChild(stats);
 
-  // Reviews section with combined toggle
-  _appendReviewsSection(container);
+  // Scrapbook — reviewed stops
+  const scrapbook = _buildScrapbookEl();
+  if (scrapbook) {
+    const sl = document.createElement('div');
+    sl.className = 'cover-section-label';
+    sl.textContent = 'Your reviews';
+    container.appendChild(sl);
+    container.appendChild(scrapbook);
+  }
 
   const section = document.createElement('div');
   section.className = 'cover-section-label';
   section.textContent = 'Your journey';
   container.appendChild(section);
   container.appendChild(_buildTripSummaryEl());
-}
-
-function _buildNowPanel() {
-  const todayStr = localDateStr();
-  const today = TRIP_DATA.days.find(d => {
-    if (d.isCountdown) return false;
-    if (d.isFestival) return todayStr >= d.date && todayStr <= (d.dateEnd || d.date);
-    return d.date === todayStr;
-  });
-  if (!today) return null;
-  const cur = getCurrentStop(today);
-  if (!cur) return null;
-  const stops = getDayStops(today).filter(s => !state.skipped[s.id] && !state.removed[s.id] && getStopType(s) !== 'depart');
-  const curIdx = stops.indexOf(cur);
-  const next = curIdx >= 0 && curIdx < stops.length - 1 ? stops[curIdx + 1] : null;
-  const travelMins = cur && next ? (_travelCache[_travelKey(cur, next)] ?? null) : null;
-
-  const panel = document.createElement('div');
-  panel.className = 'now-panel';
-  panel.innerHTML = `
-    <div class="now-panel-label"><i class="ph ph-map-pin-simple-area"></i> Right now</div>
-    <div class="now-panel-current">
-      <div class="now-panel-stop-name">${getStopName(cur)}</div>
-      <button class="now-panel-nav-btn" onclick="selectDay('${today.id}');document.getElementById('cover-page-overlay')?.classList.remove('open')"><i class="ph ph-arrow-right"></i> View day</button>
-    </div>
-    ${next ? `<div class="now-panel-next"><i class="ph ph-arrow-elbow-down-right"></i><span>Next: <strong>${getStopName(next)}</strong>${travelMins ? ` · ~${travelMins} min` : ''}</span></div>` : ''}`;
-  return panel;
-}
-
-function _appendReviewsSection(container) {
-  const combined = localStorage.getItem('annecy_combined_scrapbook') === '1';
-
-  const hdr = document.createElement('div');
-  hdr.className = 'cover-section-label scrapbook-section-hdr';
-  hdr.innerHTML = `<span>Reviews</span>
-    <div class="scrapbook-toggle-row">
-      <button class="scrapbook-toggle-btn${!combined?' scrapbook-toggle-btn--active':''}" id="scrapbook-toggle-mine">Mine</button>
-      <button class="scrapbook-toggle-btn${combined?' scrapbook-toggle-btn--active':''}" id="scrapbook-toggle-all">Everyone's</button>
-    </div>`;
-  container.appendChild(hdr);
-
-  const cardsWrap = document.createElement('div');
-  cardsWrap.id = 'scrapbook-cards-wrap';
-  container.appendChild(cardsWrap);
-
-  const renderCards = async (showAll) => {
-    cardsWrap.innerHTML = '<div class="scrapbook-loading"><i class="ph ph-circle-notch ph-spin"></i></div>';
-    const mine = _collectMyReviewedStops();
-    let allItems = mine.map(r => ({ ...r, authorName: state.userName || 'You' }));
-    if (showAll && typeof fetchMemberReviews === 'function') {
-      try {
-        const memberData = await fetchMemberReviews();
-        memberData.forEach(({ name, reviews }) => {
-          Object.entries(reviews).forEach(([stopId, rev]) => {
-            const stop = findStop(stopId);
-            if (!stop) return;
-            let dayIdx = -1, stopIdx = -1;
-            TRIP_DATA.days.forEach((day, di) => {
-              if (day.isCountdown) return;
-              getDayStops(day).forEach((s, si) => { if (s.id === stopId) { dayIdx = di; stopIdx = si; } });
-            });
-            allItems.push({ stop, rev, score: _reviewScore(rev), dayIdx, stopIdx, authorName: name });
-          });
-        });
-        allItems.sort((a, b) => a.dayIdx - b.dayIdx || a.stopIdx - b.stopIdx);
-      } catch {}
-    }
-    cardsWrap.innerHTML = '';
-    if (!allItems.length) {
-      cardsWrap.innerHTML = '<div class="mag-empty"><i class="ph ph-camera-slash"></i><p>No reviews yet — tap ★ on any stop card to add yours.</p></div>';
-    } else {
-      allItems.forEach(({ stop, rev, score, dayIdx, authorName }) =>
-        cardsWrap.appendChild(_buildMagazineCard(stop, rev, score, dayIdx, authorName)));
-    }
-  };
-
-  hdr.querySelector('#scrapbook-toggle-mine').addEventListener('click', () => {
-    localStorage.setItem('annecy_combined_scrapbook', '0');
-    hdr.querySelector('#scrapbook-toggle-mine').classList.add('scrapbook-toggle-btn--active');
-    hdr.querySelector('#scrapbook-toggle-all').classList.remove('scrapbook-toggle-btn--active');
-    renderCards(false);
-  });
-  hdr.querySelector('#scrapbook-toggle-all').addEventListener('click', () => {
-    localStorage.setItem('annecy_combined_scrapbook', '1');
-    hdr.querySelector('#scrapbook-toggle-all').classList.add('scrapbook-toggle-btn--active');
-    hdr.querySelector('#scrapbook-toggle-mine').classList.remove('scrapbook-toggle-btn--active');
-    renderCards(true);
-  });
-
-  renderCards(combined);
-}
-
-function _collectMyReviewedStops() {
-  return Object.entries(state.reviews || {})
-    .map(([stopId, rev]) => {
-      const stop = findStop(stopId);
-      if (!stop) return null;
-      let dayIdx = -1, stopIdx = -1;
-      TRIP_DATA.days.forEach((day, di) => {
-        if (day.isCountdown) return;
-        getDayStops(day).forEach((s, si) => { if (s.id === stopId) { dayIdx = di; stopIdx = si; } });
-      });
-      return { stop, rev, score: _reviewScore(rev), dayIdx, stopIdx };
-    })
-    .filter(Boolean)
-    .sort((a, b) => a.dayIdx - b.dayIdx || a.stopIdx - b.stopIdx);
-}
-
-function _buildMagazineCard(stop, rev, score, dayIdx, authorName) {
-  const day = TRIP_DATA.days[dayIdx];
-  const photos = rev.photos || [];
-  const dateStr = day ? formatDate(day.date) : '';
-  const dayName = day ? getDayLabel(day).replace(/<[^>]+>/g, '') : '';
-  const eyebrow = [dayName, dateStr].filter(Boolean).join(' · ');
-
-  const card = document.createElement('div');
-  card.className = 'mag-card';
-
-  const photosHtml = photos.length
-    ? `<div class="mag-photo-strip">${photos.map((src, i) =>
-        `<img class="mag-photo${i === 0 ? ' mag-photo--hero' : ''}" src="${src}" alt="" loading="lazy">`
-      ).join('')}</div>`
-    : `<div class="mag-no-photo">${stopTypeIcon(stop)}</div>`;
-
-  const starsHtml = score ? [1,2,3,4,5].map(i =>
-    `<i class="ph ${i <= Math.round(score) ? 'ph-star-fill mag-star--filled' : 'ph-star mag-star--empty'} mag-star"></i>`
-  ).join('') : '';
-
-  const prosHtml = (rev.pros||[]).filter(Boolean).map(p =>
-    `<div class="mag-pro"><i class="ph ph-plus-circle"></i>${p}</div>`).join('');
-  const consHtml = (rev.cons||[]).filter(Boolean).map(c =>
-    `<div class="mag-con"><i class="ph ph-minus-circle"></i>${c}</div>`).join('');
-
-  const revDate = rev.updatedAt
-    ? new Date(rev.updatedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '';
-
-  card.innerHTML = `
-    ${photosHtml}
-    <div class="mag-card-body">
-      ${eyebrow ? `<div class="mag-eyebrow">${eyebrow}</div>` : ''}
-      <h2 class="mag-stop-name">${getStopName(stop)}</h2>
-      ${score ? `<div class="mag-rating">${starsHtml}<span class="mag-score">${score.toFixed(1)}</span></div>` : ''}
-      ${rev.heading ? `<blockquote class="mag-quote">"${rev.heading}"</blockquote>` : ''}
-      ${rev.body ? `<p class="mag-body">${rev.body}</p>` : ''}
-      ${(prosHtml||consHtml) ? `<div class="mag-proscons">${prosHtml}${consHtml}</div>` : ''}
-      ${(authorName||revDate) ? `
-        <div class="mag-byline">
-          ${authorName ? `<span class="mag-author-chip">${authorName[0].toUpperCase()}</span><span class="mag-author-name">${authorName}</span>` : ''}
-          ${revDate ? `<span class="mag-byline-date">${revDate}</span>` : ''}
-        </div>` : ''}
-    </div>`;
-
-  card.addEventListener('click', () => openReviewSheet(stop.id));
-  return card;
 }
 
 /* ── Kept for backward compat (called from renderTimeline) ───────────── */
@@ -7536,33 +7202,6 @@ function openReviewSheet(stopId) {
 }
 window.openReviewSheet = openReviewSheet;
 
-/* ── Magazine card renderer ──────────────────────────────────────────── */
-function _renderMagazineCards(container, items) {
-  // items: [{stop, rev, score, authorName?}]
-  const wrap = document.createElement('div');
-  wrap.className = 'scrapbook-grid';
-  items.forEach(({ stop, rev, score, authorName }) => {
-    const card = document.createElement('div');
-    card.className = 'scrapbook-card';
-    const photo = rev.photos?.[0] || null;
-    const stars = score ? '★'.repeat(Math.round(score)) + '☆'.repeat(5-Math.round(score)) : '';
-    const nameHtml = authorName ? `<div class="scrapbook-author">${authorName}</div>` : '';
-    card.innerHTML = `
-      ${photo ? `<img class="scrapbook-photo" src="${photo}" alt="">` : `<div class="scrapbook-no-photo">${stopTypeIcon(stop)}</div>`}
-      <div class="scrapbook-card-body">
-        <div class="scrapbook-stop-name">${getStopName(stop)}</div>
-        ${score ? `<div class="scrapbook-stars">${stars} <span class="scrapbook-score">${score.toFixed(1)}</span></div>` : ''}
-        ${rev.heading ? `<div class="scrapbook-heading">"${rev.heading}"</div>` : ''}
-        ${rev.body ? `<div class="scrapbook-body">${rev.body.slice(0,120)}${rev.body.length>120?'…':''}</div>` : ''}
-        ${rev.pros?.length ? `<div class="scrapbook-pros">${rev.pros.map(p=>`<span>+ ${p}</span>`).join('')}</div>` : ''}
-        ${nameHtml}
-      </div>`;
-    card.addEventListener('click', () => openReviewSheet(stop.id));
-    wrap.appendChild(card);
-  });
-  container.appendChild(wrap);
-}
-
 /* ── Scrapbook section for cover page ────────────────────────────────── */
 function _buildScrapbookEl() {
   const reviewed = Object.entries(state.reviews || {})
@@ -7662,83 +7301,16 @@ function openStopSheet(stopId) {
           <i class="ph ph-trash"></i> Remove
         </button>
       </div>
-      <div class="comments-section">
-        <div class="comments-label"><i class="ph ph-chat-centered-text"></i> Conversation</div>
-        <div class="comments-list" id="comments-list-${stopId}"><div class="comments-loading">Loading…</div></div>
-        <div class="comment-input-row">
-          <input class="comment-input" id="comment-input-${stopId}" type="text" placeholder="Add a comment…" maxlength="500">
-          <button class="comment-send-btn" id="comment-send-${stopId}"><i class="ph ph-paper-plane-tilt"></i></button>
-        </div>
-      </div>
     </div>`;
   sheet.querySelector('.stop-sheet-close').addEventListener('click', closeStopSheet);
-
-  // Comments
-  let _unlistenComments = () => {};
-  if (typeof listenComments === 'function') {
-    _unlistenComments = listenComments(stopId, comments => _renderCommentsList(stopId, comments));
-  }
-  const sendComment = async () => {
-    const input = document.getElementById('comment-input-' + stopId);
-    const text = input?.value?.trim();
-    if (!text) return;
-    input.value = '';
-    if (typeof postComment === 'function') await postComment(stopId, text);
-  };
-  sheet.querySelector('#comment-send-' + stopId)?.addEventListener('click', sendComment);
-  sheet.querySelector('#comment-input-' + stopId)?.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); sendComment(); } });
 
   const overlay = document.createElement('div');
   overlay.id = 'stop-sheet-overlay';
   overlay.className = 'stop-sheet-overlay';
-  overlay.addEventListener('click', () => { _unlistenComments(); closeStopSheet(); });
+  overlay.addEventListener('click', closeStopSheet);
   document.body.appendChild(overlay);
   document.body.appendChild(sheet);
   requestAnimationFrame(() => { sheet.classList.add('open'); overlay.classList.add('open'); });
-
-function renderCommentsList(stopId, comments) {
-  const list = document.getElementById(`comments-list-${stopId}`);
-  if (!list) return;
-  const entries = Object.values(comments || {}).sort((a, b) => (a.createdAt||0) - (b.createdAt||0));
-  if (!entries.length) {
-    list.innerHTML = '<div class="comments-empty">No comments yet.</div>';
-    return;
-  }
-  list.innerHTML = '';
-  entries.forEach(c => {
-    const isMe = c.uid === (typeof state !== 'undefined' ? state.userId : null);
-    const item = document.createElement('div');
-    item.className = 'comment-item' + (isMe ? ' comment-item--mine' : '');
-    const initial = (c.name || '?')[0].toUpperCase();
-    item.innerHTML = `
-      <div class="comment-author-chip">${initial}</div>
-      <div class="comment-bubble">
-        <div class="comment-author">${c.name || 'Traveller'}</div>
-        <div class="comment-text">${c.text}</div>
-      </div>`;
-    list.appendChild(item);
-  });
-  list.scrollTop = list.scrollHeight;
-}
-
-function _renderCommentsList(stopId, comments) {
-  const el = document.getElementById('comments-list-' + stopId);
-  if (!el) return;
-  const entries = Object.values(comments).sort((a, b) => a.createdAt - b.createdAt);
-  if (!entries.length) {
-    el.innerHTML = '<div class="comments-empty">No comments yet — start the conversation</div>';
-    return;
-  }
-  const myUid = typeof getAuthUser === 'function' ? getAuthUser()?.uid : null;
-  el.innerHTML = entries.map(c => `
-    <div class="comment-item${myUid && c.uid === myUid ? ' comment-item--mine' : ''}">
-      <span class="comment-author-chip">${(c.name||'?')[0].toUpperCase()}</span>
-      <div class="comment-bubble">
-        <div class="comment-author">${c.name}</div>
-        <div class="comment-text">${c.text}</div>
-      </div>
-    </div>`).join('');
-  el.scrollTop = el.scrollHeight;
 }
 
 function closeStopSheet() {
@@ -9241,18 +8813,6 @@ function bootApp() {
   }
   document.getElementById('version-badge').textContent = APP_VERSION;
   document.getElementById('version-number').textContent = APP_VERSION;
-  const _navVerLabel = document.getElementById('nav-version-label');
-  if (_navVerLabel) _navVerLabel.textContent = APP_VERSION;
-  const _navVerBtn = document.getElementById('nav-version-btn');
-  if (_navVerBtn) _navVerBtn.addEventListener('click', () => {
-    if (_navVerBtn.classList.contains('nav-version-chip--update')) {
-      window.location.reload();
-    } else {
-      // Show changelog / what's new
-      const wb = document.getElementById('version-btn');
-      if (wb) wb.click();
-    }
-  });
   load();
   loadWikiCache();
   loadPlacesCache();
@@ -9326,24 +8886,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // FAB quick-action sheet
   // Auth state observer — fires once on load and again on sign-in/out
-  let _authResolved = false;
   auth.onAuthStateChanged(user => {
-    _authResolved = true;
     if (user) {
       onAuthSuccess(user);
     } else {
+      // Show auth overlay
       document.getElementById('auth-overlay').classList.remove('hidden');
-      const splash = document.getElementById('splash-screen');
-      if (splash) splash.classList.add('hidden');
     }
   });
-  // Fallback: if Firebase hasn't responded in 6s (no network), show auth overlay anyway
-  setTimeout(() => {
-    if (_authResolved) return;
-    document.getElementById('auth-overlay').classList.remove('hidden');
-    const splash = document.getElementById('splash-screen');
-    if (splash) splash.classList.add('hidden');
-  }, 6000);
 
   /* Gyroscope parallax */
   (function() {
@@ -9805,5 +9355,4 @@ document.addEventListener('DOMContentLoaded', () => {
     }, msUntilMidnight);
   }
   scheduleMidnightTick();
-}); // end DOMContentLoaded
-}
+});
