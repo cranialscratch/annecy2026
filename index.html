@@ -19,7 +19,7 @@
   <!-- Splash screen — shown on launch, fades out once app is ready -->
   <div id="splash-screen">
     <img src="splash.png" alt="StopStart" id="splash-img">
-    <div id="splash-wordmark">StopStart</div>
+
     <button id="splash-reload-btn" onclick="(function(){var go=function(){caches.keys().then(function(ks){return Promise.all(ks.map(function(k){return caches.delete(k)}))}).then(function(){window.location.href=window.location.pathname+'?r='+Date.now()})};if(navigator.serviceWorker){navigator.serviceWorker.getRegistrations().then(function(rs){return Promise.all(rs.map(function(r){return r.unregister()}))}).then(go)}else{go()}})()" style="display:none;padding:14px 32px;border-radius:100px;border:none;background:rgba(255,255,255,0.22);color:#fff;font-size:16px;font-weight:700;cursor:pointer;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);position:fixed;bottom:max(120px,calc(env(safe-area-inset-bottom)+90px));left:50%;transform:translateX(-50%);white-space:nowrap">Tap to reload</button>
     <script>setTimeout(function(){var b=document.getElementById('splash-reload-btn');if(b&&document.getElementById('app').style.display==='none')b.style.display='block';},4000);</script>
   </div>
@@ -525,8 +525,8 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
-  <script src="data.js?v=285"></script>
-  <script src="sync.js?v=285"></script>
-  <script src="app.js?v=285"></script>
+  <script src="data.js?v=286"></script>
+  <script src="sync.js?v=286"></script>
+  <script src="app.js?v=286"></script>
 </body>
 </html>

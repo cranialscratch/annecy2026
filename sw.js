@@ -1,4 +1,4 @@
-const CACHE = 'annecy2026-v285';
+const CACHE = 'annecy2026-v286';
 const CORE = [
   './index.html',
   './styles.v113.css',
@@ -77,7 +77,13 @@ self.addEventListener('fetch', e => {
   // All other cross-origin (Wikipedia, OSRM, Google, weather, Firebase): never intercept
   if (url.origin !== self.location.origin) return;
 
-  // Same-origin assets: network-first, cache fallback for offline
+  // JS files: always network-only — never serve stale scripts from cache
+  if (url.pathname.endsWith('.js')) {
+    e.respondWith(fetch(e.request));
+    return;
+  }
+
+  // Other same-origin assets: network-first, cache fallback for offline
   e.respondWith(
     fetch(e.request).then(res => {
       if (res.ok) {
