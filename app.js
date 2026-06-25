@@ -1,5 +1,5 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v300';;
+const APP_VERSION = 'v301';;
 
 const CHANGELOG = [
   { version: 'v279', title: 'Post-trip magazine scrapbook', items: [
@@ -7983,6 +7983,12 @@ function openDetail(stop) {
       rescheduleBtn.innerHTML = '<i class="ph ph-calendar-dots"></i> Reschedule to another day';
       rescheduleBtn.addEventListener('click', () => openRescheduleSheet(stop));
       travelActEl.appendChild(rescheduleBtn);
+      const reviewBtn = document.createElement('button');
+      const hasReview = !!(state.reviews || {})[stop.id];
+      reviewBtn.className = 'travel-action-btn detail-review-btn' + (hasReview ? ' active' : '');
+      reviewBtn.innerHTML = `<i class="ph ph-star${hasReview ? '-fill' : ''}"></i> ${hasReview ? 'Edit review' : 'Write a review'}`;
+      reviewBtn.addEventListener('click', () => openReviewSheet(stop.id));
+      travelActEl.appendChild(reviewBtn);
     } else {
       travelActEl.innerHTML = '';
       travelActEl.classList.add('hidden');

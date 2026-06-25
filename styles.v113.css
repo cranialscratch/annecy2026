@@ -2885,6 +2885,8 @@ body.light .cl-text { color: #475569; }
   border-radius: 0 0 16px 16px;
 }
 .detail-reschedule-btn { background: rgba(14,165,233,.15); color: #0ea5e9; border-color: rgba(14,165,233,.3); margin-top: 6px; }
+.detail-review-btn { background: rgba(250,204,21,.12); color: #facc15; border-color: rgba(250,204,21,.3); margin-top: 6px; }
+.detail-review-btn.active { background: rgba(250,204,21,.22); border-color: rgba(250,204,21,.5); }
 
 /* ── Filter popup ───────────────────────────────────────────────────── */
 #filter-wrap { position: relative; }
