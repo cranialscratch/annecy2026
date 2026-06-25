@@ -1,7 +1,13 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v279';;
+const APP_VERSION = 'v280';;
 
 const CHANGELOG = [
+  { version: 'v280', title: 'Scrapbook toggle, stop comments, now panel, packing list', items: [
+    { type: 'feat', text: 'Scrapbook toggle: switch between "Mine" and "Everyone\'s" reviews on the cover page' },
+    { type: 'feat', text: 'Stop comments: leave and read per-stop comments in the stop detail sheet' },
+    { type: 'feat', text: '"Now" panel at top of during-trip cover showing current stop and what\'s next' },
+    { type: 'feat', text: 'Packing list in the Notes tab — add items per bag, check off as packed' },
+  ]},
   { version: 'v279', title: 'Post-trip magazine scrapbook', items: [
     { type: 'feat', text: 'After the trip ends, the cover page becomes a magazine-style scrapbook — full-bleed hero photo, stop name, star rating, pull-quote headline, full review text, pros/cons, reviewer byline' },
     { type: 'feat', text: 'Trip header: hero photo from best-rated stop, title, dates, stats row (distance, places, avg rating, reviewed count)' },
@@ -310,6 +316,7 @@ const state = {
   notes:              [],   // personal notes [{id,title,content,links,createdAt}]
   bookingInfo:        {},   // stopId → {ref,link,notes}
   reviews:            {},   // stopId → {heading,body,pros[],cons[],photos[],questions:{},createdAt}
+  packingList:        [],   // [{id,name,bag,packed}]
 };
 
 /* ── Helpers ───────────────────────────────────────────────────────── */
@@ -2082,6 +2089,7 @@ function localSave() {
     localStorage.setItem('annecy_notes',             JSON.stringify(state.notes           || []));
     localStorage.setItem('annecy_booking_info',      JSON.stringify(state.bookingInfo      || {}));
     localStorage.setItem('annecy_reviews',            JSON.stringify(state.reviews          || {}));
+    localStorage.setItem('annecy_packing',            JSON.stringify(state.packingList       || []));
   } catch {}
 }
 function save() {
@@ -2135,6 +2143,8 @@ function load() {
     if (bi) state.bookingInfo = JSON.parse(bi);
     const rv = localStorage.getItem('annecy_reviews');
     if (rv) state.reviews = JSON.parse(rv);
+    const pk = localStorage.getItem('annecy_packing');
+    if (pk) state.packingList = JSON.parse(pk);
   } catch {}
   try {
     if (localStorage.getItem('annecy_theme') === 'light') document.body.classList.add('light');
@@ -3346,6 +3356,102 @@ function renderNotesView(container) {
   renderList();
   document.getElementById('notes-search')?.addEventListener('input', e => renderList(e.target.value));
   document.getElementById('notes-add-btn')?.addEventListener('click', () => openNoteSheet(null, () => renderNotesView(container)));
+
+  // Packing list section
+  const packingSection = document.createElement('div');
+  packingSection.className = 'packing-section';
+
+  const packingList = state.packingList || [];
+  const packed = packingList.filter(i => i.packed).length;
+  const packingCollapsed = localStorage.getItem('annecy_packing_collapsed') === '1';
+
+  const packingHeader = document.createElement('div');
+  packingHeader.className = 'packing-header';
+  packingHeader.innerHTML = `
+    <button class="packing-collapse-btn" id="packing-collapse-btn">
+      <i class="ph ph-${packingCollapsed ? 'caret-right' : 'caret-down'}"></i>
+      <i class="ph ph-bag-simple"></i> Packing list
+      <span class="packing-progress">${packed}/${packingList.length}</span>
+    </button>
+    <button class="packing-add-btn" id="packing-add-btn" title="Add item"><i class="ph ph-plus"></i></button>`;
+  packingSection.appendChild(packingHeader);
+
+  const packingBody = document.createElement('div');
+  packingBody.id = 'packing-body';
+  packingBody.style.display = packingCollapsed ? 'none' : '';
+  packingSection.appendChild(packingBody);
+  wrap.insertBefore(packingSection, wrap.firstChild);
+
+  const renderPackingList = () => {
+    packingBody.innerHTML = '';
+    const items = state.packingList || [];
+    if (!items.length) {
+      packingBody.innerHTML = '<div style="font-size:13px;color:var(--text3);padding:4px 2px">No items yet — tap + to add.</div>';
+      return;
+    }
+    // Group by bag
+    const bags = {};
+    items.forEach(item => { const b = item.bag || 'General'; if (!bags[b]) bags[b] = []; bags[b].push(item); });
+    Object.entries(bags).forEach(([bag, bagItems]) => {
+      const group = document.createElement('div');
+      group.className = 'packing-bag-group';
+      group.innerHTML = `<div class="packing-bag-label">${bag}</div>`;
+      bagItems.forEach(item => {
+        const row = document.createElement('div');
+        row.className = 'packing-item' + (item.packed ? ' packing-item--packed' : '');
+        row.innerHTML = `
+          <button class="packing-check${item.packed ? ' packing-check--packed' : ''}" data-id="${item.id}">
+            ${item.packed ? '<i class="ph ph-check-bold"></i>' : ''}
+          </button>
+          <span class="packing-item-name">${item.name}</span>
+          <button class="packing-item-del" data-id="${item.id}"><i class="ph ph-trash"></i></button>`;
+        group.appendChild(row);
+      });
+      packingBody.appendChild(group);
+    });
+
+    packingBody.querySelectorAll('.packing-check').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.dataset.id;
+        const idx = (state.packingList||[]).findIndex(i => i.id === id);
+        if (idx < 0) return;
+        state.packingList[idx].packed = !state.packingList[idx].packed;
+        save(); renderPackingList();
+        document.querySelector('.packing-progress').textContent =
+          `${(state.packingList||[]).filter(i=>i.packed).length}/${(state.packingList||[]).length}`;
+      });
+    });
+    packingBody.querySelectorAll('.packing-item-del').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.dataset.id;
+        state.packingList = (state.packingList||[]).filter(i => i.id !== id);
+        save(); renderPackingList();
+        document.querySelector('.packing-progress').textContent =
+          `${(state.packingList||[]).filter(i=>i.packed).length}/${(state.packingList||[]).length}`;
+      });
+    });
+  };
+
+  renderPackingList();
+
+  document.getElementById('packing-collapse-btn')?.addEventListener('click', () => {
+    const isCollapsed = packingBody.style.display === 'none';
+    packingBody.style.display = isCollapsed ? '' : 'none';
+    localStorage.setItem('annecy_packing_collapsed', isCollapsed ? '0' : '1');
+    const icon = packingHeader.querySelector('.ph-caret-right, .ph-caret-down');
+    if (icon) { icon.className = isCollapsed ? 'ph ph-caret-down' : 'ph ph-caret-right'; }
+  });
+
+  document.getElementById('packing-add-btn')?.addEventListener('click', () => {
+    const name = prompt('Item name:');
+    if (!name?.trim()) return;
+    const bag = prompt('Bag/category (e.g. Clothes, Tech, Toiletries):', 'General') || 'General';
+    if (!state.packingList) state.packingList = [];
+    state.packingList.push({ id: Date.now().toString(36), name: name.trim(), bag: bag.trim(), packed: false });
+    save(); renderPackingList();
+    document.querySelector('.packing-progress').textContent =
+      `${(state.packingList||[]).filter(i=>i.packed).length}/${(state.packingList||[]).length}`;
+  });
 }
 
 function openNoteSheet(noteId, onDone) {
@@ -4795,54 +4901,104 @@ function _renderPostTripCover(container) {
     lbl.textContent = 'Your journey, reviewed';
     container.appendChild(lbl);
 
-    allReviewed.forEach(({ stop, rev, score, dayIdx }) => {
-      const day = TRIP_DATA.days[dayIdx];
-      const photos = rev.photos || [];
-      const dateStr = day ? formatDate(day.date) : '';
-      const dayName = day ? getDayLabel(day).replace(/<[^>]+>/g, '') : '';
-      const eyebrow = [dayName, dateStr].filter(Boolean).join(' · ');
+    const postCombined = localStorage.getItem('annecy_combined_scrapbook') === '1';
+    const postToggleRow = document.createElement('div');
+    postToggleRow.className = 'scrapbook-toggle-row';
+    const postMineBtn = document.createElement('button');
+    postMineBtn.className = 'scrapbook-toggle-btn' + (!postCombined ? ' scrapbook-toggle-btn--active' : '');
+    postMineBtn.textContent = 'Mine';
+    const postEveryoneBtn = document.createElement('button');
+    postEveryoneBtn.className = 'scrapbook-toggle-btn' + (postCombined ? ' scrapbook-toggle-btn--active' : '');
+    postEveryoneBtn.textContent = "Everyone's";
+    postToggleRow.appendChild(postMineBtn);
+    postToggleRow.appendChild(postEveryoneBtn);
+    container.appendChild(postToggleRow);
 
-      const card = document.createElement('div');
-      card.className = 'mag-card';
+    const postCardsWrap = document.createElement('div');
+    container.appendChild(postCardsWrap);
 
-      const photosHtml = photos.length
-        ? `<div class="mag-photo-strip">${photos.map((src, i) =>
-            `<img class="mag-photo${i === 0 ? ' mag-photo--hero' : ''}" src="${src}" alt="">`
-          ).join('')}</div>`
-        : `<div class="mag-no-photo">${stopTypeIcon(stop)}</div>`;
+    const renderPostCards = async (showCombined) => {
+      postCardsWrap.innerHTML = '';
+      let items = allReviewed.map(({ stop, rev, score }) => ({ stop, rev, score, authorName: state.userName || 'Me' }));
+      if (showCombined && typeof fetchMemberReviews === 'function') {
+        try {
+          const memberResults = await fetchMemberReviews();
+          memberResults.forEach(({ uid, name, reviews }) => {
+            Object.entries(reviews || {}).forEach(([stopId, rev]) => {
+              const stop = findStop(stopId);
+              if (!stop) return;
+              if (!items.find(i => i.stop.id === stopId)) {
+                items.push({ stop, rev, score: _reviewScore(rev), authorName: name });
+              }
+            });
+          });
+        } catch {}
+      }
+      items.forEach(({ stop, rev, score, authorName }) => {
+        const dayIdx = allReviewed.find(r => r.stop.id === stop.id)?.dayIdx ?? -1;
+        const day = dayIdx >= 0 ? TRIP_DATA.days[dayIdx] : null;
+        const photos = rev.photos || [];
+        const dateStr = day ? formatDate(day.date) : '';
+        const dayName = day ? getDayLabel(day).replace(/<[^>]+>/g, '') : '';
+        const eyebrow = [dayName, dateStr].filter(Boolean).join(' · ');
 
-      const starsHtml = score ? [1,2,3,4,5].map(i =>
-        `<i class="ph ${i <= Math.round(score) ? 'ph-star-fill mag-star--filled' : 'ph-star mag-star--empty'} mag-star"></i>`
-      ).join('') : '';
+        const card = document.createElement('div');
+        card.className = 'mag-card';
 
-      const prosHtml = (rev.pros || []).filter(Boolean).map(p =>
-        `<div class="mag-pro"><i class="ph ph-plus-circle"></i>${p}</div>`).join('');
-      const consHtml = (rev.cons || []).filter(Boolean).map(c =>
-        `<div class="mag-con"><i class="ph ph-minus-circle"></i>${c}</div>`).join('');
+        const photosHtml = photos.length
+          ? `<div class="mag-photo-strip">${photos.map((src, i) =>
+              `<img class="mag-photo${i === 0 ? ' mag-photo--hero' : ''}" src="${src}" alt="">`
+            ).join('')}</div>`
+          : `<div class="mag-no-photo">${stopTypeIcon(stop)}</div>`;
 
-      const revDate = rev.updatedAt
-        ? new Date(rev.updatedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '';
-      const author = state.userName || '';
+        const starsHtml = score ? [1,2,3,4,5].map(i =>
+          `<i class="ph ${i <= Math.round(score) ? 'ph-star-fill mag-star--filled' : 'ph-star mag-star--empty'} mag-star"></i>`
+        ).join('') : '';
 
-      card.innerHTML = `
-        ${photosHtml}
-        <div class="mag-card-body">
-          ${eyebrow ? `<div class="mag-eyebrow">${eyebrow}</div>` : ''}
-          <h2 class="mag-stop-name">${getStopName(stop)}</h2>
-          ${score ? `<div class="mag-rating">${starsHtml}<span class="mag-score">${score.toFixed(1)}</span></div>` : ''}
-          ${rev.heading ? `<blockquote class="mag-quote">"${rev.heading}"</blockquote>` : ''}
-          ${rev.body ? `<p class="mag-body">${rev.body}</p>` : ''}
-          ${(prosHtml || consHtml) ? `<div class="mag-proscons">${prosHtml}${consHtml}</div>` : ''}
-          ${(author || revDate) ? `
-            <div class="mag-byline">
-              ${author ? `<span class="mag-author-chip">${author[0].toUpperCase()}</span><span class="mag-author-name">${author}</span>` : ''}
-              ${revDate ? `<span class="mag-byline-date">${revDate}</span>` : ''}
-            </div>` : ''}
-        </div>`;
+        const prosHtml = (rev.pros || []).filter(Boolean).map(p =>
+          `<div class="mag-pro"><i class="ph ph-plus-circle"></i>${p}</div>`).join('');
+        const consHtml = (rev.cons || []).filter(Boolean).map(c =>
+          `<div class="mag-con"><i class="ph ph-minus-circle"></i>${c}</div>`).join('');
 
-      card.addEventListener('click', () => openReviewSheet(stop.id));
-      container.appendChild(card);
+        const revDate = rev.updatedAt
+          ? new Date(rev.updatedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '';
+        const author = authorName || state.userName || '';
+
+        card.innerHTML = `
+          ${photosHtml}
+          <div class="mag-card-body">
+            ${eyebrow ? `<div class="mag-eyebrow">${eyebrow}</div>` : ''}
+            <h2 class="mag-stop-name">${getStopName(stop)}</h2>
+            ${score ? `<div class="mag-rating">${starsHtml}<span class="mag-score">${score.toFixed(1)}</span></div>` : ''}
+            ${rev.heading ? `<blockquote class="mag-quote">"${rev.heading}"</blockquote>` : ''}
+            ${rev.body ? `<p class="mag-body">${rev.body}</p>` : ''}
+            ${(prosHtml || consHtml) ? `<div class="mag-proscons">${prosHtml}${consHtml}</div>` : ''}
+            ${author ? `
+              <div class="mag-byline">
+                <span class="mag-author-chip">${author[0].toUpperCase()}</span><span class="mag-author-name">${author}</span>
+                ${revDate ? `<span class="mag-byline-date">${revDate}</span>` : ''}
+              </div>` : ''}
+          </div>`;
+
+        card.addEventListener('click', () => openReviewSheet(stop.id));
+        postCardsWrap.appendChild(card);
+      });
+    };
+
+    postMineBtn.addEventListener('click', () => {
+      localStorage.setItem('annecy_combined_scrapbook', '0');
+      postMineBtn.classList.add('scrapbook-toggle-btn--active');
+      postEveryoneBtn.classList.remove('scrapbook-toggle-btn--active');
+      renderPostCards(false);
     });
+    postEveryoneBtn.addEventListener('click', () => {
+      localStorage.setItem('annecy_combined_scrapbook', '1');
+      postEveryoneBtn.classList.add('scrapbook-toggle-btn--active');
+      postMineBtn.classList.remove('scrapbook-toggle-btn--active');
+      renderPostCards(true);
+    });
+
+    renderPostCards(postCombined);
   }
 
   // Prompt for unreviewed visited stops
@@ -4914,6 +5070,27 @@ function _renderPreTripCover(container) {
   container.appendChild(_buildTripSummaryEl());
 }
 
+function _buildNowPanel() {
+  const ts = getTripState();
+  if (!ts) return null;
+  const panel = document.createElement('div');
+  panel.className = 'now-panel';
+  const labelMap = { at_stop: '📍 Now at', travelling: '🚗 Heading to', done: '✅ Today done' };
+  const label = labelMap[ts.state] || 'Now';
+  const stopName = getStopName(ts.stop);
+  const nextHtml = ts.nextStop
+    ? `<div class="now-panel-next">Next: <strong>${getStopName(ts.nextStop)}</strong></div>`
+    : '';
+  panel.innerHTML = `
+    <div class="now-panel-label">${label}</div>
+    <div class="now-panel-current">
+      <span class="now-panel-stop-name">${stopName}</span>
+      <button class="now-panel-nav-btn" onclick="openStopSheet('${ts.stop.id}')"><i class="ph ph-info"></i> Details</button>
+    </div>
+    ${nextHtml}`;
+  return panel;
+}
+
 function _renderDuringTripCover(container) {
   const today       = localDateStr();
   const tripDayNums = TRIP_DATA.days.filter(d => !d.isCountdown && !d.isFestival);
@@ -4923,6 +5100,10 @@ function _renderDuringTripCover(container) {
   const totalStops  = _allTripStops().length;
   const km          = _kmDriven();
   const distStr     = state.useMetric ? `${Math.round(km)} km` : `${Math.round(km * 0.621371)} mi`;
+
+  // Now panel
+  const nowPanel = _buildNowPanel();
+  if (nowPanel) container.appendChild(nowPanel);
 
   const stats = document.createElement('div');
   stats.className = 'cover-stats';
@@ -4941,15 +5122,77 @@ function _renderDuringTripCover(container) {
     </div>`;
   container.appendChild(stats);
 
-  // Scrapbook — reviewed stops
-  const scrapbook = _buildScrapbookEl();
-  if (scrapbook) {
-    const sl = document.createElement('div');
-    sl.className = 'cover-section-label';
-    sl.textContent = 'Your reviews';
-    container.appendChild(sl);
-    container.appendChild(scrapbook);
-  }
+  // Scrapbook — reviewed stops with toggle
+  const scrapbookWrap = document.createElement('div');
+  const combined = localStorage.getItem('annecy_combined_scrapbook') === '1';
+
+  const sl = document.createElement('div');
+  sl.className = 'cover-section-label';
+  sl.textContent = 'Reviews';
+  scrapbookWrap.appendChild(sl);
+
+  const toggleRow = document.createElement('div');
+  toggleRow.className = 'scrapbook-toggle-row';
+  const mineBtn = document.createElement('button');
+  mineBtn.className = 'scrapbook-toggle-btn' + (!combined ? ' scrapbook-toggle-btn--active' : '');
+  mineBtn.textContent = 'Mine';
+  const everyoneBtn = document.createElement('button');
+  everyoneBtn.className = 'scrapbook-toggle-btn' + (combined ? ' scrapbook-toggle-btn--active' : '');
+  everyoneBtn.textContent = "Everyone's";
+  toggleRow.appendChild(mineBtn);
+  toggleRow.appendChild(everyoneBtn);
+  scrapbookWrap.appendChild(toggleRow);
+
+  const cardsWrap = document.createElement('div');
+  scrapbookWrap.appendChild(cardsWrap);
+
+  const renderScrapbookCards = async (showCombined) => {
+    cardsWrap.innerHTML = '';
+    const myReviewed = Object.entries(state.reviews || {})
+      .map(([stopId, rev]) => {
+        const stop = findStop(stopId);
+        if (!stop) return null;
+        return { stop, rev, score: _reviewScore(rev), authorName: state.userName || 'Me' };
+      }).filter(Boolean).sort((a, b) => (b.rev.updatedAt||0) - (a.rev.updatedAt||0));
+
+    let items = myReviewed;
+    if (showCombined && typeof fetchMemberReviews === 'function') {
+      try {
+        const memberResults = await fetchMemberReviews();
+        memberResults.forEach(({ uid, name, reviews }) => {
+          Object.entries(reviews || {}).forEach(([stopId, rev]) => {
+            const stop = findStop(stopId);
+            if (!stop) return;
+            items = items.filter(i => i.stop.id !== stopId); // prefer own
+            items.push({ stop, rev, score: _reviewScore(rev), authorName: name });
+          });
+        });
+        items.sort((a, b) => (b.rev.updatedAt||0) - (a.rev.updatedAt||0));
+      } catch {}
+    }
+
+    if (!items.length) {
+      cardsWrap.innerHTML = '<div style="font-size:13px;color:var(--text3);padding:8px 0">No reviews yet.</div>';
+      return;
+    }
+    _renderMagazineCards(cardsWrap, items);
+  };
+
+  mineBtn.addEventListener('click', () => {
+    localStorage.setItem('annecy_combined_scrapbook', '0');
+    mineBtn.classList.add('scrapbook-toggle-btn--active');
+    everyoneBtn.classList.remove('scrapbook-toggle-btn--active');
+    renderScrapbookCards(false);
+  });
+  everyoneBtn.addEventListener('click', () => {
+    localStorage.setItem('annecy_combined_scrapbook', '1');
+    everyoneBtn.classList.add('scrapbook-toggle-btn--active');
+    mineBtn.classList.remove('scrapbook-toggle-btn--active');
+    renderScrapbookCards(true);
+  });
+
+  renderScrapbookCards(combined);
+  container.appendChild(scrapbookWrap);
 
   const section = document.createElement('div');
   section.className = 'cover-section-label';
@@ -7202,6 +7445,33 @@ function openReviewSheet(stopId) {
 }
 window.openReviewSheet = openReviewSheet;
 
+/* ── Magazine card renderer ──────────────────────────────────────────── */
+function _renderMagazineCards(container, items) {
+  // items: [{stop, rev, score, authorName?}]
+  const wrap = document.createElement('div');
+  wrap.className = 'scrapbook-grid';
+  items.forEach(({ stop, rev, score, authorName }) => {
+    const card = document.createElement('div');
+    card.className = 'scrapbook-card';
+    const photo = rev.photos?.[0] || null;
+    const stars = score ? '★'.repeat(Math.round(score)) + '☆'.repeat(5-Math.round(score)) : '';
+    const nameHtml = authorName ? `<div class="scrapbook-author">${authorName}</div>` : '';
+    card.innerHTML = `
+      ${photo ? `<img class="scrapbook-photo" src="${photo}" alt="">` : `<div class="scrapbook-no-photo">${stopTypeIcon(stop)}</div>`}
+      <div class="scrapbook-card-body">
+        <div class="scrapbook-stop-name">${getStopName(stop)}</div>
+        ${score ? `<div class="scrapbook-stars">${stars} <span class="scrapbook-score">${score.toFixed(1)}</span></div>` : ''}
+        ${rev.heading ? `<div class="scrapbook-heading">"${rev.heading}"</div>` : ''}
+        ${rev.body ? `<div class="scrapbook-body">${rev.body.slice(0,120)}${rev.body.length>120?'…':''}</div>` : ''}
+        ${rev.pros?.length ? `<div class="scrapbook-pros">${rev.pros.map(p=>`<span>+ ${p}</span>`).join('')}</div>` : ''}
+        ${nameHtml}
+      </div>`;
+    card.addEventListener('click', () => openReviewSheet(stop.id));
+    wrap.appendChild(card);
+  });
+  container.appendChild(wrap);
+}
+
 /* ── Scrapbook section for cover page ────────────────────────────────── */
 function _buildScrapbookEl() {
   const reviewed = Object.entries(state.reviews || {})
@@ -7311,6 +7581,70 @@ function openStopSheet(stopId) {
   document.body.appendChild(overlay);
   document.body.appendChild(sheet);
   requestAnimationFrame(() => { sheet.classList.add('open'); overlay.classList.add('open'); });
+
+  // Comments section
+  const sheetBody = sheet.querySelector('.stop-sheet-body');
+  const commentsSection = document.createElement('div');
+  commentsSection.className = 'comments-section';
+  commentsSection.innerHTML = `
+    <div class="comments-label"><i class="ph ph-chat-circle"></i> Comments</div>
+    <div class="comments-list" id="comments-list-${stopId}"><div class="comments-empty">Loading…</div></div>
+    <div class="comment-input-row">
+      <input class="comment-input" id="comment-input-${stopId}" type="text" placeholder="Add a comment…" autocomplete="off">
+      <button class="comment-send-btn" id="comment-send-${stopId}"><i class="ph ph-paper-plane-right"></i></button>
+    </div>`;
+  sheetBody.appendChild(commentsSection);
+
+  let _unlistenComments = null;
+  if (typeof listenComments === 'function') {
+    _unlistenComments = listenComments(stopId, (comments) => {
+      renderCommentsList(stopId, comments);
+    });
+  }
+
+  const sendComment = async () => {
+    const input = document.getElementById(`comment-input-${stopId}`);
+    const text = input?.value?.trim();
+    if (!text) return;
+    input.value = '';
+    if (typeof postComment === 'function') await postComment(stopId, text);
+  };
+
+  document.getElementById(`comment-send-${stopId}`)?.addEventListener('click', sendComment);
+  document.getElementById(`comment-input-${stopId}`)?.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); sendComment(); }
+  });
+
+  // Unlisten on sheet close
+  const origClose = sheet.querySelector('.stop-sheet-close');
+  const cleanupComments = () => { if (_unlistenComments) { _unlistenComments(); _unlistenComments = null; } };
+  origClose.addEventListener('click', cleanupComments);
+  overlay.addEventListener('click', cleanupComments);
+}
+
+function renderCommentsList(stopId, comments) {
+  const list = document.getElementById(`comments-list-${stopId}`);
+  if (!list) return;
+  const entries = Object.values(comments || {}).sort((a, b) => (a.createdAt||0) - (b.createdAt||0));
+  if (!entries.length) {
+    list.innerHTML = '<div class="comments-empty">No comments yet.</div>';
+    return;
+  }
+  list.innerHTML = '';
+  entries.forEach(c => {
+    const isMe = c.uid === (typeof state !== 'undefined' ? state.userId : null);
+    const item = document.createElement('div');
+    item.className = 'comment-item' + (isMe ? ' comment-item--mine' : '');
+    const initial = (c.name || '?')[0].toUpperCase();
+    item.innerHTML = `
+      <div class="comment-author-chip">${initial}</div>
+      <div class="comment-bubble">
+        <div class="comment-author">${c.name || 'Traveller'}</div>
+        <div class="comment-text">${c.text}</div>
+      </div>`;
+    list.appendChild(item);
+  });
+  list.scrollTop = list.scrollHeight;
 }
 
 function closeStopSheet() {
