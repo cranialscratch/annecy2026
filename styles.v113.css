@@ -3624,9 +3624,11 @@ body.light .late-btn--adjust {
 /* ─── Cover page — trip summary & progress ──────────────────────────── */
 .cover-section-label {
   font-size: 11px; font-weight: 700; text-transform: uppercase;
-  letter-spacing: .06em; color: var(--text3);
+  letter-spacing: .06em; color: rgba(255,255,255,0.65);
   margin: 20px 0 10px; padding: 0 4px;
+  text-shadow: 0 1px 4px rgba(0,0,0,0.6);
 }
+body.light .cover-section-label { color: rgba(0,0,0,0.45); text-shadow: none; }
 
 /* Stats row (during-trip) */
 .trip-progress-bar {
@@ -3644,17 +3646,18 @@ body.light .trip-progress-divider { background: rgba(0,0,0,0.1); }
 .cover-stats {
   display: flex; gap: 0; margin: 12px 12px 4px;
   border-radius: 16px; overflow: hidden;
-  background: rgba(255,255,255,0.06);
-  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(20,20,32,0.78);
+  border: 1px solid rgba(255,255,255,0.14);
+  backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
 }
-body.light .cover-stats { background: rgba(0,0,0,0.04); border-color: rgba(0,0,0,0.07); }
+body.light .cover-stats { background: rgba(255,255,255,0.88); border-color: rgba(0,0,0,0.1); }
 .cover-stat {
   flex: 1; display: flex; flex-direction: column; align-items: center;
   padding: 14px 8px 12px; gap: 4px;
-  border-right: 1px solid rgba(255,255,255,0.06);
+  border-right: 1px solid rgba(255,255,255,0.14);
 }
 .cover-stat:last-child { border-right: none; }
-body.light .cover-stat { border-right-color: rgba(0,0,0,0.06); }
+body.light .cover-stat { border-right-color: rgba(0,0,0,0.1); }
 .cover-stat-num  { font-size: 18px; font-weight: 800; color: var(--text); line-height: 1; }
 .cover-stat-label { font-size: 11px; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: .04em; }
 
@@ -3663,16 +3666,18 @@ body.light .cover-stat { border-right-color: rgba(0,0,0,0.06); }
 .cover-day-row {
   padding: 10px 12px;
   border-radius: 12px;
-  background: rgba(255,255,255,0.04);
+  background: rgba(20,20,32,0.68);
+  border: 1px solid rgba(255,255,255,0.08);
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
   transition: background .15s;
 }
-.cover-day-row--past { opacity: 0.45; }
+.cover-day-row--past { opacity: 0.55; }
 .cover-day-row--today {
-  background: rgba(var(--accent-rgb, 59,130,246),0.12);
-  border: 1px solid rgba(var(--accent-rgb, 59,130,246),0.2);
+  background: rgba(20,100,120,0.75);
+  border: 1px solid rgba(95,168,158,0.4);
 }
-body.light .cover-day-row { background: rgba(0,0,0,0.025); }
-body.light .cover-day-row--today { background: rgba(59,130,246,0.08); }
+body.light .cover-day-row { background: rgba(255,255,255,0.82); border-color: rgba(0,0,0,0.08); }
+body.light .cover-day-row--today { background: rgba(59,130,246,0.12); border-color: rgba(59,130,246,0.25); }
 .cover-day-hdr {
   display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap;
   margin-bottom: 6px;
@@ -3880,11 +3885,12 @@ body.light .review-share-btn { background: rgba(0,0,0,0.05); border-color: rgba(
 @media (min-width: 500px) { .scrapbook-grid { grid-template-columns: repeat(3, 1fr); } }
 .scrapbook-card {
   border-radius: 14px; overflow: hidden;
-  background: rgba(255,255,255,0.05);
-  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(20,20,32,0.78);
+  border: 1px solid rgba(255,255,255,0.12);
+  backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
   cursor: pointer; transition: transform .15s, box-shadow .15s;
 }
-body.light .scrapbook-card { background: rgba(0,0,0,0.04); border-color: rgba(0,0,0,0.07); }
+body.light .scrapbook-card { background: rgba(255,255,255,0.88); border-color: rgba(0,0,0,0.1); }
 .scrapbook-card:active { transform: scale(.97); }
 .scrapbook-photo {
   width: 100%; aspect-ratio: 4/3; object-fit: cover; display: block;
