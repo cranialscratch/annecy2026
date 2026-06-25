@@ -25,11 +25,7 @@
   <div id="offline-banner" style="display:none">
     <i class="ph ph-wifi-slash"></i> No internet — showing cached content
   </div>
-  <!-- Update banner — shown when a new SW version has activated -->
-  <div id="sw-update-banner" style="display:none">
-    <span><i class="ph ph-arrow-clockwise"></i> Update available</span>
-    <button onclick="window.location.reload()">Reload</button>
-  </div>
+  <!-- Update banner removed — update prompt lives in the bottom nav version chip -->
   <div id="app" style="display:none">
     <div id="bg-clip"><div id="bg-layer"></div></div>
     <header id="app-header">
@@ -77,6 +73,7 @@
       <button class="nav-btn" data-view="map"><i class="ph ph-map-trifold nav-icon"></i><span class="nav-label">Map</span></button>
       <button class="nav-btn" data-view="find"><i class="ph ph-magnifying-glass nav-icon"></i><span class="nav-label">Find</span></button>
       <button class="nav-btn" data-view="more"><i class="ph ph-notebook nav-icon"></i><span class="nav-label">Notes</span></button>
+      <button id="nav-version-btn" class="nav-version-chip" title="App version"><span id="nav-version-label"></span></button>
     </nav>
   </div>
 
@@ -504,9 +501,11 @@
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.addEventListener('message', e => {
         if (e.data?.type !== 'SW_UPDATED') return;
-        // Show a non-disruptive banner rather than auto-reloading mid-journey
-        var b = document.getElementById('sw-update-banner');
-        if (b) b.style.display = 'flex';
+        // Signal update via the bottom-nav version chip instead of a top banner
+        var chip = document.getElementById('nav-version-btn');
+        var lbl  = document.getElementById('nav-version-label');
+        if (chip) chip.classList.add('nav-version-chip--update');
+        if (lbl)  lbl.textContent = 'Update ↑';
       });
       navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' })
         .then(reg => reg.update());
@@ -524,8 +523,8 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
-  <script src="data.js?v=265"></script>
-  <script src="sync.js?v=265"></script>
-  <script src="app.js?v=265"></script>
+  <script src="data.js?v=282"></script>
+  <script src="sync.js?v=282"></script>
+  <script src="app.js?v=282"></script>
 </body>
 </html>

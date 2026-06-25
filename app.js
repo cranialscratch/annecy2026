@@ -1,5 +1,5 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v281';
+const APP_VERSION = 'v282';
 
 const CHANGELOG = [
   { version: 'v280', title: 'Now panel, combined scrapbook, comments, packing list', items: [
@@ -9241,6 +9241,18 @@ function bootApp() {
   }
   document.getElementById('version-badge').textContent = APP_VERSION;
   document.getElementById('version-number').textContent = APP_VERSION;
+  const _navVerLabel = document.getElementById('nav-version-label');
+  if (_navVerLabel) _navVerLabel.textContent = APP_VERSION;
+  const _navVerBtn = document.getElementById('nav-version-btn');
+  if (_navVerBtn) _navVerBtn.addEventListener('click', () => {
+    if (_navVerBtn.classList.contains('nav-version-chip--update')) {
+      window.location.reload();
+    } else {
+      // Show changelog / what's new
+      const wb = document.getElementById('version-btn');
+      if (wb) wb.click();
+    }
+  });
   load();
   loadWikiCache();
   loadPlacesCache();
