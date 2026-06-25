@@ -1,5 +1,5 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v286';
+const APP_VERSION = 'v287';
 
 const CHANGELOG = [
   { version: 'v280', title: 'Now panel, combined scrapbook, comments, packing list', items: [
@@ -9326,14 +9326,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // FAB quick-action sheet
   // Auth state observer — fires once on load and again on sign-in/out
+  let _authResolved = false;
   auth.onAuthStateChanged(user => {
+    _authResolved = true;
     if (user) {
       onAuthSuccess(user);
     } else {
-      // Show auth overlay
       document.getElementById('auth-overlay').classList.remove('hidden');
+      const splash = document.getElementById('splash-screen');
+      if (splash) splash.classList.add('hidden');
     }
   });
+  // Fallback: if Firebase hasn't responded in 6s (no network), show auth overlay anyway
+  setTimeout(() => {
+    if (_authResolved) return;
+    document.getElementById('auth-overlay').classList.remove('hidden');
+    const splash = document.getElementById('splash-screen');
+    if (splash) splash.classList.add('hidden');
+  }, 6000);
 
   /* Gyroscope parallax */
   (function() {
