@@ -1,5 +1,5 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v296';;
+const APP_VERSION = 'v297';;
 
 const CHANGELOG = [
   { version: 'v279', title: 'Post-trip magazine scrapbook', items: [
@@ -4764,6 +4764,12 @@ let _countdownInterval = null;
 const TRIP_DEPARTURE = new Date('2026-06-17T10:30:00+01:00');
 const TRIP_RETURN    = '2026-06-27'; // inclusive last day
 
+function haversineKm(lat1, lng1, lat2, lng2) {
+  const R = 6371, dLat = (lat2-lat1)*Math.PI/180, dLng = (lng2-lng1)*Math.PI/180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
 /* ── Collect all notable stops across all non-countdown days ─────────── */
 function _allTripStops() {
   return TRIP_DATA.days
@@ -5354,12 +5360,6 @@ function renderCalView(container) {
     architecture:'#d97706', village:'#0d9488', town:'#0d9488', experience:'#db2777',
     wander:'#059669', depart:'#475569', scenic:'#16a34a', historic:'#b45309', festival:'#7c3aed',
   };
-
-  function haversineKm(lat1, lng1, lat2, lng2) {
-    const R = 6371, dLat = (lat2-lat1)*Math.PI/180, dLng = (lng2-lng1)*Math.PI/180;
-    const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
-    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-  }
 
   timedStops.forEach((stop, idx) => {
     const t    = timeToMinutes(getStopTime(stop));
