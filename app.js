@@ -1,5 +1,5 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v288';;
+const APP_VERSION = 'v289';;
 
 const CHANGELOG = [
   { version: 'v279', title: 'Post-trip magazine scrapbook', items: [
@@ -8754,7 +8754,11 @@ async function onAuthSuccess(user) {
   // Check membership (non-owners)
   if (!state.isOwner) {
     try {
-      const snap = await firebase.database().ref('trips/annecy_2026/members/' + user.uid).get();
+      const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 5000));
+      const snap = await Promise.race([
+        firebase.database().ref('trips/annecy_2026/members/' + user.uid).get(),
+        timeout
+      ]);
       if (snap.exists()) {
         const member = snap.val();
         state.memberRole = member.role || 'viewer';
@@ -8767,7 +8771,8 @@ async function onAuthSuccess(user) {
         state.memberRole = 'viewer';
       }
     } catch (e) {
-      console.warn('[auth] membership check failed:', e);
+      console.warn('[auth] membership check failed or timed out — continuing as viewer:', e);
+      state.memberRole = 'viewer';
     }
   } else {
     state.memberRole = 'editor';
