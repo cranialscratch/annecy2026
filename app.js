@@ -1,7 +1,13 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v278';;
+const APP_VERSION = 'v279';;
 
 const CHANGELOG = [
+  { version: 'v279', title: 'Post-trip magazine scrapbook', items: [
+    { type: 'feat', text: 'After the trip ends, the cover page becomes a magazine-style scrapbook — full-bleed hero photo, stop name, star rating, pull-quote headline, full review text, pros/cons, reviewer byline' },
+    { type: 'feat', text: 'Trip header: hero photo from best-rated stop, title, dates, stats row (distance, places, avg rating, reviewed count)' },
+    { type: 'feat', text: 'Unreviewed visited stops appear as chips below the cards, tapping opens the review sheet' },
+    { type: 'fix', text: 'renderCoverPage now has three distinct states: pre-trip countdown, during-trip stats, post-trip magazine' },
+  ]},
   { version: 'v278', title: 'Cover icon: white, correct size, aligned to day text', items: [
     { type: 'fix', text: 'Icon now solid white — .day-chip-label i was overriding colour at 18px; targeted with !important' },
     { type: 'fix', text: 'Icon size 26px, matching header button line weight' },
@@ -4720,12 +4726,145 @@ function _buildTripSummaryEl() {
 /* ── Cover page — pre-trip countdown + trip summary ─────────────────── */
 function renderCoverPage(container) {
   container.innerHTML = '';
-  const departed = Date.now() >= TRIP_DEPARTURE.getTime();
+  const now = Date.now();
+  const returnEnd = new Date(TRIP_RETURN + 'T23:59:59').getTime();
 
-  if (!departed) {
-    _renderPreTripCover(container);
-  } else {
+  if (now > returnEnd) {
+    _renderPostTripCover(container);
+  } else if (now >= TRIP_DEPARTURE.getTime()) {
     _renderDuringTripCover(container);
+  } else {
+    _renderPreTripCover(container);
+  }
+}
+
+function _renderPostTripCover(container) {
+  // Collect reviewed stops, ordered by day then stop position
+  const allReviewed = Object.entries(state.reviews || {})
+    .map(([stopId, rev]) => {
+      const stop = findStop(stopId);
+      if (!stop) return null;
+      let dayIdx = -1, stopIdx = -1;
+      TRIP_DATA.days.forEach((day, di) => {
+        if (day.isCountdown) return;
+        getDayStops(day).forEach((s, si) => { if (s.id === stopId) { dayIdx = di; stopIdx = si; } });
+      });
+      return { stop, rev, score: _reviewScore(rev), dayIdx, stopIdx };
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.dayIdx - b.dayIdx || a.stopIdx - b.stopIdx);
+
+  // Stats
+  const km = _kmDriven();
+  const distStr = state.useMetric !== false ? `${Math.round(km)} km` : `${Math.round(km * 0.621371)} mi`;
+  const visited = _allTripStops().filter(({ s }) => state.checked[s.id]).length;
+  const totalStops = _allTripStops().length;
+  const tripDays = Math.round((new Date(TRIP_RETURN) - new Date('2026-06-17')) / 86400000) + 1;
+  const scores = allReviewed.map(r => r.score).filter(Boolean);
+  const avgScore = scores.length ? (scores.reduce((a, b) => a + b, 0) / scores.length) : null;
+  const heroBg = allReviewed.filter(r => r.score).sort((a, b) => b.score - a.score)[0]?.rev?.photos?.[0]
+    || allReviewed.find(r => r.rev.photos?.[0])?.rev.photos?.[0] || null;
+
+  // Hero header
+  const header = document.createElement('div');
+  header.className = 'mag-header';
+  header.innerHTML = `
+    ${heroBg ? `<img class="mag-header-photo" src="${heroBg}" alt="">` : ''}
+    <div class="mag-header-overlay"></div>
+    <div class="mag-header-body">
+      <div class="mag-header-eyebrow"><i class="ph ph-mountains"></i> Road Trip</div>
+      <h1 class="mag-header-title">Annecy 2026</h1>
+      <p class="mag-header-dates">17–27 Jun 2026 · ${tripDays} days</p>
+      <div class="mag-header-stats">
+        <div class="mag-stat"><span class="mag-stat-num">${distStr}</span><span class="mag-stat-lbl">Driven</span></div>
+        <div class="mag-stat"><span class="mag-stat-num">${visited}/${totalStops}</span><span class="mag-stat-lbl">Places</span></div>
+        ${avgScore ? `<div class="mag-stat"><span class="mag-stat-num">★${avgScore.toFixed(1)}</span><span class="mag-stat-lbl">Avg rating</span></div>` : ''}
+        <div class="mag-stat"><span class="mag-stat-num">${allReviewed.length}</span><span class="mag-stat-lbl">Reviewed</span></div>
+      </div>
+    </div>`;
+  container.appendChild(header);
+
+  if (!allReviewed.length) {
+    const empty = document.createElement('div');
+    empty.className = 'mag-empty';
+    empty.innerHTML = `<i class="ph ph-camera-slash"></i><p>No reviews yet — tap <i class="ph ph-star"></i> on any stop card to add yours.</p>`;
+    container.appendChild(empty);
+  } else {
+    const lbl = document.createElement('div');
+    lbl.className = 'cover-section-label';
+    lbl.textContent = 'Your journey, reviewed';
+    container.appendChild(lbl);
+
+    allReviewed.forEach(({ stop, rev, score, dayIdx }) => {
+      const day = TRIP_DATA.days[dayIdx];
+      const photos = rev.photos || [];
+      const dateStr = day ? formatDate(day.date) : '';
+      const dayName = day ? getDayLabel(day).replace(/<[^>]+>/g, '') : '';
+      const eyebrow = [dayName, dateStr].filter(Boolean).join(' · ');
+
+      const card = document.createElement('div');
+      card.className = 'mag-card';
+
+      const photosHtml = photos.length
+        ? `<div class="mag-photo-strip">${photos.map((src, i) =>
+            `<img class="mag-photo${i === 0 ? ' mag-photo--hero' : ''}" src="${src}" alt="">`
+          ).join('')}</div>`
+        : `<div class="mag-no-photo">${stopTypeIcon(stop)}</div>`;
+
+      const starsHtml = score ? [1,2,3,4,5].map(i =>
+        `<i class="ph ${i <= Math.round(score) ? 'ph-star-fill mag-star--filled' : 'ph-star mag-star--empty'} mag-star"></i>`
+      ).join('') : '';
+
+      const prosHtml = (rev.pros || []).filter(Boolean).map(p =>
+        `<div class="mag-pro"><i class="ph ph-plus-circle"></i>${p}</div>`).join('');
+      const consHtml = (rev.cons || []).filter(Boolean).map(c =>
+        `<div class="mag-con"><i class="ph ph-minus-circle"></i>${c}</div>`).join('');
+
+      const revDate = rev.updatedAt
+        ? new Date(rev.updatedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '';
+      const author = state.userName || '';
+
+      card.innerHTML = `
+        ${photosHtml}
+        <div class="mag-card-body">
+          ${eyebrow ? `<div class="mag-eyebrow">${eyebrow}</div>` : ''}
+          <h2 class="mag-stop-name">${getStopName(stop)}</h2>
+          ${score ? `<div class="mag-rating">${starsHtml}<span class="mag-score">${score.toFixed(1)}</span></div>` : ''}
+          ${rev.heading ? `<blockquote class="mag-quote">"${rev.heading}"</blockquote>` : ''}
+          ${rev.body ? `<p class="mag-body">${rev.body}</p>` : ''}
+          ${(prosHtml || consHtml) ? `<div class="mag-proscons">${prosHtml}${consHtml}</div>` : ''}
+          ${(author || revDate) ? `
+            <div class="mag-byline">
+              ${author ? `<span class="mag-author-chip">${author[0].toUpperCase()}</span><span class="mag-author-name">${author}</span>` : ''}
+              ${revDate ? `<span class="mag-byline-date">${revDate}</span>` : ''}
+            </div>` : ''}
+        </div>`;
+
+      card.addEventListener('click', () => openReviewSheet(stop.id));
+      container.appendChild(card);
+    });
+  }
+
+  // Prompt for unreviewed visited stops
+  const unreviewed = _allTripStops()
+    .filter(({ s }) => state.checked[s.id] && !(state.reviews || {})[s.id])
+    .map(({ s }) => s)
+    .filter(s => getStopType(s) !== 'depart' && getStopType(s) !== 'transport');
+  if (unreviewed.length) {
+    const sl = document.createElement('div');
+    sl.className = 'cover-section-label';
+    sl.textContent = `${unreviewed.length} visited place${unreviewed.length > 1 ? 's' : ''} without a review`;
+    container.appendChild(sl);
+    const chips = document.createElement('div');
+    chips.className = 'mag-unreviewed-chips';
+    unreviewed.slice(0, 10).forEach(s => {
+      const chip = document.createElement('button');
+      chip.className = 'mag-unreviewed-chip';
+      chip.innerHTML = `${stopTypeIcon(s).replace('card-type-icon','')}<span>${getStopName(s)}</span>`;
+      chip.addEventListener('click', () => openReviewSheet(s.id));
+      chips.appendChild(chip);
+    });
+    container.appendChild(chips);
   }
 }
 
