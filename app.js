@@ -1,5 +1,5 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v294';;
+const APP_VERSION = 'v295';;
 
 const CHANGELOG = [
   { version: 'v279', title: 'Post-trip magazine scrapbook', items: [
