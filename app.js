@@ -1,5 +1,5 @@
 /* ── Version & error capture ───────────────────────────────────────── */
-const APP_VERSION = 'v289';;
+const APP_VERSION = 'v290';;
 
 const CHANGELOG = [
   { version: 'v279', title: 'Post-trip magazine scrapbook', items: [
@@ -310,6 +310,7 @@ const state = {
   notes:              [],   // personal notes [{id,title,content,links,createdAt}]
   bookingInfo:        {},   // stopId → {ref,link,notes}
   reviews:            {},   // stopId → {heading,body,pros[],cons[],photos[],questions:{},createdAt}
+  packingList:        [],   // [{id,name,bag,packed}]
 };
 
 /* ── Helpers ───────────────────────────────────────────────────────── */
@@ -2082,6 +2083,7 @@ function localSave() {
     localStorage.setItem('annecy_notes',             JSON.stringify(state.notes           || []));
     localStorage.setItem('annecy_booking_info',      JSON.stringify(state.bookingInfo      || {}));
     localStorage.setItem('annecy_reviews',            JSON.stringify(state.reviews          || {}));
+    localStorage.setItem('annecy_packing_list',       JSON.stringify(state.packingList       || []));
   } catch {}
 }
 function save() {
@@ -2135,6 +2137,8 @@ function load() {
     if (bi) state.bookingInfo = JSON.parse(bi);
     const rv = localStorage.getItem('annecy_reviews');
     if (rv) state.reviews = JSON.parse(rv);
+    const pl = localStorage.getItem('annecy_packing_list');
+    if (pl) state.packingList = JSON.parse(pl);
   } catch {}
   try {
     if (localStorage.getItem('annecy_theme') === 'light') document.body.classList.add('light');
@@ -3279,10 +3283,114 @@ function _seedDefaultNotes() {
   if (added) state.notes.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 }
 
+function _buildPackingSection(onUpdate) {
+  const section = document.createElement('div');
+  section.className = 'packing-section';
+
+  const BAGS = ['Hand luggage', 'Main bag', 'Day bag', 'Car boot', 'Other'];
+  const packed = (state.packingList || []).filter(i => i.packed).length;
+  const total  = (state.packingList || []).length;
+
+  section.innerHTML = `
+    <div class="packing-header">
+      <span><i class="ph ph-backpack"></i> Packing list</span>
+      <span class="packing-progress">${packed}/${total}</span>
+      <button class="packing-add-btn" id="packing-add-btn"><i class="ph ph-plus"></i> Add</button>
+    </div>
+    <div class="packing-body" id="packing-body"></div>`;
+
+  const body = section.querySelector('#packing-body');
+
+  function render() {
+    const list = state.packingList || [];
+    if (!list.length) {
+      body.innerHTML = '<div class="packing-empty">No items yet — tap Add to get started</div>';
+      return;
+    }
+    const byBag = {};
+    list.forEach(item => { (byBag[item.bag || 'Other'] = byBag[item.bag || 'Other'] || []).push(item); });
+    body.innerHTML = BAGS.filter(b => byBag[b]).map(bag => `
+      <div class="packing-bag-group">
+        <div class="packing-bag-label">${bag}</div>
+        ${byBag[bag].map(item => `
+          <div class="packing-item${item.packed ? ' packing-item--packed' : ''}" data-id="${item.id}">
+            <button class="packing-check${item.packed ? ' packing-check--packed' : ''}" data-id="${item.id}">
+              <i class="ph ph-${item.packed ? 'check-circle' : 'circle'}"></i>
+            </button>
+            <span class="packing-item-name">${item.name}</span>
+            <button class="packing-item-del" data-id="${item.id}"><i class="ph ph-x"></i></button>
+          </div>`).join('')}
+      </div>`).join('');
+
+    body.querySelectorAll('.packing-check').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const item = state.packingList.find(i => i.id === btn.dataset.id);
+        if (item) { item.packed = !item.packed; localSave(); syncSave(); onUpdate(); }
+      });
+    });
+    body.querySelectorAll('.packing-item-del').forEach(btn => {
+      btn.addEventListener('click', () => {
+        state.packingList = state.packingList.filter(i => i.id !== btn.dataset.id);
+        localSave(); syncSave(); onUpdate();
+      });
+    });
+  }
+  render();
+
+  section.querySelector('#packing-add-btn').addEventListener('click', () => {
+    _openPackingAddSheet(() => { onUpdate(); });
+  });
+
+  return section;
+}
+
+function _openPackingAddSheet(onUpdate) {
+  const BAGS = ['Hand luggage', 'Main bag', 'Day bag', 'Car boot', 'Other'];
+  const sheet = document.createElement('div');
+  sheet.className = 'bottom-sheet-overlay';
+  sheet.innerHTML = `
+    <div class="bottom-sheet">
+      <div class="sheet-handle"></div>
+      <div class="sheet-title">Add packing item</div>
+      <input class="sheet-input" id="pack-name-input" type="text" placeholder="Item name" autocomplete="off">
+      <div class="sheet-label">Bag</div>
+      <div class="packing-bag-chips">
+        ${BAGS.map((b,i) => `<button class="packing-bag-chip${i===0?' active':''}" data-bag="${b}">${b}</button>`).join('')}
+      </div>
+      <button class="pill-btn primary full-width" id="pack-save-btn" style="margin-top:16px">Add item</button>
+    </div>`;
+  document.body.appendChild(sheet);
+  requestAnimationFrame(() => sheet.querySelector('.bottom-sheet').classList.add('open'));
+
+  let selectedBag = BAGS[0];
+  sheet.querySelectorAll('.packing-bag-chip').forEach(btn => {
+    btn.addEventListener('click', () => {
+      sheet.querySelectorAll('.packing-bag-chip').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      selectedBag = btn.dataset.bag;
+    });
+  });
+
+  const close = () => { sheet.querySelector('.bottom-sheet').classList.remove('open'); setTimeout(() => sheet.remove(), 300); };
+  sheet.addEventListener('click', e => { if (e.target === sheet) close(); });
+
+  sheet.querySelector('#pack-save-btn').addEventListener('click', () => {
+    const name = sheet.querySelector('#pack-name-input').value.trim();
+    if (!name) return;
+    if (!state.packingList) state.packingList = [];
+    state.packingList.push({ id: 'pk_' + Date.now(), name, bag: selectedBag, packed: false });
+    localSave(); syncSave(); onUpdate();
+    close();
+  });
+  setTimeout(() => sheet.querySelector('#pack-name-input').focus(), 350);
+}
+
 function renderNotesView(container) {
   container.innerHTML = '';
   const wrap = document.createElement('div');
   wrap.className = 'notes-view';
+
+  wrap.appendChild(_buildPackingSection(() => renderNotesView(container)));
 
   const header = document.createElement('div');
   header.className = 'notes-header';

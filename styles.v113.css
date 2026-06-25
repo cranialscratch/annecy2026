@@ -3402,6 +3402,28 @@ body.light .cl-text { color: #475569; }
 .booking-info-notes { font-size:13px; color:var(--text3); margin-top:4px; }
 .booking-edit-btn { margin-top:8px; font-size:12px; color:var(--text3); background:transparent; border:1.5px solid var(--card-border); border-radius:8px; padding:4px 10px; cursor:pointer; }
 
+/* ── Packing list ── */
+.packing-section { margin: 0 12px 16px; background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: 16px; overflow: hidden; }
+.packing-header { display:flex; align-items:center; gap:8px; padding: 12px 14px; font-size:15px; font-weight:700; color:var(--text1); }
+.packing-header i { font-size:18px; color:var(--accent); }
+.packing-progress { font-size:13px; font-weight:600; color:var(--text2); margin-left:auto; }
+.packing-add-btn { background:var(--accent); border:none; color:#fff; border-radius:20px; padding:4px 12px; font-size:13px; font-weight:700; cursor:pointer; display:flex; align-items:center; gap:4px; }
+.packing-body { padding: 0 14px 12px; }
+.packing-bag-group { margin-top:8px; }
+.packing-bag-label { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.8px; color:var(--text2); margin-bottom:4px; padding-left:4px; }
+.packing-item { display:flex; align-items:center; gap:10px; padding:8px 4px; border-bottom:1px solid var(--glass-border); }
+.packing-item:last-child { border-bottom:none; }
+.packing-item--packed .packing-item-name { text-decoration:line-through; color:var(--text2); }
+.packing-check { background:none; border:none; cursor:pointer; padding:0; color:var(--text2); font-size:22px; line-height:1; -webkit-tap-highlight-color:transparent; }
+.packing-check--packed { color: #30d158; }
+.packing-item-name { flex:1; font-size:15px; color:var(--text1); }
+.packing-item-del { background:none; border:none; cursor:pointer; padding:4px; color:var(--text2); font-size:16px; opacity:.5; -webkit-tap-highlight-color:transparent; }
+.packing-empty { padding:16px; text-align:center; color:var(--text2); font-size:14px; }
+.packing-bag-chips { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
+.packing-bag-chip { background:var(--glass-bg); border:1px solid var(--glass-border); color:var(--text2); border-radius:20px; padding:6px 14px; font-size:14px; cursor:pointer; -webkit-tap-highlight-color:transparent; }
+.packing-bag-chip.active { background:var(--accent); border-color:var(--accent); color:#fff; font-weight:700; }
+.sheet-label { font-size:13px; font-weight:600; color:var(--text2); margin-top:12px; margin-bottom:4px; }
+
 /* ── Notes view ─────────────────────────────────────────────────────── */
 .notes-view { padding: 12px 0 80px; }
 .notes-header { display:flex; align-items:center; justify-content:space-between; padding:0 16px 8px; }
