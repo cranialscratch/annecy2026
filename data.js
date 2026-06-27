@@ -364,54 +364,42 @@ const TRIP_DATA = {
         { id:"d5s7", order:6, time:"21:00", tz:"FR", location:"B&B HOTEL Besançon Valentin", type:"hotel", priority:0, lat:47.2500, lng:6.0100, mapsUrl:"https://maps.google.com/?q=B%26B+HOTEL+Besan%C3%A7on+Valentin+3+Chemin+des+Trois+Croix+25480+Besan%C3%A7on+France", reason:"Overnight stay." }
       ]
     },
-    /* ── Return Day 2 — Sun 28 Jun — Besançon to Rouen ─────────────── */
+    /* ── Return Day 2 — Sun 28 Jun — Besançon to Vernon ─────────────── */
     {
       id: "day6",
       date: "2026-06-28",
       label: "Day 6",
-      title: "Besançon to Rouen",
-      subtitle: "Monet's Giverny & Gothic Rouen",
+      title: "Besançon to Vernon",
+      subtitle: "Normandy · Overnight before Giverny",
       stops: [
-        { id:"d6s1", order:1, time:"10:30", tz:"FR", location:"B&B HOTEL Besançon Valentin", type:"depart", priority:0, lat:47.2500, lng:6.0100, mapsUrl:"https://maps.google.com/?q=B%26B+HOTEL+Besan%C3%A7on+Valentin+3+Chemin+des+Trois+Croix+25480+Besan%C3%A7on+France", reason:"Breakfast and checkout. Long drive day — Rouen via Giverny." },
-        { id:"d6s2", order:2, time:"14:30", tz:"FR", location:"Tesla Supercharger Chartres", type:"charging", priority:0, lat:48.4497, lng:1.4803, mapsUrl:"https://maps.google.com/?q=24+Avenue+Gustave+Eiffel+28000+Chartres+France", reason:"Exact Tesla location. Open 24/7; mid-route charge towards Normandy.", duration:30 },
-        { id:"d6s3", order:3, time:"16:30", tz:"FR", location:"Fondation Claude Monet, Giverny Visit", type:"experience", priority:3, lat:49.0762, lng:1.5345, mapsUrl:"https://maps.google.com/?q=Fondation+Claude+Monet+Giverny+84+Rue+Claude+Monet+27620+Giverny+France", reason:"Must-visit gardens; current 2026 hours are 10:00–18:00 with last admission at 17:30. Visit duration sits inside opening hours before 18:00 close.", duration:80, planStatus:'primary', openingFit:'ok', risk:'low', sameDayAction:'Last admission is 17:30 — current planned arrival 16:30 is safe. Do not delay the Chartres charge stop.', decisionDeadline:'15:30 FR' },
-        { id:"d6s5", order:4, time:"19:00", tz:"FR", location:"Rouen Old Town", type:"architecture", priority:3, lat:49.4431, lng:1.0993, mapsUrl:"https://maps.google.com/?q=Rouen+Old+Town+France", reason:"Must-visit half-timbered streets and cathedral area.", placesQuery:"Cathédrale Notre-Dame de Rouen" },
-        { id:"d6s6", order:5, time:"19:30", tz:"FR", location:"Le Joubeil, Rouen", type:"food", priority:2, lat:49.4431, lng:1.0993, mapsUrl:"https://maps.google.com/?q=Le+Joubeil+52+Rue+des+Augustins+76000+Rouen+France", reason:"HappyCow lists vegan mezze and TheFork identifies it as open Sunday; book ahead.", veganFriendly:true, duration:120, planStatus:'primary', veganFit:'wide', openingFit:'check', bookingRequired:true, risk:'medium', trigger:'TheFork confirms Sunday opening but restaurant hours can change — recheck and book same day', sameDayAction:'Book via TheFork or call ahead for Sunday evening before leaving Giverny', decisionDeadline:'17:00 FR',
-          alternatives: [
-            {
-              id:'alt_d6s6_cancan',
-              location:'Cancan, Rouen',
-              type:'food',
-              lat:49.4430, lng:1.0985,
-              mapsUrl:'https://maps.google.com/?q=Cancan+Rouen+France',
-              reason:'Full vegan menu confirmed. Open daily 19:00–00:00 — no booking needed, guaranteed vegan choice in Rouen.',
-              duration:120,
-              veganFriendly:true,
-              veganFit:'full',
-              openingFit:'ok',
-              trigger:'If Le Joubeil is closed Sunday, fully booked, or cannot confirm vegan mezze availability',
-              sameDayAction:'Walk to Cancan — no booking needed, opens 19:00',
-              decisionDeadline:'17:30 FR',
-            }
-          ]
-        },
-        { id:"d6s7", order:6, time:"21:30", tz:"FR", location:"B&B HOTEL Rouen Centre Rive Droite", type:"hotel", priority:0, lat:49.4431, lng:1.0993, mapsUrl:"https://maps.google.com/?q=B%26B+HOTEL+Rouen+Centre+Rive+Droite+56+Quai+Gaston+Boulet+76000+Rouen+France", reason:"Overnight stay." }
+        { id:"d6s1", order:1, time:"10:30", tz:"FR", location:"B&B HOTEL Besançon Valentin", type:"depart", priority:0, lat:47.2500, lng:6.0100, mapsUrl:"https://maps.google.com/?q=B%26B+HOTEL+Besancon+Valentin", reason:"Relaxed breakfast and depart for Vernon.", routeUrl:"https://www.google.com/maps/dir/B%26B+HOTEL+Besancon+Valentin/Tesla+Supercharger+Sens/Hotel+Normandy+Vernon" },
+        { id:"d6s2", order:2, time:"12:45", tz:"FR", location:"Tesla Supercharger Sens", type:"charging", priority:0, lat:48.1977, lng:3.2877, mapsUrl:"https://maps.google.com/?q=Tesla+Supercharger+Sens", reason:"Charge while enjoying a relaxed lunch to minimise journey time.", duration:60 },
+        { id:"d6s3", order:3, time:"16:15", tz:"FR", location:"Vernon Old Town", type:"architecture", priority:2, lat:49.0937, lng:1.4851, mapsUrl:"https://maps.google.com/?q=Vernon+France", reason:"Stretch your legs with a gentle walk through the historic centre and along the Seine.", duration:105 },
+        { id:"d6s4", order:4, time:"18:00", tz:"FR", location:"Vegan Dinner, Vernon", type:"food", priority:3, lat:49.0937, lng:1.4851, mapsUrl:"https://maps.google.com/?q=Vernon+France", reason:"Enjoy a restaurant offering a genuine choice of vegan dishes rather than a token option.", veganFriendly:true, duration:120 },
+        { id:"d6s5", order:5, time:"20:00", tz:"FR", location:"Hotel Normandy Vernon", type:"hotel", priority:0, lat:49.0940, lng:1.4848, mapsUrl:"https://maps.google.com/?q=Hotel+Normandy+Vernon", reason:"Comfortable overnight stay positioned perfectly for Monet's Gardens." }
+      ],
+      bucketListStops: [
+        { id:"bl_rouen_town", location:"Rouen Old Town", type:"architecture", priority:3, lat:49.4431, lng:1.0993, mapsUrl:"https://maps.google.com/?q=Rouen+Old+Town+France", reason:"Must-visit half-timbered streets and cathedral area — Cathédrale Notre-Dame de Rouen." },
+        { id:"bl_lejoubeil", location:"Le Joubeil, Rouen", type:"food", priority:2, lat:49.4431, lng:1.0993, mapsUrl:"https://maps.google.com/?q=Le+Joubeil+52+Rue+des+Augustins+76000+Rouen+France", reason:"HappyCow vegan mezze — worth booking ahead for a future visit.", veganFriendly:true },
+        { id:"bl_cancan", location:"Cancan, Rouen", type:"food", priority:2, lat:49.4430, lng:1.0985, mapsUrl:"https://maps.google.com/?q=Cancan+Rouen+France", reason:"Full vegan menu, open daily — guaranteed vegan choice in Rouen.", veganFriendly:true }
       ]
     },
-    /* ── Return Day 3 — Mon 29 Jun — Rouen to Home ──────────────────── */
+    /* ── Return Day 3 — Mon 29 Jun — Vernon to Home ─────────────────── */
     {
       id: "day7",
       date: "2026-06-29",
       label: "Day 7",
-      title: "Rouen to Home",
-      subtitle: "LeShuttle · North Cadbury",
+      title: "Vernon to Home",
+      subtitle: "Giverny · LeShuttle · North Cadbury",
       stops: [
-        { id:"d7s1", order:1, time:"10:30", tz:"FR", location:"B&B HOTEL Rouen Centre Rive Droite", type:"depart", priority:0, lat:49.4431, lng:1.0993, mapsUrl:"https://maps.google.com/?q=B%26B+HOTEL+Rouen+Centre+Rive+Droite+56+Quai+Gaston+Boulet+76000+Rouen+France", reason:"Breakfast and checkout. Final morning in France." },
-        { id:"d7s2", order:2, time:"13:00", tz:"FR", location:"Tesla Supercharger Calais Coquelles", type:"charging", priority:0, lat:50.9283, lng:1.8167, mapsUrl:"https://maps.google.com/?q=L%27Haut%27Aile+ZAC+Les+Terrasses+Avenue+des+Longues+Pieces+62231+Coquelles+France", reason:"Exact Tesla location. Open 24/7; charge and take a short break before check-in.", duration:75 },
-        { id:"d7s3", order:3, time:"14:20", tz:"FR", location:"LeShuttle Check-In, Calais", type:"transport", priority:0, lat:50.9513, lng:1.8587, mapsUrl:"https://maps.google.com/?q=LeShuttle+Calais+Terminal", reason:"Arrive with margin for the booked return crossing." },
-        { id:"d7s4", order:4, time:"15:36", tz:"FR", location:"LeShuttle Departure", type:"transport", priority:0, lat:50.9513, lng:1.8587, mapsUrl:"https://maps.google.com/?q=LeShuttle+Calais+Terminal", reason:"Booked return crossing — approximately 35 minutes through the tunnel.", planStatus:'anchor', risk:'low', fixed:true },
-        { id:"d7s5", order:5, time:"15:11", tz:"UK", location:"LeShuttle Folkestone Arrival", type:"transport", priority:0, lat:51.0940, lng:1.1430, mapsUrl:"https://maps.google.com/?q=LeShuttle+Folkestone+Terminal", reason:"Back in the UK. Nearly home." },
-        { id:"d7s6", order:6, time:"18:30", tz:"UK", location:"North Cadbury — Home", type:"hotel", priority:0, lat:51.0333, lng:-2.5333, mapsUrl:"https://maps.google.com/?q=North+Cadbury+Somerset", reason:"Arrive home. Holiday complete." }
+        { id:"d7s1", order:1, time:"10:30", tz:"FR", location:"Hotel Normandy Vernon", type:"depart", priority:0, lat:49.0940, lng:1.4848, mapsUrl:"https://maps.google.com/?q=Hotel+Normandy+Vernon", reason:"Short drive to Giverny.", routeUrl:"https://www.google.com/maps/dir/Hotel+Normandy+Vernon/Fondation+Claude+Monet+Giverny/Tesla+Supercharger+Coquelles/LeShuttle+Calais" },
+        { id:"d7s2", order:2, time:"10:45", tz:"FR", location:"Fondation Claude Monet, Giverny", type:"experience", priority:3, lat:49.0762, lng:1.5345, mapsUrl:"https://maps.google.com/?q=Fondation+Claude+Monet+Giverny", reason:"Enjoy Monet's House and Gardens without rushing. Open 09:30–18:00; last admission 17:30.", duration:165, planStatus:'primary', openingFit:'ok', risk:'low' },
+        { id:"d7s3", order:3, time:"13:30", tz:"FR", location:"Lunch in Giverny", type:"food", priority:3, lat:49.0762, lng:1.5345, mapsUrl:"https://maps.google.com/?q=Giverny", reason:"Relaxed lunch before beginning the journey home.", duration:75 },
+        { id:"d7s4", order:4, time:"14:45", tz:"FR", location:"Depart Giverny", type:"depart", priority:0, lat:49.0762, lng:1.5345, mapsUrl:"https://maps.google.com/?q=Giverny", reason:"Head towards Coquelles allowing generous contingency." },
+        { id:"d7s5", order:5, time:"17:00", tz:"FR", location:"Tesla Supercharger Coquelles", type:"charging", priority:0, lat:50.9283, lng:1.8167, mapsUrl:"https://maps.google.com/?q=Tesla+Supercharger+Coquelles", reason:"Top up only if required before LeShuttle.", duration:30 },
+        { id:"d7s6", order:6, time:"17:30", tz:"FR", location:"LeShuttle Terminal Check-in, Calais", type:"transport", priority:0, lat:50.9513, lng:1.8587, mapsUrl:"https://maps.google.com/?q=LeShuttle+Calais", reason:"Arrive comfortably within your Standard Plus flexibility window without using the full allowance." },
+        { id:"d7s7", order:7, time:"18:00", tz:"FR", location:"LeShuttle Crossing", type:"transport", priority:0, lat:50.9513, lng:1.8587, mapsUrl:"https://maps.google.com/?q=LeShuttle+Calais", reason:"Cross when ready while retaining approximately 1½–2 hours of unused Standard Plus flexibility." },
+        { id:"d7s8", order:8, time:"19:30", tz:"UK", location:"North Cadbury — Home", type:"hotel", priority:0, lat:51.0333, lng:-2.5333, mapsUrl:"https://maps.google.com/?q=North+Cadbury+Somerset", reason:"Arrive home after a relaxed final day rather than racing the clock." }
       ]
     }
   ]
