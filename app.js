@@ -5750,7 +5750,8 @@ function renderTimeline(container, scrollToNow) {
       const headerH = document.getElementById('app-header').offsetHeight;
       const target = document.getElementById('tl-now-marker');
       if (target) {
-        mc.scrollTo({ top: Math.max(0, target.offsetTop - headerH - 60), behavior: 'smooth' });
+        const targetTop = target.getBoundingClientRect().top - mc.getBoundingClientRect().top + mc.scrollTop;
+        mc.scrollTo({ top: Math.max(0, targetTop - headerH - 60), behavior: 'smooth' });
       }
     }, 120);
   }

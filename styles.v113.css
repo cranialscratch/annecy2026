@@ -244,6 +244,7 @@ body.light #app-header {
   z-index: 1;
   padding: calc(var(--header-h, 110px) + 16px) 14px
            calc(var(--bottom-h) + 110px + env(safe-area-inset-bottom));
+  scroll-padding-top: calc(var(--header-h, 110px) + 8px);
 }
 #main-content.map-active { padding: 0; overflow: hidden; }
 
